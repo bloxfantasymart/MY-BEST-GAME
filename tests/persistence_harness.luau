@@ -15,7 +15,8 @@ end
 local counter=0
 local http = {}
 function http:GenerateGUID() counter+=1; return "token-"..counter end
-function http:JSONEncode(value) return clone(value) end
+local copyFails=false
+function http:JSONEncode(value) if copyFails then error("encoding failed") end; return clone(value) end
 function http:JSONDecode(value) return clone(value) end
 local services = {
  DataStoreService = {GetDataStore=function() return store end},
@@ -144,3 +145,11 @@ database.player_506.rareBlueprints=1; database.player_506.creatures={{id="bp-cre
 local crafted=a.load(506); assert(crafted and crafted.creatures[1].blueprintApplied==true); assert(a.save(506,crafted,true))
 database.player_506.creatures[1].blueprintApplied="yes"; assert(a.load(506)==nil)
 print("Backpack upgrade and blueprint schema tests passed")
+
+database.player_507={version=1,cash=200,pending=0,slots=1,rebirth=0,parts={},creatures={}}
+local guarded=a.load(507); assert(guarded)
+guarded.cash=-1; assert(not a.save(507,guarded,false)); assert(database.player_507.cash==200, "Invalid snapshots must not overwrite the store")
+guarded.cash=500; copyFails=true; assert(not a.save(507,guarded,false), "A failed copy must be reported")
+copyFails=false; assert(a.save(507,guarded,true), "Copy failure must not leave the session permanently busy")
+local after=b.load(507); assert(after and after.cash==500); assert(b.save(507,after,true))
+print("Invalid-save and copy-failure recovery tests passed")

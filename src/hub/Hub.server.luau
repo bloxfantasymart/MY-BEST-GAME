@@ -10,8 +10,10 @@ local DataService=require(script.Parent.Services.DataService)
 local Visuals=require(script.Parent.Services.Visuals)
 local BoothLogic=require(script.Parent.BoothLogic)
 local Titles=require(script.Parent.Services.Titles)
+local ShutdownGate=require(script.Parent.Services.ShutdownGate)
 local remote=Instance.new("RemoteEvent"); remote.Name="HubAction"; remote.Parent=ReplicatedStorage
 local profiles={}
+local joinGate=ShutdownGate.new()
 local booths={}
 local world=Instance.new("Folder"); world.Name="TradingBazaar"; world.Parent=workspace
 local function block(parent,name,size,position,color,material)
@@ -157,7 +159,7 @@ local function releaseBooth(s)
  if not s.booth then return end
  local booth=booths[s.booth]; BoothLogic.release(booth,booth.owner,s); refreshBooth(booth)
 end
-local function join(player)
+local function joinImpl(player,context)
  local function titleWhenReady(character)
   local head=character:WaitForChild("Head",10)
   local session=profiles[player]
@@ -167,10 +169,29 @@ local function join(player)
  if player.Character then noCharacterCollision(player.Character) end
  local profile=DataService.load(player.UserId)
  if not profile then if player.Parent then player:Kick("Could not load your profile safely. Please retry after the previous session closes.") end; return end
- if not player.Parent then DataService.save(player.UserId,profile,true); return end
- profiles[player]={profile=profile,booth=nil}
+ context.data=profile
+ if not player.Parent or joinGate.closed then
+  if not DataService.save(player.UserId,profile,true) then warn("Failed to release hub profile after interrupted join: "..player.UserId) end
+  context.data=nil
+  return
+ end
+ profiles[player]={profile=profile,booth=nil}; context.data=nil
  if player.Character then task.spawn(titleWhenReady,player.Character) end
  text(player,"Claim a booth to display creatures. Trading is not enabled yet.")
+end
+local function join(player)
+ if profiles[player] or not ShutdownGate.begin(joinGate,player.UserId) then return end
+ local context={}
+ local ok,err=pcall(joinImpl,player,context)
+ if not ok then
+  warn("Hub join failed for "..player.UserId..": "..tostring(err))
+  if not profiles[player] and context.data then
+   local savedOk,saved=pcall(DataService.save,player.UserId,context.data,true)
+   if not savedOk or not saved then warn("Failed to release hub profile after join error: "..player.UserId) end
+  end
+  if player.Parent then player:Kick("Could not join safely. Please try again.") end
+ end
+ ShutdownGate.finish(joinGate,player.UserId)
 end
 Players.PlayerAdded:Connect(join)
 Players.PlayerRemoving:Connect(function(player)
@@ -193,11 +214,13 @@ task.spawn(function()
  while true do task.wait(2); for player in pairs(profiles) do if not DataService.isHealthy(player.UserId) then player:Kick("Data session expired. Please rejoin.") end end end
 end)
 game:BindToClose(function()
+ ShutdownGate.close(joinGate)
  local remaining=0
  for player,s in pairs(profiles) do
   profiles[player]=nil; remaining+=1
   task.spawn(function() if not DataService.save(player.UserId,s.profile,true) then warn("Hub shutdown save failed: "..player.UserId) end; remaining-=1 end)
  end
  local deadline=os.clock()+25
- while remaining>0 and os.clock()<deadline do task.wait(0.1) end
+ while (remaining>0 or joinGate.pending>0) and os.clock()<deadline do task.wait(0.1) end
+ if remaining>0 or joinGate.pending>0 then warn("Hub shutdown deadline reached with saves or joins still pending.") end
 end)

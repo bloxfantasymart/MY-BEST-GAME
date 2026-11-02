@@ -24,12 +24,14 @@ local Season = require(script.Parent.Services.Season)
 local AutoCollector = require(script.Parent.Services.AutoCollector)
 local AutoRoll = require(script.Parent.Services.AutoRoll)
 local Blueprints = require(script.Parent.Services.Blueprints)
+local ShutdownGate = require(script.Parent.Services.ShutdownGate)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
 remote.Parent = ReplicatedStorage
 local rng = Random.new()
 local states = {}
+local joinGate = ShutdownGate.new()
 local plots = {}
 local adminEvent=nil
 local function currentEvent()
@@ -610,11 +612,11 @@ local function clearPlot(s)
  Visuals.showRolls(s.plot,{},1); Visuals.applyTheme(s.plot,Config.Themes[1]); Visuals.applyRewardCosmetics(s.plot,RewardExtras.new()); Visuals.autoCollector(s.plot,false)
  s.plot.owner=nil; s.plot.sign.Text="Unclaimed plot"; s.plot.bankLabel.Text="Bank: $0"
 end
-local function join(player)
+local function joinImpl(player,context)
  local plot=nil
  for _,p in ipairs(plots) do if not p.owner then plot=p; break end end
  if not plot then player:Kick("This server has no free plots. Please join another server."); return end
- plot.owner=player; plot.sign.Text="Loading "..player.DisplayName.."..."
+ plot.owner=player; context.plot=plot; plot.sign.Text="Loading "..player.DisplayName.."..."
  local data=DataService.load(player.UserId,function(profileData)
   return Progression.applyOffline(profileData,os.time(),Config.Income,function(creatures,incomeFn)
    return PlotEconomy.total(creatures,incomeFn)*((profileData.extras and profileData.extras.sigmaStatue) and 1.5 or 1)
@@ -625,9 +627,15 @@ local function join(player)
   if player.Parent then player:Kick("Could not load your data safely. Please try again later.") end
   return
  end
- if not player.Parent then data.lastLogout=os.time(); DataService.save(player.UserId,data,true); plot.owner=nil; plot.sign.Text="Unclaimed plot"; return end
+ context.data=data
+ if not player.Parent or joinGate.closed then
+  data.lastLogout=os.time()
+  if not DataService.save(player.UserId,data,true) then warn("Failed to release profile after interrupted join: "..player.UserId) end
+  context.data=nil
+  plot.owner=nil; plot.sign.Text="Unclaimed plot"; return
+ end
  local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=data.extras or RewardExtras.new(),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
- states[player]=s; plot.sign.Text=player.DisplayName.."'s plot"
+ states[player]=s; context.data=nil; plot.sign.Text=player.DisplayName.."'s plot"
  for _,key in ipairs(Config.PassOrder) do refreshPass(player,s,key) end
  local stats=Instance.new("Folder"); stats.Name="leaderstats"; stats.Parent=player
  local cashStat=Instance.new("NumberValue"); cashStat.Name="Cash"; cashStat.Value=s.cash; cashStat.Parent=stats
@@ -650,6 +658,24 @@ local function join(player)
  if player.Character then task.spawn(teleport,player.Character) end
  if (data.lastOfflineAward or 0)>0 then send(player,"Welcome back! $"..data.lastOfflineAward.." was added to your bank while away.")
  else send(player,"Welcome! Roll at your station.") end
+end
+local function join(player)
+ if states[player] or not ShutdownGate.begin(joinGate,player.UserId) then return end
+ local context={}
+ local ok,err=pcall(joinImpl,player,context)
+ if not ok then
+  warn("Player join failed for "..player.UserId..": "..tostring(err))
+  if not states[player] then
+   if context.data then
+    context.data.lastLogout=os.time()
+    local savedOk,saved=pcall(DataService.save,player.UserId,context.data,true)
+    if not savedOk or not saved then warn("Failed to release profile after join error: "..player.UserId) end
+   end
+   if context.plot and context.plot.owner==player then context.plot.owner=nil; context.plot.sign.Text="Unclaimed plot" end
+  end
+  if player.Parent then player:Kick("Could not join safely. Please try again.") end
+ end
+ ShutdownGate.finish(joinGate,player.UserId)
 end
 Players.PlayerAdded:Connect(join)
 Players.PlayerRemoving:Connect(function(player)
@@ -774,6 +800,7 @@ task.spawn(function()
  end
 end)
 game:BindToClose(function()
+ ShutdownGate.close(joinGate)
  local remaining=0
  for player,s in pairs(states) do
   states[player]=nil; remaining+=1
@@ -783,5 +810,6 @@ game:BindToClose(function()
   end)
  end
  local deadline=os.clock()+25
- while remaining>0 and os.clock()<deadline do task.wait(0.1) end
+ while (remaining>0 or joinGate.pending>0) and os.clock()<deadline do task.wait(0.1) end
+ if remaining>0 or joinGate.pending>0 then warn("Shutdown deadline reached with saves or joins still pending.") end
 end)

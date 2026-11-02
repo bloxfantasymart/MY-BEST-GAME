@@ -131,12 +131,19 @@ end
 function DataService.save(userId, data, release)
  local session=sessions[userId]
  if not session then return false end
+ if not validProfile(data) then warn("Refusing to save invalid profile: "..userId); return false end
  if session.memory then if release then sessions[userId]=nil end; return true end
  -- Serialize operations; never allow an earlier save to overwrite a later one.
  while session.busy do task.wait(0.1) end
  if sessions[userId]~=session then return false end
  session.busy=true
- local snapshot=copy(data)
+ local copied,snapshot=pcall(copy,data)
+ if not copied then
+  session.busy=false; warn("Failed to copy player profile: "..userId); return false
+ end
+ if not validProfile(snapshot) then
+  session.busy=false; warn("Refusing to save invalid profile snapshot: "..userId); return false
+ end
  local saved=false
  for attempt=1,3 do
   local wrote=false
