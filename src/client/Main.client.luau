@@ -46,13 +46,15 @@ local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.B
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRarity=1,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
-local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
+local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
 local bulkRarity=1; local confirmBulk=nil
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
 local forgeIds={}; local forgeConfirm=false
+local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
+local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false
 local giftButtons={}
 local incomeLabels={}
 local adminData=nil; local adminTarget=nil; local adminAmount="1000"; local adminCatalog=1; local adminKind=1; local pendingAdmin=nil
@@ -95,11 +97,18 @@ local function render()
  if mode=="roll" then
   title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s"
   row("PULL LEVER / REROLL",function() remote:FireServer("roll") end,Color3.fromRGB(220,78,93))
-  row("Auto-buy rarity: "..Config.Rarities[rarityFilter].name.." and above (tap to change)",function() rarityFilter=rarityFilter%#Config.Rarities+1; render() end,Color3.fromRGB(70,75,105))
-  if state.autoRolling then row("STOP AUTO-ROLL",function() remote:FireServer("autoRoll",false) end,Color3.fromRGB(200,65,85))
+  if state.autoRolling then
+   local run=state.autoRun
+   row("STOP AUTO-ROLL"..(run and (" | spent $"..run.spent.." / $"..run.config.maxSpend.." | batches "..run.batches.."/"..run.config.maxBatches) or ""),function() remote:FireServer("autoRoll",false) end,Color3.fromRGB(200,65,85))
   elseif state.rebirth<5 and state.passes.AutoRoll~="owned" then
    row("AUTO-ROLL: unlock at rebirth 5 or with pass",nil,Color3.fromRGB(70,75,105))
-  else row("START AUTO-ROLL (buys matching parts)",function() remote:FireServer("autoRoll",rarityFilter) end,Color3.fromRGB(52,170,105)) end
+  else row("CONFIGURE AUTO-ROLL",function() autoConfirm=false; mode="autoSetup"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(52,170,105)) end
+  if not state.autoRolling and #state.rolls>0 then
+   row(discardConfirm and "CONFIRM: DISCARD ALL CURRENT OFFERS" or "DISCARD ALL OFFERS (review first)",function()
+    if discardConfirm then remote:FireServer("discardOffers"); discardConfirm=false else discardConfirm=true; render() end
+   end,Color3.fromRGB(160,75,70))
+   if discardConfirm then row("CANCEL DISCARD",function() discardConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
+  end
   for _,item in ipairs(state.rolls) do
    local rarity=Config.Rarities[item.rarity]
    local odds=item.rarityChance and string.format("%.2f%% tier",item.rarityChance*100) or rarity.name
@@ -109,6 +118,31 @@ local function render()
    end
    row("SKIP "..item.name.." "..item.kind,function() remote:FireServer("skip",item.id) end,Color3.fromRGB(70,75,105))
   end
+ elseif mode=="autoSetup" then
+  title.Text="AUTO-ROLL SETTINGS"
+  row("Per rarity: SKIP discards; HOLD stops for review; BUY spends cash. Processed in slot order.",nil,Color3.fromRGB(70,75,105))
+  for i,rarity in ipairs(Config.Rarities) do
+   row(rarity.name..": "..string.upper(autoRules[i]).." (tap to change)",function()
+    autoRules[i]=autoRules[i]=="skip" and "hold" or (autoRules[i]=="hold" and "buy" or "skip"); autoConfirm=false; render()
+   end,rarity.color)
+  end
+  local function numberField(labelText,initial,callback)
+   local field=Instance.new("TextBox"); field.Size=UDim2.new(1,-10,0,50); field.BackgroundColor3=Color3.fromRGB(60,65,95); field.TextColor3=Color3.new(1,1,1)
+   field.Text=initial; field.PlaceholderText=labelText; field.ClearTextOnFocus=false; field.Font=Enum.Font.GothamBold; field.TextSize=16
+   field.Parent=list; rowOrder+=1; field.LayoutOrder=rowOrder; round(field)
+   field:GetPropertyChangedSignal("Text"):Connect(function() callback(string.sub(field.Text,1,18)); autoConfirm=false end)
+  end
+  row("MAX CASH TO SPEND IN THIS RUN",nil,Color3.fromRGB(70,75,105)); numberField("Total cash budget",autoMaxSpend,function(v) autoMaxSpend=v end)
+  row("MAX PRICE PER PART",nil,Color3.fromRGB(70,75,105)); numberField("Maximum part price",autoMaxPrice,function(v) autoMaxPrice=v end)
+  row("MAX BATCHES (1–1000)",nil,Color3.fromRGB(70,75,105)); numberField("Maximum batches",autoMaxBatches,function(v) autoMaxBatches=v end)
+  row("Run uses cash, not vouchers. Limits reset on each run. Existing offers must be cleared first.",nil,Color3.fromRGB(70,75,105))
+  row(autoConfirm and "CONFIRM AUTO-ROLL: CASH MAY BE SPENT" or "REVIEW AUTO-ROLL SETTINGS",function()
+   if autoConfirm then
+    remote:FireServer("autoRoll",{rules=autoRules,maxSpend=tonumber(autoMaxSpend),maxPrice=tonumber(autoMaxPrice),maxBatches=tonumber(autoMaxBatches)})
+    autoConfirm=false; discardConfirm=false; mode="roll"; list.CanvasPosition=Vector2.zero; render()
+   else autoConfirm=true; render() end
+  end,Color3.fromRGB(185,65,85))
+  row("BACK TO ROLL STATION",function() autoConfirm=false; mode="roll"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="assemble" then
   title.Text="ASSEMBLY: select one of each"
   row("AUTO-FILL BEST owned part of each type",function()
@@ -436,7 +470,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; if data.open=="roll" then discardConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  render()
