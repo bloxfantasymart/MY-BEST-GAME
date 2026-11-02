@@ -8,7 +8,7 @@ local function samePart(a,b)
   and (a.mutationMultiplier or 1)==(b.mutationMultiplier or 1)
 end
 local function identical(a,b)
- if a.name~=b.name or a.income~=b.income then return false end
+ if a.name~=b.name or a.income~=b.income or (a.blueprintApplied==true)~=(b.blueprintApplied==true) then return false end
  for _,kind in ipairs(kinds) do if not samePart(a.components[kind],b.components[kind]) then return false end end
  return true
 end
@@ -33,7 +33,7 @@ function Fusion.execute(creatures,ids,rebirth,cash,costFn,newId)
  if chosen[1].income*5>1e18 then return nil,"This creature is too powerful to fuse safely." end
  local cost=costFn(chosen[1])
  if cash<cost then return nil,"Not enough cash for fusion." end
- local result={id=newId(),name=chosen[1].name,components=chosen[1].components,income=chosen[1].income*5,level=1,exp=0,stand=0,ascended=true}
+ local result={id=newId(),name=chosen[1].name,components=chosen[1].components,income=chosen[1].income*5,level=1,exp=0,stand=0,ascended=true,blueprintApplied=chosen[1].blueprintApplied==true}
  for i=#creatures,1,-1 do if seen[creatures[i].id] then table.remove(creatures,i) end end
  table.insert(creatures,result)
  return result,cost

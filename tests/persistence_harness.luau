@@ -131,3 +131,16 @@ legacy.autoCollect=true; assert(a.save(505,legacy,true))
 local auto=b.load(505); assert(auto and auto.autoCollect==true); assert(b.save(505,auto,true))
 database.player_505.autoCollect="true"; assert(a.load(505)==nil)
 print("Auto-collector profile compatibility and validation tests passed")
+local manyParts={}
+for i=1,250 do table.insert(manyParts,item("exp-"..i,"Head")) end
+database.player_506={version=1,cash=200,pending=0,slots=1,rebirth=0,parts=manyParts,creatures={},backpackUpgrades=10,rareBlueprints=100}
+local upgrades=a.load(506); assert(upgrades and #upgrades.parts==250 and upgrades.backpackUpgrades==10 and upgrades.rareBlueprints==100)
+assert(a.save(506,upgrades,true))
+local upgradesAgain=b.load(506); assert(upgradesAgain and upgradesAgain.rareBlueprints==100); assert(b.save(506,upgradesAgain,true))
+table.insert(database.player_506.parts,item("excess","Head")); assert(a.load(506)==nil)
+table.remove(database.player_506.parts); database.player_506.backpackUpgrades=11; assert(a.load(506)==nil)
+database.player_506.backpackUpgrades=10; database.player_506.rareBlueprints=101; assert(a.load(506)==nil)
+database.player_506.rareBlueprints=1; database.player_506.creatures={{id="bp-creature",name="Dirt Boy Abomination",income=10,level=1,stand=0,components=clone(complete),blueprintApplied=true}}
+local crafted=a.load(506); assert(crafted and crafted.creatures[1].blueprintApplied==true); assert(a.save(506,crafted,true))
+database.player_506.creatures[1].blueprintApplied="yes"; assert(a.load(506)==nil)
+print("Backpack upgrade and blueprint schema tests passed")

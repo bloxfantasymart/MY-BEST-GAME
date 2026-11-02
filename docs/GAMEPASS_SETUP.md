@@ -9,7 +9,7 @@
 | `Luck` | Doubles the weights of non-common rarity tiers; it does not necessarily double the final probability of each tier. Stacks with event weight multipliers. |
 | `AutoRoll` | Allows auto-roll before rebirth 5. Everyone can use auto-roll at rebirth 5. It spends in-game cash. |
 | `KeepSlots` | Keeps unlocked roll slots after a standard rebirth. Cash still resets and the sacrifice is still consumed. |
-| `Backpack` | Raises body-part capacity from 100 to 200. It does not expand the 100-creature cap. |
+| `Backpack` | Adds 100 body-part slots to the cash-upgraded capacity of 100–150, for a maximum of 250. It does not expand the 100-creature cap. |
 | `VIP` | Adds 20% to **online** stand income. VIP chat tags, booth skins and improved offline income are not yet implemented. |
 
 Only sell a pass if its actual listing description accurately describes the benefits that are implemented and you are ready to support it. The full specification requests additional benefits not yet present. The current code displays the descriptions above; Roblox's purchase dialog supplies the actual price.
@@ -31,7 +31,7 @@ Only sell a pass if its actual listing description accurately describes the bene
 ## Verify before any release
 
 - Test an existing owner, a non-owner, successful and cancelled prompts, rejoin, teleport, shutdown and ownership-service failure. Check that each promised benefit works after ownership is verified and cannot be obtained by sending a client remote.
-- Check auto-roll access before and after rebirth 5. Confirm the backpack accepts up to 200 parts with the pass and that all remain after rejoining and visiting the hub. If ownership cannot be checked temporarily, existing items are retained, but buying more may be blocked until verification succeeds.
+- Check auto-roll access before and after rebirth 5. Confirm the backpack accepts up to 250 parts with the pass and all cash upgrades and that all remain after rejoining and visiting the hub. If ownership cannot be checked temporarily, existing items are retained, but buying more may be blocked until verification succeeds.
 - Test KeepSlots after upgrading slots and completing rebirth. When ownership cannot be verified and no prior confirmed entitlement was saved, rebirth is blocked rather than risking a destructive reset. A confirmed entitlement is retained in the saved profile. **Do not change or remove IDs after people have bought passes:** doing so can break verification and access; a previously unsaved entitlement could still be affected.
 - Test the VIP online multiplier and Luck's actual displayed tier odds during and outside events. Neither gives the unimplemented benefits listed above. On an ownership lookup failure the game may temporarily omit bonuses and lets the player retry from the shop; it does not assume an unverified pass is owned.
 - Mock tests included in the repo do not prove Roblox billing, entitlement callbacks, persistence or compliance work correctly. Paid features require published-environment validation, policy review and a support/refund plan.

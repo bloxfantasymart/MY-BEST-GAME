@@ -38,6 +38,8 @@ assert(PassService.capacity(state)==100 and not PassService.canAuto(state,4))
 assert(PassService.canAuto(state,5))
 state.Backpack="owned"; state.AutoRoll="owned"
 assert(PassService.capacity(state)==200 and PassService.canAuto(state,0))
+assert(PassService.capacity(state,10)==250)
+state.Backpack="notOwned"; assert(PassService.capacity(state,10)==150)
 ids.Luck=104 -- duplicate IDs must be treated as invalid, not sold as multiple perks.
 state=PassService.initial(ids,order)
 assert(state.Luck=="invalid" and state.Backpack=="invalid")

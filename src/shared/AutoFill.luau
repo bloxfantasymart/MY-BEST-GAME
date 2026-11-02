@@ -1,7 +1,8 @@
 --!strict
 -- Finds the exact highest-income 4-part combination under the current synthesis formula.
 local AutoFill={}
-function AutoFill.best(parts,rarities,kinds)
+function AutoFill.best(parts,rarities,kinds,minRarity)
+ minRarity=minRarity or 1
  -- Include every mutation present, including future catalog additions.
  local groups={false}; local seen={}
  for _,item in ipairs(parts) do
@@ -15,7 +16,7 @@ function AutoFill.best(parts,rarities,kinds)
    local highest={}; local exact={}
    for _,item in ipairs(parts) do
     local mutation=item.mutation or "Standard"
-    if not item.locked and item.rarity<=rarity and (group==false or mutation==group) then
+    if not item.locked and item.rarity>=minRarity and item.rarity<=rarity and (group==false or mutation==group) then
      local amount=item.income*(item.mutationMultiplier or 1)
      local current=highest[item.kind]
      if not current or amount>current.income*(current.mutationMultiplier or 1) then highest[item.kind]=item end

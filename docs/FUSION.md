@@ -20,3 +20,5 @@ Stand labels show the creature's income including neighboring bonuses but exclud
 This is an unfinished development build. Test fusion, persistence, rejoin and hub display in a private test experience before trusting it with valuable creatures. Both places must be updated to the current code. See [TESTING.md](TESTING.md).
 
 Protected creatures cannot be fused. Use BACKPACK to unprotect them deliberately before selecting them at the forge.
+
+Blueprint-boosted creatures can only fuse with otherwise matching blueprint-boosted creatures. The output retains the blueprint flag; the 5x fusion uses the already-boosted base income and does not apply the blueprint bonus a second time.

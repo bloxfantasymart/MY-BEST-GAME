@@ -29,8 +29,10 @@ local function validProfile(data)
  if not finite(data.cash,0,1e300) or not finite(data.pending,0,1e300)
   or not finite(data.slots,1,9) or data.slots%1~=0
   or not finite(data.rebirth,0,100) or data.rebirth%1~=0
-  or type(data.parts)~="table" or #data.parts>200
+  or type(data.parts)~="table" or #data.parts>250
   or type(data.creatures)~="table" or #data.creatures>100 then return false end
+ if data.backpackUpgrades~=nil and (not finite(data.backpackUpgrades,0,10) or data.backpackUpgrades%1~=0) then return false end
+ if data.rareBlueprints~=nil and (not finite(data.rareBlueprints,0,100) or data.rareBlueprints%1~=0) then return false end
  if data.autoCollect~=nil and type(data.autoCollect)~="boolean" then return false end
  if data.season~=nil then
   local season=data.season
@@ -81,7 +83,8 @@ local function validProfile(data)
    or not finite(creature.stand,0,maxStands) or creature.stand%1~=0
    or (creature.exp~=nil and not finite(creature.exp,0,1e12))
    or (creature.ascended~=nil and type(creature.ascended)~="boolean")
-   or (creature.locked~=nil and type(creature.locked)~="boolean") or type(creature.components)~="table" then return false end
+   or (creature.locked~=nil and type(creature.locked)~="boolean")
+   or (creature.blueprintApplied~=nil and type(creature.blueprintApplied)~="boolean") or type(creature.components)~="table" then return false end
   ids[creature.id]=true
   if creature.stand>0 then if stands[creature.stand] then return false end; stands[creature.stand]=true end
   for _,kind in ipairs({"Head","Chest","Arms","Legs"}) do

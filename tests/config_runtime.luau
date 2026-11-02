@@ -30,7 +30,8 @@ for price=1,1000 do
 end
 assert(#Config.StandCosts == 12 and #Config.SlotCosts == 9)
 assert(#Config.Themes==5 and #Config.TutorialText==7)
-assert(#Config.SessionGifts==8 and #Config.DailyRewardLabels==7)
+assert(#Config.BackpackUpgradeCosts==10 and Config.BackpackUpgradeCosts[1]==5000)
+assert(#Config.SessionGifts==9 and #Config.DailyRewardLabels==7)
 for rarity=4,8 do
  local present=false
  for _,entry in ipairs(Config.Catalog) do if entry.rarity==rarity then present=true end end

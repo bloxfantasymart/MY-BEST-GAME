@@ -19,6 +19,7 @@ roster[2].locked=true; fail({"one","two","three"},15,999999); roster[2].locked=f
 roster[2].stand=1; fail({"one","two","three"},15,999999); roster[2].stand=0
 roster[2].level=9; fail({"one","two","three"},15,999999); roster[2].level=10
 roster[2].ascended=true; fail({"one","two","three"},15,999999); roster[2].ascended=nil
+roster[2].blueprintApplied=true; fail({"one","two","three"},15,999999); roster[2].blueprintApplied=nil
 roster[2].components.Head.mutation="Golden"; fail({"one","two","three"},15,999999); roster[2].components.Head.mutation="Standard"
 local result,fee=Fusion.execute(roster,{"one","two","three"},15,10000,cost,newId)
 assert(result and result.id=="new-guid" and result.income==50 and result.level==1 and result.ascended and fee==10000)
@@ -48,3 +49,9 @@ assert(near(snapshot.offline,138*1.5*0.25))
 assert(near(PlotEconomy.multiplier({sigma=true,weekend=true},true,true),3*2*1.2*1.5))
 assert(snapshot.sigma and snapshot.weekend and snapshot.vip and snapshot.statue)
 print("Income summary and multiplier stacking tests passed")
+
+local bp={creature("bp1"),creature("bp2"),creature("bp3")}
+for _,entry in ipairs(bp) do entry.blueprintApplied=true end
+local fused=Fusion.execute(bp,{"bp1","bp2","bp3"},15,10000,cost,newId)
+assert(fused and fused.blueprintApplied==true)
+print("Blueprint fusion identity and propagation tests passed")

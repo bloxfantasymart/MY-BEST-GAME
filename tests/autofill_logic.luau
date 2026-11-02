@@ -42,3 +42,14 @@ for i,kind in ipairs(kinds) do assert(selection[kind]=="unlocked"..i, "Auto-fill
 protectedParts[1].locked=true
 assert(AutoFill.best(protectedParts,rarities,kinds)==nil, "No unlocked head means no complete recipe")
 print("Auto-fill excludes protected parts")
+
+local rareParts={}
+for i,kind in ipairs(kinds) do
+ table.insert(rareParts,{id="common"..i,kind=kind,rarity=1,income=10000,mutation="Standard",mutationMultiplier=1})
+ table.insert(rareParts,{id="rare"..i,kind=kind,rarity=3,income=10,mutation="Standard",mutationMultiplier=1})
+end
+local rareSelection=AutoFill.best(rareParts,rarities,kinds,3)
+for i,kind in ipairs(kinds) do assert(rareSelection[kind]=="rare"..i) end
+rareParts[2].locked=true
+assert(AutoFill.best(rareParts,rarities,kinds,3)==nil)
+print("Blueprint auto-fill rarity restriction tests passed")

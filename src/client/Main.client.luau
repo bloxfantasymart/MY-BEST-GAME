@@ -46,13 +46,13 @@ local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.B
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,backpackUpgrades=0,rareBlueprints=0,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
 local bulkRarity=1; local confirmBulk=nil
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
-local forgeIds={}; local forgeConfirm=false
+local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local blueprintConfirm=false
 local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
 local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false
 local giftButtons={}
@@ -145,16 +145,23 @@ local function render()
   row("BACK TO ROLL STATION",function() autoConfirm=false; mode="roll"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="assemble" then
   title.Text="ASSEMBLY: select one of each"
-  row("AUTO-FILL BEST owned part of each type",function()
-   chosen=AutoFill.best(state.parts,Config.Rarities,Config.Types) or {}
+  row("RARE BLUEPRINT: "..(useBlueprint and "ON" or "OFF").." | owned: "..(state.rareBlueprints or 0).." (requires 4 Rare+ parts, +25% base income)",function()
+   useBlueprint=not useBlueprint; blueprintConfirm=false; chosen={}; render()
+  end,Color3.fromRGB(125,75,175))
+  row("AUTO-FILL BEST eligible part of each type",function()
+   blueprintConfirm=false; chosen=AutoFill.best(state.parts,Config.Rarities,Config.Types,useBlueprint and 3 or 1) or {}
    if not next(chosen) then notice.Text="You need one part of each type to auto-fill." end
    render()
   end,Color3.fromRGB(60,120,180))
-  row("ASSEMBLE selected parts",function() remote:FireServer("assemble",chosen); chosen={} end,Color3.fromRGB(52,170,105))
+  row(blueprintConfirm and "CONFIRM: CONSUME FOUR PARTS AND ONE BLUEPRINT" or ("ASSEMBLE selected parts"..(useBlueprint and " (uses 1 blueprint; review)" or "")),function()
+   if useBlueprint and not blueprintConfirm then blueprintConfirm=true; render(); return end
+   chosen.useBlueprint=useBlueprint; remote:FireServer("assemble",chosen); chosen={}; blueprintConfirm=false
+  end,Color3.fromRGB(52,170,105))
+  if blueprintConfirm then row("CANCEL BLUEPRINT ASSEMBLY",function() blueprintConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
   for _,kind in ipairs(Config.Types) do
    row(kind..": "..(chosen[kind] and "selected" or "choose below"),nil,Color3.fromRGB(70,75,105))
    for _,item in ipairs(state.parts) do
-    if item.kind==kind and not item.locked then row((item.mutation or "Standard").." "..item.name.." "..kind..(chosen[kind]==item.id and " ✓" or ""),function() chosen[kind]=item.id; render() end,Config.Rarities[item.rarity].color) end
+    if item.kind==kind and not item.locked and (not useBlueprint or item.rarity>=3) then row((item.mutation or "Standard").." "..item.name.." "..kind..(chosen[kind]==item.id and " ✓" or ""),function() chosen[kind]=item.id; blueprintConfirm=false; render() end,Config.Rarities[item.rarity].color) end
    end
   end
  elseif mode=="forge" then
@@ -202,6 +209,8 @@ local function render()
   local nextStand=state.standsUnlocked+1
   local standCost=Config.StandCosts[nextStand-12]
   row(standCost and ("Unlock stand "..nextStand.." — $"..standCost.."; rebirth "..(nextStand-12)) or "All stands unlocked",function() remote:FireServer("upgradeStands") end,Color3.fromRGB(210,130,35))
+  local bagCost=Config.BackpackUpgradeCosts[(state.backpackUpgrades or 0)+1]
+  row(bagCost and ("BACKPACK +5 PART SLOTS — $"..bagCost.." ("..(state.backpackUpgrades or 0).."/10)") or "All cash backpack upgrades unlocked",function() remote:FireServer("upgradeBackpack") end,Color3.fromRGB(210,130,35))
   row("PLOT INCOME BREAKDOWN",function() mode="income"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,145,150))
   if state.rebirth<10 then row("AUTO-COLLECTOR DRONE — unlocks at rebirth 10 (free)",nil,Color3.fromRGB(70,75,105))
   else row("AUTO-COLLECTOR: "..(state.autoCollect and "ON" or "OFF").." (every 10 seconds while online)",function() remote:FireServer("setAutoCollect",not state.autoCollect) end,Color3.fromRGB(60,145,150)) end
@@ -355,7 +364,7 @@ local function render()
   if bagTab=="Boosts" then
    local extras=state.extras or {}
    row("USE 3x LUCK POTION (15 min) — "..(extras.luckPotions or 0).." owned",function() remote:FireServer("useLuckPotion") end,Color3.fromRGB(125,75,175))
-   row("Free-part vouchers: "..(extras.rollVouchers or 0).." — use at roll station.",nil,Color3.fromRGB(70,75,105))
+   row("Free-part vouchers: "..(extras.rollVouchers or 0).." | Rare blueprints: "..(state.rareBlueprints or 0).." — use at assembly.",nil,Color3.fromRGB(70,75,105))
   else
    row("Parts "..#state.parts.."/"..state.partCapacity.." | Creatures "..#state.creatures.."/100",nil,Color3.fromRGB(70,75,105))
    local search=Instance.new("TextBox"); search.Size=UDim2.new(1,-10,0,50); search.BackgroundColor3=Color3.fromRGB(60,65,95); search.TextColor3=Color3.new(1,1,1)
@@ -413,7 +422,7 @@ local function render()
       selectedSell={name=item.name.." "..item.kind,value=Config.PartSellValue(item),id=item.id,action="sellPart",category="part",locked=item.locked==true}; confirmBulk=nil; list.CanvasPosition=Vector2.zero; render()
      end,Config.Rarities[item.rarity].color)
     else
-     row(protected..(item.ascended and "ASCENDED " or "")..item.name.." Lv."..item.level.." | $"..math.floor(entry.income).."/s | "..(item.stand==0 and "Unplaced" or "Stand "..item.stand),function()
+     row(protected..(item.ascended and "ASCENDED " or "")..(item.blueprintApplied and "[BLUEPRINT] " or "")..item.name.." Lv."..item.level.." | $"..math.floor(entry.income).."/s | "..(item.stand==0 and "Unplaced" or "Stand "..item.stand),function()
       selectedSell={name=item.name,value=Config.CreatureSellValue(item),id=item.id,action="sellCreature",category="creature",locked=item.locked==true,levelCost=Config.LevelCost(item)}; confirmBulk=nil; list.CanvasPosition=Vector2.zero; render()
      end,Config.Rarities[entry.rarity].color)
     end
@@ -470,7 +479,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; if data.open=="roll" then discardConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; blueprintConfirm=false end; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; if data.open=="roll" then discardConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  render()
