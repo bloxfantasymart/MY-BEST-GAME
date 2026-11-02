@@ -39,10 +39,11 @@ local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.B
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,autoRolling=false,autoRarity=1,rebirth=0,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
+local bulkRarity=1; local confirmBulk=nil
 local function row(text, callback, color)
  local b=button(list,text,UDim2.new(1,-10,0,50),UDim2.new(),color)
  rowOrder+=1; b.LayoutOrder=rowOrder
@@ -59,6 +60,8 @@ local function render()
   row("PULL LEVER / REROLL",function() remote:FireServer("roll") end,Color3.fromRGB(220,78,93))
   row("Auto-buy rarity: "..Config.Rarities[rarityFilter].name.." and above (tap to change)",function() rarityFilter=rarityFilter%#Config.Rarities+1; render() end,Color3.fromRGB(70,75,105))
   if state.autoRolling then row("STOP AUTO-ROLL",function() remote:FireServer("autoRoll",false) end,Color3.fromRGB(200,65,85))
+  elseif state.rebirth<5 and state.passes.AutoRoll~="owned" then
+   row("AUTO-ROLL: unlock at rebirth 5 or with pass",nil,Color3.fromRGB(70,75,105))
   else row("START AUTO-ROLL (buys matching parts)",function() remote:FireServer("autoRoll",rarityFilter) end,Color3.fromRGB(52,170,105)) end
   for _,item in ipairs(state.rolls) do
    local rarity=Config.Rarities[item.rarity]
@@ -96,7 +99,7 @@ local function render()
   title.Text="REBIRTH "..(state.rebirth or 0).." / 100"
   if state.rebirth>=100 then row("Maximum rebirth reached",nil) else
    row("Cost: $"..state.rebirthCost.." | Sacrifice: "..state.target.." Abomination",nil,Color3.fromRGB(70,75,105))
-   row("Rebirth resets cash and slots; other items remain. Luck x"..string.format("%.2f",1.15^(state.rebirth+1)),nil,Color3.fromRGB(70,75,105))
+   row("Rebirth resets cash; roll slots reset unless Keep Slots applies. Other items remain. Luck x"..string.format("%.2f",1.15^(state.rebirth+1)),nil,Color3.fromRGB(70,75,105))
    row(confirmRebirth and "CONFIRM: RESET CASH AND SACRIFICE" or "REBIRTH (tap to review)",function()
    if confirmRebirth then remote:FireServer("rebirth"); confirmRebirth=false else confirmRebirth=true; render() end
   end,Color3.fromRGB(220,75,130))
@@ -108,6 +111,17 @@ local function render()
   local nextStand=state.standsUnlocked+1
   local standCost=Config.StandCosts[nextStand-12]
   row(standCost and ("Unlock stand "..nextStand.." — $"..standCost.."; rebirth "..(nextStand-12)) or "All stands unlocked",function() remote:FireServer("upgradeStands") end,Color3.fromRGB(210,130,35))
+  row("OPEN GAMEPASS SHOP",function() mode="shop"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(180,65,160))
+ elseif mode=="shop" then
+  title.Text="GAMEPASS SHOP"
+  row("Passes are optional. Roblox shows the price before you confirm.",nil,Color3.fromRGB(70,75,105))
+  row("REFRESH OWNERSHIP",function() remote:FireServer("refreshPasses") end,Color3.fromRGB(60,120,180))
+  for _,key in ipairs(Config.PassOrder) do
+   local status=state.passes[key] or "unknown"
+   local detail=status=="owned" and "OWNED" or status=="notOwned" and "TAP TO VIEW" or status=="unknown" and "CHECKING" or "UNAVAILABLE"
+   row(key.." — "..Config.PassDescriptions[key].." — "..detail,function() remote:FireServer("buyPass",key) end,Color3.fromRGB(120,75,170))
+  end
+  row("Developer products and trading are not available yet.",nil,Color3.fromRGB(70,75,105))
  elseif mode=="rewards" then
   title.Text="DAILY REWARDS & QUESTS"
   local p=state.progress
@@ -139,7 +153,7 @@ local function render()
   title.Text="BACKPACK — "..bagTab
   row("FILTER: "..bagTab.." (tap to change)",function()
    if bagTab=="All" then bagTab="Body Parts" elseif bagTab=="Body Parts" then bagTab="Brainrots" else bagTab="All" end
-   selectedSell=nil; render()
+   selectedSell=nil; confirmBulk=nil; render()
   end,Color3.fromRGB(70,75,105))
   if selectedSell then
    row("CONFIRM SELL "..selectedSell.name.." for $"..selectedSell.value,function()
@@ -148,7 +162,17 @@ local function render()
    row("CANCEL SELL",function() selectedSell=nil; render() end,Color3.fromRGB(70,75,105))
   end
   if bagTab~="Brainrots" then
-   row("BODY PARTS: "..#state.parts.." / 100 — tap a part to sell",nil,Color3.fromRGB(70,75,105))
+   row("BODY PARTS: "..#state.parts.." / "..state.partCapacity.." — tap a part to sell",nil,Color3.fromRGB(70,75,105))
+   row("BULK SELL UP TO "..Config.Rarities[bulkRarity].name.." (tap to change rarity)",function() bulkRarity=bulkRarity%#Config.Rarities+1; confirmBulk=nil; render() end,Color3.fromRGB(85,85,120))
+   local ids={}; local value=0
+   for _,item in ipairs(state.parts) do if item.rarity<=bulkRarity then table.insert(ids,item.id); value+=Config.PartSellValue(item) end end
+   local count=confirmBulk and #confirmBulk.ids or #ids
+   local shownValue=confirmBulk and confirmBulk.value or value
+   row((confirmBulk and "CONFIRM SELL " or "SELL ")..count.." parts for $"..shownValue.." — includes mutations",function()
+    if confirmBulk then
+     remote:FireServer("bulkSellParts",{rarity=confirmBulk.rarity,ids=confirmBulk.ids}); confirmBulk=nil
+    elseif #ids>0 then confirmBulk={rarity=bulkRarity,ids=ids,value=value}; render() end
+   end,Color3.fromRGB(185,60,85))
    for _,item in ipairs(state.parts) do
     row((item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] | sell $"..Config.PartSellValue(item),function()
      selectedSell={name=item.name.." "..item.kind,value=Config.PartSellValue(item),id=item.id,action="sellPart"}; list.CanvasPosition=Vector2.zero; render()
@@ -175,7 +199,7 @@ rewards.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="rew
 slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgrades"; panel.Visible=true; render() end)
 travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
 rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; confirmRebirth=false; mode="rebirth"; panel.Visible=true; render() end)
-bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; mode="bag"; panel.Visible=true; render() end)
+bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; confirmBulk=nil; mode="bag"; panel.Visible=true; render() end)
 local tint=Instance.new("ColorCorrectionEffect"); tint.Name="BrainrotEventTint"; tint.Enabled=false; tint.Parent=Lighting
 local function updateEvent(flags)
  if not flags then return end

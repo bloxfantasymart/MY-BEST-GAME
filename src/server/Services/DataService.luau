@@ -28,8 +28,9 @@ local function validProfile(data)
  if not finite(data.cash,0,1e300) or not finite(data.pending,0,1e300)
   or not finite(data.slots,1,9) or data.slots%1~=0
   or not finite(data.rebirth,0,100) or data.rebirth%1~=0
-  or type(data.parts)~="table" or #data.parts>100
+  or type(data.parts)~="table" or #data.parts>200
   or type(data.creatures)~="table" or #data.creatures>100 then return false end
+ if data.keepSlotsEntitled~=nil and type(data.keepSlotsEntitled)~="boolean" then return false end
  if data.lastLogout~=nil and (not finite(data.lastLogout,0,1e12) or data.lastLogout%1~=0) then return false end
  if data.lastOfflineAward~=nil and not finite(data.lastOfflineAward,0,1e300) then return false end
  if data.progress~=nil then

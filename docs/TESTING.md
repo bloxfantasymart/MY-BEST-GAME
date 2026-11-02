@@ -9,7 +9,7 @@ These steps are for a **private test experience**, not your public game. The aut
 3. Walk to the red station and use its prompt. Pull the lever; check that a tray shows an offer. Buy it or press its Skip button. Try walking away and trying to roll: the server should reject the action.
 4. Keep rolling and buying until you have a Head, Chest, Arms and Legs. Go to the purple pod. Select each part (or use auto-fill), then assemble. Verify the parts disappear and the creature appears in the backpack.
 5. Use a yellow stand prompt and select the creature. It should appear, move gently and earn pending cash. Step on the green pad or tap the cash counter to collect. Check the displayed balance and level increase over time.
-6. Test inventory filtering, selling confirmation, paid leveling, travel and upgrades. Selling is permanent. Test auto-roll only after reading its warning: it spends cash. Move away from the station and check it stops.
+6. Test inventory filtering, selling confirmation, paid leveling, travel and upgrades. Selling is permanent. Auto-roll requires rebirth 5 or the configured pass. Test it only after reading its warning: it spends cash. Move away from the station and check it stops.
 7. Open **REWARDS → HOW TO PLAY**, check the two plaza leaderboards and the event countdown. The leaderboards cover the current server only. Use Studio's device emulator and a real mobile device to check that buttons and text remain usable.
 
 ### Daily rewards and objectives
@@ -30,4 +30,4 @@ In Studio's **Test** tab start a server with two or more clients. Each player sh
 
 ## 4. Before publishing broadly
 
-The optional [showcase hub](TRADING_HUB_SETUP.md) is not a marketplace yet. Trading, paid products and passes are not implemented. Complete and test them separately before charging players. Review third-party character names, licensed assets and Roblox policies. Check performance with a full six-player server, including many placed creatures and events. Event timings are based on UTC, so servers should agree when their clocks agree.
+The optional [showcase hub](TRADING_HUB_SETUP.md) is not a marketplace yet. Trading and developer products are not implemented. Optional gamepass hooks are disabled by default; see the [gamepass guide](GAMEPASS_SETUP.md) and do not enable public sales before testing. Complete and test them separately before charging players. Review third-party character names, licensed assets and Roblox policies. Check performance with a full six-player server, including many placed creatures and events. Event timings are based on UTC, so servers should agree when their clocks agree.

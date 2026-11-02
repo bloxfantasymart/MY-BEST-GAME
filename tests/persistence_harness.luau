@@ -65,4 +65,10 @@ assert(a.save(13,once,true))
 local twice=b.load(13,awardOffline)
 assert(twice and twice.pending==25, "Acquisition must not award the same interval twice")
 assert(b.save(13,twice,true))
-print("Persistence lease, atomic acquisition, and invalid-profile mock tests passed")
+local extraParts={}
+for i=1,150 do table.insert(extraParts,item("part-"..i,"Head")) end
+database.player_14={version=1,cash=0,pending=0,slots=1,rebirth=0,parts=extraParts,creatures={}}
+local expanded=a.load(14)
+assert(expanded and #expanded.parts==150, "Expanded backpacks must remain loadable without live entitlement lookup")
+assert(a.save(14,expanded,true))
+print("Persistence lease, atomic acquisition, expanded inventory, and invalid-profile mock tests passed")

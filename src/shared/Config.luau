@@ -3,6 +3,17 @@ local Config = {}
 -- Set these to the two place IDs within the SAME Roblox experience.
 -- Zero disables the corresponding portal rather than teleporting to an arbitrary place.
 Config.PlaceIds = {Main=0, TradingHub=0}
+-- Gamepass IDs are different from developer-product IDs. Zero disables each pass.
+-- Set unique IDs from this experience only, after testing in a private experience.
+Config.GamePasses = {Luck=0, AutoRoll=0, KeepSlots=0, Backpack=0, VIP=0}
+Config.PassOrder = {"Luck", "AutoRoll", "KeepSlots", "Backpack", "VIP"}
+Config.PassDescriptions = {
+ Luck="2x non-common rarity weight",
+ AutoRoll="Auto-roll before rebirth 5",
+ KeepSlots="Keep roll slots on rebirth",
+ Backpack="100 extra body-part slots",
+ VIP="20% extra online stand income",
+}
 -- Replace 0 with IDs of audio you have permission to use. 0 means silent.
 Config.AudioIds = {roll=0, buy=0, craft=0, collect=0, rare=0}
 Config.SlotCosts = {0, 500, 2500, 10000, 50000, 250000, 1000000, 5000000, 25000000}
