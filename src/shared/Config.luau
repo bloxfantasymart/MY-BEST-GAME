@@ -1,6 +1,31 @@
 --!strict
 local Config = {}
 Config.SlotCosts = {0, 500, 2500, 10000, 50000, 250000, 1000000, 5000000, 25000000}
+Config.Mutations = {
+ {name="Standard", weight=9000, multiplier=1},
+ {name="Shiny", weight=700, multiplier=1.5},
+ {name="Golden", weight=240, multiplier=2.5},
+ {name="Void", weight=50, multiplier=4},
+ {name="Glitched", weight=10, multiplier=6},
+}
+-- A tier may only require an archetype already available before that rebirth.
+function Config.RebirthTarget(current)
+ if current==0 then return "Dirt Boy" end
+ local target=Config.Catalog[1]
+ for _,entry in ipairs(Config.Catalog) do
+  if entry.rebirth<=current then target=entry end
+ end
+ return target.name
+end
+function Config.RebirthCost(current)
+ return math.floor(1000*(current+1)^2.7)
+end
+function Config.LevelCost(creature)
+ return math.max(50,math.floor(creature.income*10*(1+creature.level*0.25)))
+end
+function Config.Income(creature)
+ return creature.income*(1+0.25*(creature.level-1))
+end
 Config.Types = {"Head", "Chest", "Arms", "Legs"}
 Config.Rarities = {
  {name="Common", weight=5000, multiplier=1, color=Color3.fromRGB(180,180,180)},

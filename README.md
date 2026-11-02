@@ -1,27 +1,32 @@
-# Roll a Brainrot — stage 1 playable prototype
+# Roll a Brainrot — playable development build
 
-This repository contains the first stage of your Roblox game. It generates a world and six plots, lets you roll and buy parts, assemble mixed creatures, put them on 12 stands, collect their income and unlock up to nine roll slots. All gameplay decisions are made by the server.
+This repository contains an **unfinished Roblox game**: a generated six-plot world, server-owned rolling and crafting, stands and income, mutations, leveling, rebirths, timed events and a first persistence implementation. Trading, Robux purchases and many polish features are not yet implemented. See [the roadmap](docs/ROADMAP.md).
 
-**Important: progress is temporary and resets whenever you leave. This is not a finished or production-ready game. Do not sell paid items or publish it as finished yet.** Roblox Studio is required to test; the project has not been tested in Studio in this environment.
+**Please test this in a private test experience first.** It has not been run in Roblox Studio in this environment. Do not sell paid items or advertise it as complete. We cannot guarantee saving or prevent data loss until Studio and live multiplayer tests have passed.
 
-## Beginner setup, step by step
+## Setup for beginners
 
 1. Install [Roblox Studio](https://create.roblox.com/) and sign in. Create a new **Baseplate** experience.
-2. Install [Rojo 7.7](https://rojo.space/docs/v7/getting-started/installation/) on your computer and install its Roblox Studio plugin. Download this repository to your computer (GitHub → **Code** → **Download ZIP**, then extract it).
-3. Open a terminal in the extracted folder (the folder containing `default.project.json`) and run `rojo serve`.
-4. In Studio open the **Plugins** tab, select **Rojo**, and connect to the server (normally `localhost:34872`). This syncs the scripts into the appropriate Roblox services. Keep Rojo running while editing.
-5. Press **Play**. Walk to your red roll station and use its prompt. Click **PULL LEVER**, then buy parts. You start with $200; rolling itself is free. Reroll until you have a Head, Chest, Arms and Legs. Walk to the purple assembly pod, select each part, and assemble. Walk to a yellow stand and select the creature. Use the cash HUD or green ATM to collect income. Buy extra roll slots with the **SLOTS +** button.
-6. To test with friends, publish the place using **File → Publish to Roblox**, and set the experience's maximum players to **6** in Creator Dashboard. This setting is not controlled by the scripts. Test with Studio's **Test → Server & Clients** mode too.
+2. Install [Rojo 7.7](https://rojo.space/docs/v7/getting-started/installation/) on your computer and install the Rojo Studio plugin. Download this repository from GitHub using **Code → Download ZIP** and extract it. Make sure you download the branch `arena/323aed2b-my-best-game`, not `main`.
+3. Open a terminal in the extracted folder (containing `default.project.json`) and run `rojo serve`.
+4. In Studio, open **Plugins → Rojo** and connect (normally `localhost:34872`). Keep Rojo running while editing. The scripts sync into the Roblox services automatically.
+5. Press **Play**. At your red station, use the prompt, press **PULL LEVER**, and buy parts. Reroll for a Head, Chest, Arms and Legs. At the purple pod, select one of each and assemble. Use a yellow stand's prompt to place your creature. Click the cash HUD or use the green ATM to collect income. Use **SLOTS +** to buy more roll slots, **BACKPACK** to pay to level a creature, and **REBIRTH** to see its requirements.
+6. For multiplayer testing, publish via **File → Publish to Roblox**, then set maximum players to **6** in Creator Dashboard. Use Studio's **Test → Server & Clients** too. You must configure the player limit yourself.
 
-Alternative: `rojo build default.project.json -o RollABrainrot.rbxlx` creates a place file you can open in Studio. Do not copy scripts into arbitrary folders: their locations matter.
+Alternative: `rojo build default.project.json -o RollABrainrot.rbxlx` creates a place file you can open in Studio. Do not move scripts into different folders.
 
-## What is and isn't included
+## Saving and Studio testing
 
-See [the implementation roadmap](docs/ROADMAP.md) for scope, limitations, assumptions and future stages. The 50 requested catalog entries are present, but only the eight rebirth-0 entries can currently roll. Starter models are colored geometric placeholders, not branded characters. Some requested names may involve third-party intellectual property; review them before publishing.
+- Published servers attempt to save in Roblox DataStore `RollABrainrotProfiles_v1`, with a session lease, periodic saves, retries and a shutdown save. A failed load kicks the player instead of silently overwriting data. Offline income is not implemented.
+- **Studio defaults to temporary in-memory data**, so progress resets on leaving. To test real persistence, publish a **separate test experience**, enable **Game Settings → Security → Enable Studio Access to API Services**, then set `DataService.TestPersistence = true` in `src/server/Services/DataService.luau` and sync with Rojo. Studio API access can affect the published experience's actual data, so never test on your live game. Set the flag back to `false` after testing.
+- Verify rejoin, two concurrent sessions, save errors and shutdown in the test experience before trusting the system with real players. Roblox services can fail; unsuccessful final saves can lose progress.
 
 ## Troubleshooting
 
-- **No world or UI:** make sure Rojo is connected and press Play, not Run. Check **View → Output** for errors. The three synced locations are ReplicatedStorage/Shared, ServerScriptService/Game, and StarterPlayer/StarterPlayerScripts/GameClient.
-- **Cannot roll or assemble:** use your own plot and stand within 20 studs of the station. The station prompt opens its menu; then use the button inside it.
-- **Cannot buy:** check your balance and the 100-part inventory limit. Rerolling replaces any unpurchased offers.
-- **Nothing saves:** expected in stage 1. Do not enable Studio API access expecting it to save yet.
+- **No world or UI:** check Rojo connection and press Play, not Run. Open **View → Output** for errors. The synced locations are ReplicatedStorage/Shared, ServerScriptService/Game and StarterPlayer/StarterPlayerScripts/GameClient.
+- **Cannot roll or assemble:** use your own plot and stay within 20 studs of the station. The prompt opens the menu; use its button to act.
+- **Cannot buy:** check your balance and 100-part limit. Rerolling discards unpurchased offers.
+- **Kicked while loading:** DataStore may be unavailable or the previous server's lease is still active; wait a few minutes and retry. Check Output for errors.
+- **Studio data resets:** this is the default. See the saving section above.
+
+The catalog contains names that may involve third-party intellectual property; review names and obtain appropriate rights before publishing.

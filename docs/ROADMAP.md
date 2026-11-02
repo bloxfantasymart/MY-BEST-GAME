@@ -1,20 +1,20 @@
-# Implementation roadmap and decisions
+# Progress and roadmap
 
-## Stage 1 — prototype in this repository
-- Procedural plaza, six assigned plots, lever/pod/ATM and 12 stands per plot.
-- Server-generated weighted rolls, four body-part types, 50 catalog rows, nine slot prices, server-owned purchase/assembly/income/placement and basic remote throttling/proximity checks.
-- Starting cash $200 and part price `max(10, floor(base income * 5))` are prototype balancing choices because the specification does not define them. Slot upgrades and the HUD collect button work from anywhere. Rolls select a weighted eligible rarity then an archetype uniformly in that tier; luck adjusts tier weights. The requested exact chance labels are not displayed because actual odds depend on unlocked tiers and luck.
-- Income is the sum of four part base incomes times the highest rarity multiplier times 0.4. Ties use the first component in Head, Chest, Arms, Legs order. Only whole pending dollars are collected; fractions remain in the bank.
-- A player's in-memory data and plot are discarded on leaving; no offline income. No mutation, level, rebirth, saving, animation, sound, trading, shop, admin, live events or monetization yet. The UI is functional placeholder UI and hasn't been validated on devices.
+## Implemented development build
+- Procedural plaza, six assigned plots, roll station, assembly pod, ATM and 12 stands. Models are colored geometric placeholders.
+- Server-generated rarity-weighted rolls and mutation rolls, four part types, 50 catalog rows, nine slot prices, purchase/assembly/placement/income. Remote actions are throttled and physical station actions check proximity.
+- Mutation weights: Standard 90%, Shiny 7%, Golden 2.4%, Void 0.5%, Glitched 0.1%. Each part's base contribution is multiplied by its mutation multiplier (1, 1.5, 2.5, 4 or 6); four identical mutations, including Standard, double the result. The sum is multiplied by the highest rarity multiplier and 0.4. Ties choose Head, Chest, Arms, Legs order. Effects are basic colors/materials, not the final particles.
+- Placed creatures gain one level per 10 seconds and can also be upgraded with cash from the backpack; +25% of base income per level. This interprets the unspecified EXP threshold as one EXP per level. Level cap 1,000 and creature cap 100 are safety choices. Offline income/EXP are not included.
+- Up to 100 rebirths. Requirement is floor(1000 * (current rebirth + 1)^2.7). Rebirth 1 requires Dirt Boy; subsequent targets use the last catalog entry unlocked at the **current** tier, so the sacrifice can be obtained before rebirthing. Cash and roll slots reset, the specified creature is removed (including from a stand), and other inventory, stands and pending cash remain. No paid skips or keep-slots pass yet.
+- Server-relative events: a five-minute Frenzy during the last five minutes of every 30-minute period doubles non-common rarity weights; an Eclipse starts at minute 15 and alternates every 15 minutes with Sigma, lasting three and two minutes respectively. Eclipse discounts newly rolled offers 50%, Sigma triples stand income. No Ohio Storm, global synchronization or sky effects yet.
+- Persistence uses a DataStore profile with an UpdateAsync lease, 45-second renewal/autosave, retries and shutdown flush. Studio defaults to memory-only; see README. It is a first implementation, not a proven production persistence library. A server that cannot renew for 120 seconds stops gameplay by kicking the player; the 180-second lease eventually expires after a crash. A failed final save may lose progress. New data starts at $200; the part price is max($10, base income * 5), discounted in Eclipse. These are prototype choices.
+- The current luck model multiplies rarer tier weights increasingly with 1.15 compound rebirth luck; it is not a guarantee of a particular rarity. Probabilities depend on unlocked tiers. Slots and HUD collection are usable from anywhere. No exact probability badges or auto-roll yet.
 
-## Stage 2 — durability and progression
-Add session-locked, migration-aware persistence and safe save/retry/shutdown behavior, tests for data loss and concurrent sessions, mutation and level progression, and a defined reachable rebirth sacrifice table. The prompt's example requiring a rebirth-5 locked part for rebirth 5 is unreachable if that means moving from tier 4 to 5; choose and document a corrected rule before implementation. Consider retention, storage limits and economy balancing.
+## Next: quality and full feature coverage
+Add robust device testing, inventory filters/sell, animations, sound, procedural character detailing, proper event scheduling, storms, stand expansion, polish and accessibility. Define the exact EXP progression and luck formula if different from the above. Review Roblox policies and third-party names/assets.
 
-## Stage 3 — presentation and accessibility
-Polish responsive touch/PC UI, physical displays, visual effects, animations, sound, live events and expanded stands. Obtain or create properly licensed assets. Test real devices.
+## Later: trading and monetization
+Build the separate trading place with recoverable, secure transfers, booth and direct trades; test race conditions, session ownership and recovery extensively. Roblox DataStores do not provide transactions across two player profiles. Configure place IDs, player limits, product IDs and prices in Creator Dashboard. Implement idempotent server receipt handling before enabling purchases. Paid random items and their disclosures must comply with Roblox policy. Admin permissions, paid skips, pass benefits, auto-roll and cash packs remain unimplemented.
 
-## Stage 4 — trading and monetization
-Implement a separately configured trading place, secure atomic transfers, booth and direct trades, and extensive exploit/data-loss tests before enabling. Roblox DataStores do not provide a transaction spanning two player profiles; design a recoverable transaction protocol rather than assuming two independent saves are atomic. Set experience/place IDs, server limits, product IDs and prices in Creator Dashboard. Developer product rewards must use server receipt handling and idempotency. Do not enable paid purchases before testing fulfillment and recovery.
-
-## Release checklist
-Run Studio multiplayer tests including rejoin, shutdown, proximity abuse, malformed requests and simultaneous purchase attempts. Audit all copyrighted names and assets, platform policy and paid-random-item rules. Publish only after persistence and paid flows are independently verified. Exact event behavior, mutations, 24-stand upgrades, auto-roll, pass benefits, per-tier skip products, admin permissions, and the complete rebirth target mapping still require implementation and/or design decisions.
+## Validation before release
+Perform Studio and published test-place tests for persistence, lease expiry, server crashes, overlapping sessions, rejoin and shutdown. Test malformed remote inputs, concurrent actions and client disconnections. Validate balance and responsive UI on real mobile and PC devices. Test real paid receipts and trading recovery only in an appropriate test environment. Do not treat static syntax/config checks as Roblox runtime validation.
