@@ -20,6 +20,7 @@ local function validPart(item)
   and type(item.name)=="string" and #item.name<=100
   and (item.kind=="Head" or item.kind=="Chest" or item.kind=="Arms" or item.kind=="Legs")
   and finite(item.rarity,1,8) and item.rarity%1==0 and finite(item.income,0,1e15)
+  and (item.mutation==nil or (type(item.mutation)=="string" and #item.mutation<=40))
   and (item.locked==nil or type(item.locked)=="boolean")
   and (item.price==nil or finite(item.price,0,1e15))
   and (item.mutationMultiplier==nil or finite(item.mutationMultiplier,1,6))

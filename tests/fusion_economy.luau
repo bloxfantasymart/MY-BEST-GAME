@@ -21,6 +21,9 @@ roster[2].level=9; fail({"one","two","three"},15,999999); roster[2].level=10
 roster[2].ascended=true; fail({"one","two","three"},15,999999); roster[2].ascended=nil
 roster[2].blueprintApplied=true; fail({"one","two","three"},15,999999); roster[2].blueprintApplied=nil
 roster[2].components.Head.mutation="Golden"; fail({"one","two","three"},15,999999); roster[2].components.Head.mutation="Standard"
+assert(Fusion.execute(roster,{"one","two","three"},15,10000,cost,function() error("GUID failure") end)==nil and #roster==3)
+assert(Fusion.execute(roster,{"one","two","three"},15,10000,cost,function() return "oneh" end)==nil and #roster==3)
+assert(Fusion.execute(roster,{"one","two","three"},15,10000,cost,function() return "three" end)==nil and #roster==3)
 local result,fee=Fusion.execute(roster,{"one","two","three"},15,10000,cost,newId)
 assert(result and result.id=="new-guid" and result.income==50 and result.level==1 and result.ascended and fee==10000)
 assert(#roster==1 and roster[1]==result)

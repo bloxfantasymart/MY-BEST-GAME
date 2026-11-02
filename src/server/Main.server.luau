@@ -24,6 +24,7 @@ local Season = require(script.Parent.Services.Season)
 local AutoCollector = require(script.Parent.Services.AutoCollector)
 local AutoRoll = require(script.Parent.Services.AutoRoll)
 local Blueprints = require(script.Parent.Services.Blueprints)
+local Crafting = require(script.Parent.Services.Crafting)
 local ShutdownGate = require(script.Parent.Services.ShutdownGate)
 local RollOdds = require(script.Parent.Services.RollOdds)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
@@ -544,28 +545,13 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local cost=Config.SlotCosts[s.slots+1]
   if cost and s.cash>=cost then s.cash-=cost; s.slots+=1; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Slot unlocked!") else send(player,"Not enough cash, or all slots unlocked.") end
  elseif action=="assemble" and nearby(player,s.plot.pod) and type(value)=="table" then
-  if #s.creatures>=100 then send(player,"Creature inventory is full (100)."); return end
-  local useBlueprint=value.useBlueprint==true
-  local components={}; local seen={}; local sum=0; local highest=0; local dominant=nil; local firstMutation=nil; local harmony=true
-  for _,kind in ipairs(Config.Types) do
-   local id=value[kind]; local _,item=findById(s.parts,id)
-   if not Inventory.canConsume(item) or item.kind~=kind or seen[id] then send(player,"Select one unlocked owned part of each type."); return end
-   seen[id]=true; components[kind]=item; sum+=item.income*(item.mutationMultiplier or 1)
-   if firstMutation==nil then firstMutation=item.mutation or "Standard" elseif firstMutation~=(item.mutation or "Standard") then harmony=false end
-   if item.rarity>highest then highest=item.rarity; dominant=item.name end
-  end
-  local blueprintMultiplier,reason=Blueprints.validate(value.useBlueprint,s.rareBlueprints,components)
-  if not blueprintMultiplier then send(player,reason); return end
-  local baseIncome=sum*Config.Rarities[highest].multiplier*0.4*(harmony and 2 or 1)*blueprintMultiplier
-  if baseIncome>1e18 then send(player,"This assembly exceeds the supported income limit."); return end
-  local creature={id=HttpService:GenerateGUID(false),name=dominant.." Abomination",components=components,income=baseIncome,level=1,exp=0,stand=0,blueprintApplied=useBlueprint}
-  if useBlueprint then s.rareBlueprints-=1 end
-  if highest>=3 then Progression.increment(s.progress,"rareCrafts",1,os.time()) end
-  Season.addXP(s.season,20)
-  Tutorial.advance(s.tutorial,"craft",s.parts)
-  for i=#s.parts,1,-1 do if seen[s.parts[i].id] then table.remove(s.parts,i) end end
-  table.insert(s.creatures,creature)
-  send(player,useBlueprint and "Rare blueprint used: assembled with +25% base income!" or "Assembled! Take it to a stand.","craft")
+  local tutorialParts={}; for _,item in ipairs(s.parts) do table.insert(tutorialParts,item) end
+  local result,reason=Crafting.execute(s.parts,s.creatures,s.rareBlueprints,value,Config.Rarities,function() return HttpService:GenerateGUID(false) end)
+  if not result then send(player,reason); return end
+  s.rareBlueprints=result.blueprintCount
+  if result.highest>=3 then Progression.increment(s.progress,"rareCrafts",1,os.time()) end
+  Season.addXP(s.season,20); Tutorial.advance(s.tutorial,"craft",tutorialParts)
+  send(player,result.usedBlueprint and "Rare blueprint used: assembled with +25% base income!" or "Assembled! Take it to a stand.","craft")
  elseif action=="fusion" then
   if not nearby(player,forge) then send(player,"Move closer to the fusion forge."); return end
   local creature,costOrError=Fusion.execute(s.creatures,value,s.rebirth,s.cash,Config.FusionCost,function() return HttpService:GenerateGUID(false) end)

@@ -5,6 +5,7 @@ local SoundService=game:GetService("SoundService")
 local Lighting=game:GetService("Lighting")
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local AutoFill=require(ReplicatedStorage.Shared:WaitForChild("AutoFill"))
+local CraftMath=require(ReplicatedStorage.Shared:WaitForChild("CraftMath"))
 local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
@@ -52,7 +53,7 @@ local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
 local bulkRarity=1; local confirmBulk=nil
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
-local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local blueprintConfirm=false
+local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local craftConfirm=false
 local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
 local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false
 local giftButtons={}
@@ -201,22 +202,37 @@ local function render()
  elseif mode=="assemble" then
   title.Text="ASSEMBLY: select one of each"
   row("RARE BLUEPRINT: "..(useBlueprint and "ON" or "OFF").." | owned: "..(state.rareBlueprints or 0).." (requires 4 Rare+ parts, +25% base income)",function()
-   useBlueprint=not useBlueprint; blueprintConfirm=false; chosen={}; render()
+   useBlueprint=not useBlueprint; craftConfirm=false; chosen={}; render()
   end,Color3.fromRGB(125,75,175))
   row("AUTO-FILL BEST eligible part of each type",function()
-   blueprintConfirm=false; chosen=AutoFill.best(state.parts,Config.Rarities,Config.Types,useBlueprint and 3 or 1) or {}
-   if not next(chosen) then notice.Text="You need one part of each type to auto-fill." end
+   craftConfirm=false; chosen=AutoFill.best(state.parts,Config.Rarities,Config.Types,useBlueprint and 3 or 1) or {}
+   if not next(chosen) then notice.Text="You need one eligible part of each type to auto-fill." end
    render()
   end,Color3.fromRGB(60,120,180))
-  row(blueprintConfirm and "CONFIRM: CONSUME FOUR PARTS AND ONE BLUEPRINT" or ("ASSEMBLE selected parts"..(useBlueprint and " (uses 1 blueprint; review)" or "")),function()
-   if useBlueprint and not blueprintConfirm then blueprintConfirm=true; render(); return end
-   chosen.useBlueprint=useBlueprint; remote:FireServer("assemble",chosen); chosen={}; blueprintConfirm=false
+  local components={}
+  for _,item in ipairs(state.parts) do
+   if chosen[item.kind]==item.id and not item.locked then components[item.kind]=item end
+  end
+  local preview=CraftMath.evaluate(components,Config.Rarities,useBlueprint)
+  local ready=preview and #state.creatures<100 and (not useBlueprint or (state.rareBlueprints or 0)>0)
+  if preview then
+   row("PREVIEW: "..preview.name.." | "..Config.Rarities[preview.highest].name.." | $"..string.format("%.4g",preview.income).."/s at level 1",nil,Color3.fromRGB(60,120,180))
+   row(preview.harmony and ("Matching "..preview.mutation.." mutations: 2x harmony bonus") or "Mixed mutations: no harmony bonus",nil,Color3.fromRGB(70,75,105))
+   if useBlueprint then row("One blueprint will be consumed for +25% base income.",nil,Color3.fromRGB(125,75,175)) end
+  else row("Select one eligible part of each type to preview the creature.",nil,Color3.fromRGB(70,75,105)) end
+  if #state.creatures>=100 then row("Creature inventory is full. Free a slot before crafting.",nil,Color3.fromRGB(150,65,65)) end
+  if useBlueprint and (state.rareBlueprints or 0)<1 then row("No rare blueprints available. Claim the 25-minute session gift.",nil,Color3.fromRGB(150,65,65)) end
+  row(craftConfirm and "CONFIRM: CONSUME FOUR PARTS"..(useBlueprint and " AND ONE BLUEPRINT" or "") or "REVIEW ASSEMBLY",function()
+   if not ready then notice.Text="Select four eligible parts and check inventory and blueprint availability."; return end
+   if not craftConfirm then craftConfirm=true; render(); return end
+   chosen.useBlueprint=useBlueprint; remote:FireServer("assemble",chosen); chosen={}; craftConfirm=false
   end,Color3.fromRGB(52,170,105))
-  if blueprintConfirm then row("CANCEL BLUEPRINT ASSEMBLY",function() blueprintConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
+  if craftConfirm then row("CANCEL ASSEMBLY",function() craftConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
   for _,kind in ipairs(Config.Types) do
-   row(kind..": "..(chosen[kind] and "selected" or "choose below"),nil,Color3.fromRGB(70,75,105))
+   local picked=components[kind]
+   row(kind..": "..(picked and ((picked.mutation or "Standard").." "..picked.name.." ["..Config.Rarities[picked.rarity].name.."]") or "choose below"),nil,Color3.fromRGB(70,75,105))
    for _,item in ipairs(state.parts) do
-    if item.kind==kind and not item.locked and (not useBlueprint or item.rarity>=3) then row((item.mutation or "Standard").." "..item.name.." "..kind..(chosen[kind]==item.id and " ✓" or ""),function() chosen[kind]=item.id; blueprintConfirm=false; render() end,Config.Rarities[item.rarity].color) end
+    if item.kind==kind and not item.locked and (not useBlueprint or item.rarity>=3) then row((item.mutation or "Standard").." "..item.name.." "..kind..(chosen[kind]==item.id and " ✓" or ""),function() chosen[kind]=item.id; craftConfirm=false; render() end,Config.Rarities[item.rarity].color) end
    end
   end
  elseif mode=="forge" then
@@ -227,6 +243,15 @@ local function render()
   for _,creature in ipairs(state.creatures) do if creature.id==forgeIds[1] then first=creature; break end end
   local fee=first and Config.FusionCost(first) or 0
   row("SELECTED "..#forgeIds.."/3 | FEE $"..fee.." | Cash $"..math.floor(state.cash),nil,Color3.fromRGB(70,75,105))
+  if first then
+   row("RECIPE: "..first.name.." | "..(first.blueprintApplied and "Blueprint boosted" or "No blueprint").." | base $"..string.format("%.4g",first.income).."/s",nil,Color3.fromRGB(70,75,105))
+   for _,kind in ipairs(Config.Types) do
+    local component=first.components[kind]
+    row(kind..": "..component.name.." ["..Config.Rarities[component.rarity].name.."] "..(component.mutation or "Standard").." x"..(component.mutationMultiplier or 1).." | base "..component.income,nil,Color3.fromRGB(70,75,105))
+   end
+   row("OUTPUT if valid: level 1, $"..string.format("%.4g",first.income*5).."/s base; adjacent stands gain 20%.",nil,Color3.fromRGB(60,120,180))
+   row("CLEAR FUSION SELECTION",function() forgeIds={}; forgeConfirm=false; render() end,Color3.fromRGB(70,75,105))
+  end
   row(forgeConfirm and "CONFIRM: CONSUME 3 CREATURES AND CASH" or "FUSE SELECTED (review first)",function()
    if #forgeIds~=3 or not first then return end
    if forgeConfirm then remote:FireServer("fusion",forgeIds); forgeIds={}; forgeConfirm=false
@@ -235,7 +260,7 @@ local function render()
   for _,creature in ipairs(state.creatures) do
    if not creature.ascended and not creature.locked then
     local selected=false; for _,id in ipairs(forgeIds) do if id==creature.id then selected=true end end
-    local text=(selected and "✓ " or "")..creature.name.." Lv."..creature.level.." | "..(creature.stand==0 and "Unplaced" or "Stand "..creature.stand).." | base $"..math.floor(creature.income).."/s"
+    local text=(selected and "✓ " or "")..(creature.blueprintApplied and "[BLUEPRINT] " or "")..creature.name.." Lv."..creature.level.." | "..(creature.stand==0 and "Unplaced" or "Stand "..creature.stand).." | base $"..math.floor(creature.income).."/s"
     row(text,function()
      if selected then for i,id in ipairs(forgeIds) do if id==creature.id then table.remove(forgeIds,i); break end end
      elseif #forgeIds<3 then table.insert(forgeIds,creature.id) end
@@ -539,7 +564,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; blueprintConfirm=false end; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; if data.open=="roll" then discardConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false end; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; if data.open=="roll" then discardConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  render()

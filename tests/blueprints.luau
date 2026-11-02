@@ -1,9 +1,9 @@
 local kinds={"Head","Chest","Arms","Legs"}
 local components={}
 for _,kind in ipairs(kinds) do components[kind]={rarity=3} end
-assert(Blueprints.validate(nil,0,{})==1)
-assert(Blueprints.validate(false,0,{})==1)
-assert(Blueprints.validate(true,1,components)==1.25)
+assert(Blueprints.validate(nil,0,{})==true)
+assert(Blueprints.validate(false,0,{})==true)
+assert(Blueprints.validate(true,1,components)==true)
 assert(Blueprints.validate(true,0,components)==nil)
 assert(Blueprints.validate("yes",1,components)==nil)
 for _,kind in ipairs(kinds) do

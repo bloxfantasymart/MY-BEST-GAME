@@ -33,7 +33,13 @@ function Fusion.execute(creatures,ids,rebirth,cash,costFn,newId)
  if chosen[1].income*5>1e18 then return nil,"This creature is too powerful to fuse safely." end
  local cost=costFn(chosen[1])
  if cash<cost then return nil,"Not enough cash for fusion." end
- local result={id=newId(),name=chosen[1].name,components=chosen[1].components,income=chosen[1].income*5,level=1,exp=0,stand=0,ascended=true,blueprintApplied=chosen[1].blueprintApplied==true}
+ local ok,id=pcall(newId)
+ if not ok or type(id)~="string" or #id<1 or #id>64 then return nil,"Could not create a new creature safely." end
+ for _,creature in ipairs(creatures) do
+  if creature.id==id then return nil,"Could not create a unique creature." end
+  for _,part in pairs(creature.components) do if part.id==id then return nil,"Could not create a unique creature." end end
+ end
+ local result={id=id,name=chosen[1].name,components=chosen[1].components,income=chosen[1].income*5,level=1,exp=0,stand=0,ascended=true,blueprintApplied=chosen[1].blueprintApplied==true}
  for i=#creatures,1,-1 do if seen[creatures[i].id] then table.remove(creatures,i) end end
  table.insert(creatures,result)
  return result,cost

@@ -153,3 +153,11 @@ guarded.cash=500; copyFails=true; assert(not a.save(507,guarded,false), "A faile
 copyFails=false; assert(a.save(507,guarded,true), "Copy failure must not leave the session permanently busy")
 local after=b.load(507); assert(after and after.cash==500); assert(b.save(507,after,true))
 print("Invalid-save and copy-failure recovery tests passed")
+database.player_508={version=1,cash=200,pending=0,slots=1,rebirth=0,parts={item("mutation-test","Head")},creatures={}}
+database.player_508.parts[1].mutation={}
+assert(a.load(508)==nil, "Malformed mutation metadata must not be loaded")
+database.player_508.parts[1].mutation=string.rep("x",41)
+assert(a.load(508)==nil, "Mutation metadata must be bounded")
+database.player_508.parts[1].mutation=nil
+local legacyMutation=a.load(508); assert(legacyMutation and a.save(508,legacyMutation,true), "Legacy Standard parts without mutation metadata remain valid")
+print("Mutation metadata and legacy profile validation tests passed")
