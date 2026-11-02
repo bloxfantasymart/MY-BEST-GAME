@@ -38,7 +38,11 @@ In Studio's **Test** tab start a server with two or more clients. Each player sh
 4. Test server shutdown, disconnect during saves, service errors, and retry/rejoin behavior in a controlled private environment. Check Output for warnings. An unsuccessful final save can still lose progress.
 5. Restore `DataService.TestPersistence = false` after testing in Studio. Published servers use the live DataStore regardless of this Studio-only switch.
 
-## 4. Before publishing broadly
+## 4. Optional admin and performance tests
+
+Follow [ADMIN_SETUP.md](ADMIN_SETUP.md) in a private test experience. Confirm an unauthorized account cannot open the panel or execute forged remote requests, and check numeric boundaries, confirmations, the selected target, event expiry and save/rejoin. Admin actions affect real profile data. Test display motion and mutation effects at distances below and above 100 studs with multiple players; repeat with streaming enabled and check that models load correctly. This lightweight LOD has not been validated on devices.
+
+## 5. Before publishing broadly
 
 The optional [showcase hub](TRADING_HUB_SETUP.md) is not a marketplace yet. Trading and developer products are not implemented. Optional gamepass hooks are disabled by default; see the [gamepass guide](GAMEPASS_SETUP.md) and do not enable public sales before testing. Complete and test them separately before charging players. Review third-party character names, licensed assets and Roblox policies. Check performance with a full six-player server, including many placed creatures and events. Event timings are based on UTC, so servers should agree when their clocks agree.
 

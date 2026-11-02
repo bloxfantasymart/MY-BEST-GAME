@@ -1,5 +1,7 @@
 --!strict
 local Config = {}
+-- Leave empty unless you deliberately authorize trusted Roblox user IDs.
+Config.AdminUserIds = {}
 -- Set these to the two place IDs within the SAME Roblox experience.
 -- Zero disables the corresponding portal rather than teleporting to an arbitrary place.
 Config.PlaceIds = {Main=0, TradingHub=0}

@@ -18,6 +18,7 @@ local Titles = require(script.Parent.Services.Titles)
 local Fusion = require(script.Parent.Services.Fusion)
 local PlotEconomy = require(script.Parent.Services.PlotEconomy)
 local SessionGifts = require(script.Parent.Services.SessionGifts)
+local AdminService = require(script.Parent.Services.AdminService)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
@@ -25,12 +26,21 @@ remote.Parent = ReplicatedStorage
 local rng = Random.new()
 local states = {}
 local plots = {}
-local function activeEvents()
+local adminEvent=nil
+local function currentEvent()
  local event=LiveEvents.at(os.time())
+ if adminEvent and os.clock()>=adminEvent.expires then adminEvent=nil end
+ if adminEvent then LiveEvents.applyOverride(event,adminEvent.name) end
+ return event
+end
+local function activeEvents()
+ local event=currentEvent()
  return event.frenzy,event.eclipse,event.sigma,event.storm,event.weekend
 end
 local function eventText()
- return LiveEvents.text(LiveEvents.at(os.time()))
+ local text=LiveEvents.text(LiveEvents.at(os.time()))
+ if adminEvent and os.clock()<adminEvent.expires then text..=" | Admin "..adminEvent.name.." "..math.ceil(adminEvent.expires-os.clock()).."s" end
+ return text
 end
 local function part(parent, name, size, position, color, material)
  local p = Instance.new("Part")
@@ -91,7 +101,7 @@ local function send(player, message, effect)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, passes=s.passes, partCapacity=PassService.capacity(s.passes), autoRolling=s.autoRolling, autoRarity=s.autoRarity, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=LiveEvents.at(os.time()), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.Quests, dailyCash=Progression.DailyCash, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=PassService.capacity(s.passes), autoRolling=s.autoRolling, autoRarity=s.autoRarity, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.Quests, dailyCash=Progression.DailyCash, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -286,6 +296,56 @@ MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player,passId
   end
  end
 end)
+local function adminSnapshot(admin,targetId)
+ if not AdminService.authorized(Config.AdminUserIds,admin.UserId) then return end
+ local players={}
+ for player,s in pairs(states) do
+  table.insert(players,{id=player.UserId,name=player.DisplayName,cash=s.cash,rebirth=s.rebirth,slots=s.slots,partCount=#s.parts,creatureCount=#s.creatures})
+ end
+ table.sort(players,function(a,b) return a.id<b.id end)
+ local inspected=nil
+ local parsed=AdminService.plan(Config.AdminUserIds,admin.UserId,{command="inspect",target=targetId},#Config.Catalog)
+ if parsed then
+  local target=Players:GetPlayerByUserId(parsed.target)
+  local s=target and states[target]
+  if s then
+   local parts={}; local creatures={}
+   for _,item in ipairs(s.parts) do table.insert(parts,(item.mutation or "Standard").." "..item.name.." "..item.kind) end
+   for _,item in ipairs(s.creatures) do table.insert(creatures,(item.ascended and "ASCENDED " or "")..item.name.." Lv."..item.level.." Stand "..item.stand) end
+   inspected={id=target.UserId,name=target.DisplayName,cash=s.cash,rebirth=s.rebirth,slots=s.slots,parts=parts,creatures=creatures}
+  end
+ end
+ remote:FireClient(admin,{adminSnapshot=true,players=players,inspected=inspected})
+end
+local function runAdmin(admin,payload)
+ local plan,reason=AdminService.plan(Config.AdminUserIds,admin.UserId,payload,#Config.Catalog)
+ if not plan then send(admin,reason); return end
+ if plan.command=="event" then
+  adminEvent={name=plan.event,expires=os.clock()+120}
+  warn("[Admin] "..admin.UserId.." triggered "..plan.event.." for 120 seconds")
+  send(admin,"Server event started for 120 seconds."); adminSnapshot(admin); return
+ end
+ local target=Players:GetPlayerByUserId(plan.target)
+ local ts=target and states[target]
+ if not ts or not DataService.isHealthy(target.UserId) then send(admin,"Target is not online with a healthy profile."); return end
+ if plan.command=="grantCash" then ts.cash+=plan.amount
+ elseif plan.command=="setCash" then ts.cash=plan.amount
+ elseif plan.command=="setRebirth" then
+  ts.rebirth=plan.amount; ts.autoRolling=false; ts.rolls={}; ts.offerExpires=0
+  for _,theme in ipairs(Config.Themes) do
+   if theme.id==ts.theme and ts.rebirth<theme.rebirth then ts.theme="Classic"; Visuals.applyTheme(ts.plot,Config.Themes[1]); break end
+  end
+  Titles.apply(target.Character,ts.rebirth); Visuals.showRolls(ts.plot,ts.rolls,ts.slots)
+ elseif plan.command=="grantPart" then
+  if #ts.parts>=PassService.capacity(ts.passes) then send(admin,"Target's part inventory is full."); return end
+  local entry=Config.Catalog[plan.index]
+  table.insert(ts.parts,{id=HttpService:GenerateGUID(false),name=entry.name,kind=plan.kind,rarity=entry.rarity,income=entry.income,price=math.max(10,math.floor(entry.income*5)),mutation="Standard",mutationMultiplier=1})
+ elseif plan.command~="kick" then send(admin,"Unsupported admin action."); return end
+ warn("[Admin] "..admin.UserId.." used "..plan.command.." on "..target.UserId..(plan.amount and (" amount="..plan.amount) or "")..(plan.index and (" catalog="..plan.index.." kind="..plan.kind) or ""))
+ if plan.command=="kick" then target:Kick("Removed from this server by an administrator.")
+ else send(target,"An administrator updated your profile in this server.") end
+ if states[admin] then send(admin,"Admin action completed."); adminSnapshot(admin,plan.target) end
+end
 remote.OnServerEvent:Connect(function(player, action, value)
  local s=states[player]
  if not s or type(action)~="string" or #action>40 then return end
@@ -301,7 +361,11 @@ remote.OnServerEvent:Connect(function(player, action, value)
  if s.requestCount>15 then s.blockUntil=now+5; return end
  if now-(s.lastAction or 0)<0.15 then return end
  s.lastAction=now
- if action=="sync" then send(player)
+ if action=="adminOpen" then
+  if AdminService.authorized(Config.AdminUserIds,player.UserId) then adminSnapshot(player,value) end
+ elseif action=="adminAction" then
+  if AdminService.authorized(Config.AdminUserIds,player.UserId) then runAdmin(player,value) end
+ elseif action=="sync" then send(player)
  elseif action=="roll" and nearby(player,s.plot.lever) then
   if now-(s.lastRoll or 0)<0.35 then return end
   s.lastRoll=now; s.autoRolling=false; rollBatch(s)
@@ -502,7 +566,7 @@ for _,player in ipairs(Players:GetPlayers()) do task.spawn(join,player) end
 task.spawn(function()
  while true do
   task.wait(1)
-  local incomeEvent=LiveEvents.at(os.time())
+  local incomeEvent=currentEvent()
   for player,s in pairs(states) do
    if not DataService.isHealthy(player.UserId) then player:Kick("Data connection lost; please rejoin.")
    else
@@ -525,7 +589,7 @@ task.spawn(function()
     if leveled then refreshStands(s) end
     s.plot.bankLabel.Text="Bank: $"..math.floor(s.pending)
     if changed then send(player,expired and "Unpurchased roll offers expired after 60 seconds." or nil)
-    else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=LiveEvents.at(os.time()), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), luckRemaining=math.max(0,s.luckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock()))}) end
+    else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), luckRemaining=math.max(0,s.luckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock()))}) end
    end
   end
  end

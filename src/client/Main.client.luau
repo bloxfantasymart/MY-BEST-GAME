@@ -45,13 +45,14 @@ local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.B
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
 local bulkRarity=1; local confirmBulk=nil
 local forgeIds={}; local forgeConfirm=false
 local giftButtons={}
+local adminData=nil; local adminTarget=nil; local adminAmount="1000"; local adminCatalog=1; local adminKind=1; local pendingAdmin=nil
 local function row(text, callback, color)
  local b=button(list,text,UDim2.new(1,-10,0,50),UDim2.new(),color)
  rowOrder+=1; b.LayoutOrder=rowOrder
@@ -188,7 +189,62 @@ local function render()
    local b=row(giftText(gift),function() remote:FireServer("claimGift",gift.id) end,Color3.fromRGB(155,105,45))
    giftButtons[gift.id]=b
   end
+  if state.isAdmin then row("DEVELOPER ADMIN",function() pendingAdmin=nil; mode="admin"; list.CanvasPosition=Vector2.zero; remote:FireServer("adminOpen",adminTarget); render() end,Color3.fromRGB(155,65,65)) end
   row("HOW TO PLAY",function() mode="help"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
+ elseif mode=="admin" then
+  title.Text="DEVELOPER ADMIN — CURRENT SERVER"
+  if not state.isAdmin then row("Not authorized.",nil,Color3.fromRGB(150,50,60))
+  else
+   row("Admin actions affect real profiles. Use only in a private test experience.",nil,Color3.fromRGB(150,65,60))
+   row("REFRESH PLAYER LIST",function() remote:FireServer("adminOpen",adminTarget) end,Color3.fromRGB(60,120,180))
+   if adminData then
+    row("SELECT AN ONLINE PLAYER",nil,Color3.fromRGB(70,75,105))
+    for _,entry in ipairs(adminData.players) do
+     row(entry.name.." | $"..math.floor(entry.cash).." | Rebirth "..entry.rebirth.." | "..entry.partCount.." parts / "..entry.creatureCount.." creatures",function()
+      adminTarget=entry.id; pendingAdmin=nil; remote:FireServer("adminOpen",entry.id)
+     end,entry.id==adminTarget and Color3.fromRGB(45,145,110) or nil)
+    end
+    local inspected=adminData.inspected
+    if inspected then
+     row("TARGET: "..inspected.name.." | slots "..inspected.slots,nil,Color3.fromRGB(70,75,105))
+     local field=Instance.new("TextBox"); field.Size=UDim2.new(1,-10,0,50); field.BackgroundColor3=Color3.fromRGB(60,65,95); field.TextColor3=Color3.new(1,1,1)
+     field.Text=adminAmount; field.PlaceholderText="Enter whole-number amount"; field.ClearTextOnFocus=false; field.Font=Enum.Font.GothamBold; field.TextSize=16
+     field.Parent=list; rowOrder+=1; field.LayoutOrder=rowOrder; round(field)
+     field:GetPropertyChangedSignal("Text"):Connect(function() adminAmount=string.sub(field.Text,1,24) end)
+     local function propose(command)
+      pendingAdmin={command=command,target=inspected.id,amount=tonumber(adminAmount),index=adminCatalog,kind=Config.Types[adminKind]}; render()
+     end
+     row("GRANT CASH (amount above)",function() propose("grantCash") end,Color3.fromRGB(140,85,50))
+     row("SET CASH (amount above)",function() propose("setCash") end,Color3.fromRGB(140,85,50))
+     row("SET REBIRTH 0–100 (amount above)",function() propose("setRebirth") end,Color3.fromRGB(140,85,50))
+     row("CATALOG: "..Config.Catalog[adminCatalog].name.." (tap to change)",function() adminCatalog=adminCatalog%#Config.Catalog+1; pendingAdmin=nil; render() end)
+     row("PART TYPE: "..Config.Types[adminKind].." (tap to change)",function() adminKind=adminKind%#Config.Types+1; pendingAdmin=nil; render() end)
+     row("GRANT STANDARD PART",function() propose("grantPart") end,Color3.fromRGB(140,85,50))
+     row("KICK PLAYER FROM THIS SERVER",function() propose("kick") end,Color3.fromRGB(160,55,70))
+    end
+    row("SERVER EVENT: 120 SECONDS",nil,Color3.fromRGB(70,75,105))
+    for _,eventName in ipairs({"Frenzy","Eclipse","Sigma","Storm"}) do
+     row("TRIGGER "..eventName,function() pendingAdmin={command="event",event=eventName}; render() end,Color3.fromRGB(125,70,145))
+    end
+    if pendingAdmin then
+     local targetLabel=pendingAdmin.event or ("user ID "..tostring(pendingAdmin.target))
+     if pendingAdmin.target then
+      for _,entry in ipairs(adminData.players) do if entry.id==pendingAdmin.target then targetLabel=entry.name.." ("..entry.id..")"; break end end
+     end
+     local detail=pendingAdmin.command.." "..targetLabel
+     if pendingAdmin.command=="grantCash" or pendingAdmin.command=="setCash" or pendingAdmin.command=="setRebirth" then detail..=" amount "..tostring(pendingAdmin.amount) end
+     if pendingAdmin.command=="grantPart" then detail..=" "..Config.Catalog[pendingAdmin.index].name.." "..pendingAdmin.kind end
+     row("CONFIRM: "..detail,function() remote:FireServer("adminAction",pendingAdmin); pendingAdmin=nil; render() end,Color3.fromRGB(185,55,65))
+     row("CANCEL ADMIN ACTION",function() pendingAdmin=nil; render() end,Color3.fromRGB(70,75,105))
+    end
+    if inspected then
+     row("PART INVENTORY: "..#inspected.parts,nil,Color3.fromRGB(70,75,105))
+     for _,item in ipairs(inspected.parts) do row(item,nil,Color3.fromRGB(60,65,95)) end
+     row("CREATURE INVENTORY: "..#inspected.creatures,nil,Color3.fromRGB(70,75,105))
+     for _,item in ipairs(inspected.creatures) do row(item,nil,Color3.fromRGB(60,65,95)) end
+    end
+   else row("Loading player list...",nil,Color3.fromRGB(70,75,105)) end
+  end
  elseif mode=="help" then
   title.Text="HOW TO PLAY"
   row("1. At your red roll station, pull the lever and buy one Head, Chest, Arms and Legs.",nil,Color3.fromRGB(70,75,105))
@@ -287,6 +343,11 @@ local function updateEvent(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.adminSnapshot then
+  adminData=data; pendingAdmin=nil; if data.inspected then adminTarget=data.inspected.id end
+  if mode=="admin" then render() end
+  return
+ end
  if data.announcement then notice.Text=data.announcement; playEffect("rare"); return end
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end

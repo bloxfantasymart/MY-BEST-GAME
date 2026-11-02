@@ -17,6 +17,12 @@ function LiveEvents.at(now)
   disasterOffset=disasterOffset,
  }
 end
+function LiveEvents.applyOverride(event,name)
+ local fields={Frenzy="frenzy",Eclipse="eclipse",Sigma="sigma",Storm="storm"}
+ local field=fields[name]
+ if field then event[field]=true end
+ return event
+end
 function LiveEvents.text(event)
  local names={}
  if event.frenzy then table.insert(names,"Luck Frenzy "..(300-event.frenzyOffset).."s") end
