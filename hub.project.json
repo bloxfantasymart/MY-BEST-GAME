@@ -1,0 +1,34 @@
+{
+  "name": "RollABrainrotTradingHub",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "Hub": {
+        "Main": {
+          "$path": "src/hub/Hub.server.luau"
+        },
+        "Services": {
+          "$path": "src/server/Services"
+        },
+        "BoothLogic": {
+          "$path": "src/hub/BoothLogic.luau"
+        }
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "HubClient": {
+          "$path": "src/hub/Hub.client.luau"
+        },
+        "DisplayAnimation": {
+          "$path": "src/client/DisplayAnimation.client.luau"
+        }
+      }
+    }
+  }
+}

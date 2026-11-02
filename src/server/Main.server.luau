@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local Debris = game:GetService("Debris")
 local CollectionService = game:GetService("CollectionService")
+local TeleportService = game:GetService("TeleportService")
 local DataService = require(script.Parent:WaitForChild("Services"):WaitForChild("DataService"))
 local Visuals = require(script.Parent:WaitForChild("Services"):WaitForChild("Visuals"))
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
@@ -82,6 +83,8 @@ spawn.Size = Vector3.new(12,1,12)
 spawn.Position = Vector3.new(0,1,0)
 spawn.Neutral = true
 spawn.Parent = world
+local hubPortal=part(world,"Trading hub portal",Vector3.new(10,10,2),Vector3.new(0,5,-22),Color3.fromRGB(150,65,255),Enum.Material.Neon)
+label(hubPortal,"TRADING HUB",7)
 local cashBoard=part(world,"Server cash leaderboard",Vector3.new(13,9,1),Vector3.new(-22,5,10),Color3.fromRGB(25,35,75))
 local rebirthBoard=part(world,"Server rebirth leaderboard",Vector3.new(13,9,1),Vector3.new(22,5,10),Color3.fromRGB(70,30,105))
 local cashCaption=label(cashBoard,"SERVER CASH",6); cashCaption.Parent.Size=UDim2.fromOffset(250,180)
@@ -108,6 +111,21 @@ local function collect(player,s)
  if os.clock()-(s.lastCollectEffect or -10)>1 then s.lastCollectEffect=os.clock(); Visuals.collect(s.plot) end
  send(player,"Collected $"..amount.."!","collect")
 end
+local function goToHub(player)
+ local s=states[player]
+ if not s or not DataService.isHealthy(player.UserId) or not nearby(player,hubPortal) then return end
+ local id=Config.PlaceIds.TradingHub
+ if type(id)~="number" or id<=0 or id%1~=0 then send(player,"Trading hub is not configured yet. See the setup guide."); return end
+ if os.clock()-(s.lastPortal or -20)<10 then return end
+ s.lastPortal=os.clock()
+ local ok,err=pcall(function() TeleportService:TeleportAsync(id,{player}) end)
+ if not ok then warn("Trading hub teleport failed: "..tostring(err)); send(player,"Could not travel to the hub. Please try again.") end
+end
+prompt(hubPortal,"Visit trading hub").Triggered:Connect(goToHub)
+TeleportService.TeleportInitFailed:Connect(function(player, _result, message, placeId)
+ if placeId==Config.PlaceIds.TradingHub and states[player] then warn("Teleport init failed: "..message); send(player,"Travel failed. Please try again.") end
+end)
+
 local function makePlot(i)
  local angle = (i-1)*math.pi*2/6
  local center = Vector3.new(math.cos(angle)*105, 0, math.sin(angle)*105)
@@ -230,7 +248,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
    s.cash-=item.price; table.insert(s.parts,item); table.remove(s.rolls,i); Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Part purchased!",item.rarity>=4 and "rare" or "buy")
   else send(player,"Cannot buy: check cash and inventory space.") end
  elseif action=="teleport" then
-  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm}
+  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal}
   local destination=type(value)=="string" and destinations[value] or nil
   if destination and now-(s.lastTeleport or -10)>=3 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
    s.lastTeleport=now; player.Character:PivotTo(CFrame.new(destination.Position+Vector3.new(0,4,8))); send(player,"Teleported to "..destination.Name..".")

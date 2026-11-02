@@ -1,5 +1,8 @@
 --!strict
 local Config = {}
+-- Set these to the two place IDs within the SAME Roblox experience.
+-- Zero disables the corresponding portal rather than teleporting to an arbitrary place.
+Config.PlaceIds = {Main=0, TradingHub=0}
 -- Replace 0 with IDs of audio you have permission to use. 0 means silent.
 Config.AudioIds = {roll=0, buy=0, craft=0, collect=0, rare=0}
 Config.SlotCosts = {0, 500, 2500, 10000, 50000, 250000, 1000000, 5000000, 25000000}

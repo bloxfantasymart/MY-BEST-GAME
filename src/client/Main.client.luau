@@ -120,6 +120,7 @@ local function render()
   row("ROLL STATION",function() remote:FireServer("teleport","lever"); panel.Visible=false end)
   row("ASSEMBLY POD",function() remote:FireServer("teleport","pod"); panel.Visible=false end)
   row("CASH ATM",function() remote:FireServer("teleport","atm"); panel.Visible=false end)
+  row("TRADING HUB PORTAL",function() remote:FireServer("teleport","portal"); panel.Visible=false end)
  elseif mode=="bag" then
   title.Text="BACKPACK — "..bagTab
   row("FILTER: "..bagTab.." (tap to change)",function()

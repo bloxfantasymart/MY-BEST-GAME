@@ -26,4 +26,4 @@ In Studio's **Test** tab start a server with two or more clients. Each player sh
 
 ## 4. Before publishing broadly
 
-Trading, paid products and passes are not implemented. Complete and test them separately before charging players. Review third-party character names, licensed assets and Roblox policies. Check performance with a full six-player server, including many placed creatures and events. Event timings are relative to each server's start, so two servers need not have the same event.
+The optional [showcase hub](TRADING_HUB_SETUP.md) is not a marketplace yet. Trading, paid products and passes are not implemented. Complete and test them separately before charging players. Review third-party character names, licensed assets and Roblox policies. Check performance with a full six-player server, including many placed creatures and events. Event timings are relative to each server's start, so two servers need not have the same event.

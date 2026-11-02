@@ -62,7 +62,7 @@ function DataService.load(userId)
  end
  local token=HttpService:GenerateGUID(false)
  local key="player_"..userId
- for attempt=1,3 do
+ for attempt=1,6 do
   local acquired=false
   local ok,result=pcall(function()
    return store:UpdateAsync(key,function(old)
@@ -80,7 +80,7 @@ function DataService.load(userId)
    result.lock=nil
    return result
   end
-  if attempt<3 then task.wait(2*attempt) end
+  if attempt<6 then task.wait(2) end
  end
  return nil
 end

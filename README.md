@@ -1,6 +1,6 @@
 # Roll a Brainrot — playable development build
 
-This repository contains an **unfinished Roblox game**: a generated six-plot world, server-owned rolling and crafting, stands and income, mutations, leveling, rebirths, timed events, animated placeholder displays and a first persistence implementation. Trading, Robux purchases and many polish features are not yet implemented. See [the roadmap](docs/ROADMAP.md).
+This repository contains an **unfinished Roblox game**: a generated six-plot world, server-owned rolling and crafting, stands and income, mutations, leveling, rebirths, timed events, animated placeholder displays and a first persistence implementation. The separate hub currently supports showcases only; item trading, Robux purchases and many polish features are not yet implemented. See [the roadmap](docs/ROADMAP.md).
 
 **Please test this in a private test experience first.** It has not been run in Roblox Studio in this environment. Do not sell paid items or advertise it as complete. We cannot guarantee saving or prevent data loss until Studio and live multiplayer tests have passed.
 
@@ -22,6 +22,7 @@ Alternative: `rojo build default.project.json -o RollABrainrot.rbxlx` creates a 
 - **Extra stands:** buy stands 13–24 in UPGRADES. Stand 13 requires rebirth 1, stand 14 rebirth 2, and so on. Your extra stands persist through rebirth.
 - **Selling:** choose an item in BACKPACK and confirm the sale. Remove a creature from its stand before selling it. Sales are permanent; a creature resells for half the total original prices of its four parts.
 - **HELP** explains the loop in-game. Plaza leaderboards show only the current server, not all players worldwide. Roll offer odds are for a rarity tier, not a specific item or mutation.
+- **Showcase hub:** there is a disabled-by-default portal to a separate place with 15 booths. Configure it using [the hub setup guide](docs/TRADING_HUB_SETUP.md). There are no sales or trades yet.
 - **Audio:** the game is silent by default. To add sounds you have permission to use, replace the `0` values in `Config.AudioIds` in `src/shared/Config.luau` with your Roblox audio asset IDs; sync using Rojo. Roblox must allow your experience to use the assets.
 
 ## Saving and Studio testing
@@ -44,4 +45,4 @@ For a more detailed step-by-step verification list, see [Studio testing](docs/TE
 
 ## Developer checks
 
-`python3 tests/check_config.py` checks catalog structure. With the standalone Luau CLI installed, run `python3 tests/run_luau_tests.py` and `python3 tests/run_persistence_tests.py` (or pass the path to `luau` as an argument). The persistence test uses a synchronous mock, **not** Roblox DataStore services. These checks do not replace Studio or published multiplayer tests.
+`python3 tests/check_config.py` checks catalog structure. With the standalone Luau CLI installed, run `python3 tests/run_luau_tests.py`, `python3 tests/run_persistence_tests.py` and `python3 tests/run_booth_tests.py` (or pass the path to `luau` as an argument). The persistence test uses a synchronous mock, **not** Roblox DataStore services. These checks do not replace Studio or published multiplayer tests.
