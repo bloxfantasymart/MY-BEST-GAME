@@ -85,4 +85,8 @@ assert(ascended and ascended.creatures[1].ascended==true)
 assert(a.save(16,ascended,true))
 database.player_16.creatures[1].ascended="yes"
 assert(b.load(16)==nil, "Malformed ascension flags must not be loaded")
-print("Persistence lease, acquisition, inventory, tutorial, theme and ascension validation tests passed")
+database.player_17={version=1,cash=0,pending=0,slots=1,rebirth=0,parts={},creatures={},luckUntil=5000}
+local boosted=a.load(17); assert(boosted and boosted.luckUntil==5000); assert(a.save(17,boosted,true))
+database.player_17.luckUntil=-1
+assert(b.load(17)==nil, "Invalid luck-boost expiration must not be loaded")
+print("Persistence lease, acquisition, inventory, tutorial, theme, boost and ascension validation tests passed")

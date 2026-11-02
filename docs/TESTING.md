@@ -16,6 +16,12 @@ These steps are for a **private test experience**, not your public game. The aut
 
 In a private test profile at rebirth 15 or above, prepare three distinct, unplaced, non-ascended creatures with the same four components and mutations, each at level 10 or higher. At the plaza forge, check that too little cash, different mutations, a placed creature, repeated selections and rebirth below 15 cannot consume anything. Confirm a valid fusion; verify exactly three inputs and the fee disappear, and one level-1 ascended creature with 5x base income appears. Place it next to another creature: the adjacent stand's displayed rate should rise by 20%. Test corners, row edges, multiple ascended neighbors and removal. Save/rejoin and visit the hub to check the flag and appearance survive. Also verify offline income includes adjacency once. These behaviors need real Studio and published-environment testing, not just the pure-logic checks.
 
+### Session gifts and roll expiry
+
+In a private server, open **REWARDS** and try claiming each session gift early; it must not grant anything. After one minute, claim the cash gift twice and verify only the first claim pays. After five minutes, claim the Uncommon part with space available; repeat with a full inventory and ensure it remains claimable after freeing space. At 15 minutes, claim the timed luck boost, verify the countdown and boosted tier odds, then rejoin or visit the hub and check the boost continues until its saved expiry. Rejoining resets the session gift timer and allows gifts to be earned again. The rest of the specified gifts have not been implemented.
+
+Roll a part and leave the offer unpurchased for more than 60 seconds. Its tray should clear and a late buy request must not deduct cash or grant the item. Check that auto-roll still refreshes its own offers. Compare auto-fill's selected income against different mixed and same-mutation combinations.
+
 ### Daily rewards and objectives
 
 Open **REWARDS**, claim the daily reward twice, and check that only the first claim pays. Roll 50 parts (multi-slot rolls count each part), then claim the roll objective once. Complete the other objectives and verify each can only pay once. UTC midnight resets the objectives. Verify a missed UTC day resets the login streak; Studio clock changes alone should not be trusted as a server-time test.

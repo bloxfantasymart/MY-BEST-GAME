@@ -38,6 +38,7 @@ local function validProfile(data)
   if type(data.theme)~="string" or not thresholds[data.theme] or data.rebirth<thresholds[data.theme] then return false end
  end
  if data.keepSlotsEntitled~=nil and type(data.keepSlotsEntitled)~="boolean" then return false end
+ if data.luckUntil~=nil and (not finite(data.luckUntil,0,1e12) or data.luckUntil%1~=0) then return false end
  if data.lastLogout~=nil and (not finite(data.lastLogout,0,1e12) or data.lastLogout%1~=0) then return false end
  if data.lastOfflineAward~=nil and not finite(data.lastOfflineAward,0,1e300) then return false end
  if data.progress~=nil then

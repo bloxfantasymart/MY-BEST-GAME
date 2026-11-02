@@ -30,6 +30,13 @@ for price=1,1000 do
 end
 assert(#Config.StandCosts == 12 and #Config.SlotCosts == 9)
 assert(#Config.Themes==5 and #Config.TutorialText==7)
+assert(#Config.SessionGifts==5)
+local giftIds={}
+for i,gift in ipairs(Config.SessionGifts) do
+ assert(not giftIds[gift.id] and gift.seconds>0)
+ if i>1 then assert(gift.seconds>Config.SessionGifts[i-1].seconds) end
+ giftIds[gift.id]=true
+end
 local themeIds={}
 for i,theme in ipairs(Config.Themes) do
  assert(not themeIds[theme.id] and theme.rebirth>=0 and theme.rebirth<=100)

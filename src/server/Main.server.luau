@@ -17,6 +17,7 @@ local Tutorial = require(script.Parent.Services.Tutorial)
 local Titles = require(script.Parent.Services.Titles)
 local Fusion = require(script.Parent.Services.Fusion)
 local PlotEconomy = require(script.Parent.Services.PlotEconomy)
+local SessionGifts = require(script.Parent.Services.SessionGifts)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
@@ -90,7 +91,7 @@ local function send(player, message, effect)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, passes=s.passes, partCapacity=PassService.capacity(s.passes), autoRolling=s.autoRolling, autoRarity=s.autoRarity, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=LiveEvents.at(os.time()), serverDay=Progression.day(os.time()), progress=s.progress, quests=Progression.Quests, dailyCash=Progression.DailyCash, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, passes=s.passes, partCapacity=PassService.capacity(s.passes), autoRolling=s.autoRolling, autoRarity=s.autoRarity, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=LiveEvents.at(os.time()), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.Quests, dailyCash=Progression.DailyCash, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -209,7 +210,7 @@ local function roll(s)
  for r, rarity in ipairs(Config.Rarities) do
   local list={}
   for _, entry in ipairs(Config.Catalog) do if entry.rarity==r and entry.rebirth<=s.rebirth then table.insert(list,entry) end end
-  if #list>0 then table.insert(eligible,{list=list, weight=rarity.weight * (1.15 ^ (s.rebirth * (r-1)/7)) * (r>1 and ((frenzy and 2 or 1)*(weekend and 1.5 or 1)*(PassService.owned(s.passes,"Luck") and 2 or 1)) or 1)}) end
+  if #list>0 then table.insert(eligible,{list=list, weight=rarity.weight * (1.15 ^ (s.rebirth * (r-1)/7)) * (r>1 and ((frenzy and 2 or 1)*(weekend and 1.5 or 1)*(PassService.owned(s.passes,"Luck") and 2 or 1)*(s.luckUntil>os.time() and 2 or 1)) or 1)}) end
  end
  local total=0; for _, tier in ipairs(eligible) do total+=tier.weight end
  local pick=rng:NextNumber(0,total)
@@ -225,6 +226,7 @@ end
 local lastAnnouncement=-10
 local function rollBatch(s)
  s.rolls={}
+ s.offerExpires=os.clock()+60
  for _=1,s.slots do table.insert(s.rolls,roll(s)) end
  Progression.increment(s.progress,"rolls",s.slots,os.time())
  Tutorial.advance(s.tutorial,"roll",s.parts)
@@ -236,6 +238,19 @@ local function rollBatch(s)
  end
  Visuals.showRolls(s.plot,s.rolls,s.slots); Visuals.pull(s.plot)
  remote:FireClient(s.player,{effectOnly="roll"})
+end
+local function makeGiftPart(rarity)
+ local eligible={}
+ for _,entry in ipairs(Config.Catalog) do if entry.rarity==rarity then table.insert(eligible,entry) end end
+ if #eligible==0 then return nil end
+ local entry=eligible[rng:NextInteger(1,#eligible)]
+ return {id=HttpService:GenerateGUID(false),name=entry.name,kind=Config.Types[rng:NextInteger(1,#Config.Types)],rarity=entry.rarity,income=entry.income,price=math.max(10,math.floor(entry.income*5)),mutation="Standard",mutationMultiplier=1}
+end
+local function expireOffers(s,now)
+ if SessionGifts.offersExpired(s.offerExpires,now,#s.rolls) then
+  s.rolls={}; s.offerExpires=0; Visuals.showRolls(s.plot,s.rolls,s.slots); return true
+ end
+ return false
 end
 local function findById(items, id)
  if type(id) ~= "string" or #id>64 then return nil end
@@ -276,6 +291,10 @@ remote.OnServerEvent:Connect(function(player, action, value)
  if not s or type(action)~="string" or #action>40 then return end
  if not DataService.isHealthy(player.UserId) then player:Kick("Your data session could not be renewed. Please rejoin."); return end
  local now=os.clock()
+ if expireOffers(s,now) then
+  send(player,"Unpurchased roll offers expired after 60 seconds.")
+  if action=="buy" or action=="skip" then return end
+ end
  if now<(s.blockUntil or 0) then return end
  if now-(s.windowStart or 0)>=1 then s.windowStart=now; s.requestCount=0 end
  s.requestCount=(s.requestCount or 0)+1
@@ -290,7 +309,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="buy" and nearby(player,s.plot.lever) then
   local i,item=findById(s.rolls,value)
   if i and s.cash>=item.price and #s.parts<PassService.capacity(s.passes) then
-   s.cash-=item.price; table.insert(s.parts,item); Tutorial.advance(s.tutorial,"buy",s.parts); table.remove(s.rolls,i); Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Part purchased!",item.rarity>=4 and "rare" or "buy")
+   s.cash-=item.price; table.insert(s.parts,item); Tutorial.advance(s.tutorial,"buy",s.parts); table.remove(s.rolls,i); if #s.rolls==0 then s.offerExpires=0 end; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Part purchased!",item.rarity>=4 and "rare" or "buy")
   else send(player,"Cannot buy: check cash and inventory space.") end
  elseif action=="buyPass" and type(value)=="string" and #value<=30 then
   local status=s.passes[value]
@@ -305,6 +324,19 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="refreshPasses" then
   for _,key in ipairs(Config.PassOrder) do refreshPass(player,s,key) end
   send(player,"Checking gamepass ownership...")
+ elseif action=="claimGift" then
+  local gift,reason=SessionGifts.find(Config.SessionGifts,s.giftClaims,value,os.clock()-s.sessionStarted)
+  if not gift then send(player,reason); return end
+  if gift.kind=="cash" then s.cash+=gift.value
+  elseif gift.kind=="luck" then s.luckUntil=math.max(s.luckUntil,os.time())+gift.duration
+  elseif gift.kind=="part" then
+   if #s.parts>=PassService.capacity(s.passes) then send(player,"Free inventory space before claiming this gift."); return end
+   local item=makeGiftPart(gift.rarity)
+   if not item then send(player,"This gift is unavailable. Please try again later."); return end
+   table.insert(s.parts,item)
+  else send(player,"This gift is not implemented."); return end
+  s.giftClaims[gift.id]=true
+  send(player,"Session gift claimed: "..gift.label.."!")
  elseif action=="dailyReward" then
   local reward,day=Progression.claimDaily(s.progress,os.time())
   if reward then s.cash+=reward; send(player,"Day "..day.." reward: $"..reward.."!")
@@ -321,7 +353,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   end
  elseif action=="skip" and nearby(player,s.plot.lever) then
   local i=findById(s.rolls,value)
-  if i then table.remove(s.rolls,i); Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Offer skipped.") end
+  if i then table.remove(s.rolls,i); if #s.rolls==0 then s.offerExpires=0 end; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Offer skipped.") end
  elseif action=="autoRoll" then
   if value==false then s.autoRolling=false; send(player,"Auto-roll stopped.")
   elseif not PassService.canAuto(s.passes,s.rebirth) then send(player,"Auto-roll unlocks at rebirth 5 or with the AutoRoll pass.")
@@ -404,14 +436,14 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if s.cash<Config.RebirthCost(s.rebirth) or not index then send(player,"Rebirth requires the displayed cash and a non-ascended target creature."); return end
   local sacrificed=table.remove(s.creatures,index)
   if sacrificed.stand>0 then refreshStands(s) end
-  s.cash=0; if not PassService.keepSlots(s.passes,s.keepSlotsEntitled) then s.slots=1 end; s.rolls={}; s.autoRolling=false; s.rebirth+=1; Titles.apply(player.Character,s.rebirth); Visuals.showRolls(s.plot,s.rolls,s.slots)
+  s.cash=0; if not PassService.keepSlots(s.passes,s.keepSlotsEntitled) then s.slots=1 end; s.rolls={}; s.offerExpires=0; s.autoRolling=false; s.rebirth+=1; Titles.apply(player.Character,s.rebirth); Visuals.showRolls(s.plot,s.rolls,s.slots)
   send(player,"Rebirth complete! New archetypes unlocked.")
  elseif action=="collect" then
   collect(player,s)
  end
 end)
 local function profile(s,closing)
- return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,parts=s.parts,creatures=s.creatures,progress=s.progress,tutorial=s.tutorial,theme=s.theme,keepSlotsEntitled=s.keepSlotsEntitled,lastLogout=closing and os.time() or 0}
+ return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,parts=s.parts,creatures=s.creatures,progress=s.progress,luckUntil=s.luckUntil,tutorial=s.tutorial,theme=s.theme,keepSlotsEntitled=s.keepSlotsEntitled,lastLogout=closing and os.time() or 0}
 end
 local function clearPlot(s)
  for n=1,24 do
@@ -435,7 +467,7 @@ local function join(player)
   return
  end
  if not player.Parent then data.lastLogout=os.time(); DataService.save(player.UserId,data,true); plot.owner=nil; plot.sign.Text="Unclaimed plot"; return end
- local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRarity=1,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
+ local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),giftClaims={},luckUntil=data.luckUntil or 0,offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRarity=1,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
  states[player]=s; plot.sign.Text=player.DisplayName.."'s plot"
  for _,key in ipairs(Config.PassOrder) do refreshPass(player,s,key) end
  local stats=Instance.new("Folder"); stats.Name="leaderstats"; stats.Parent=player
@@ -477,6 +509,8 @@ task.spawn(function()
     local previousDay=s.progress.questDay
     Progression.refresh(s.progress,os.time())
     local changed=previousDay~=s.progress.questDay
+    local expired=expireOffers(s,os.clock())
+    if expired then changed=true end
     local leveled=false
     local rates=PlotEconomy.rates(s.creatures,Config.Income)
     for _,creature in ipairs(s.creatures) do
@@ -490,7 +524,8 @@ task.spawn(function()
     end
     if leveled then refreshStands(s) end
     s.plot.bankLabel.Text="Bank: $"..math.floor(s.pending)
-    if changed then send(player) else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=LiveEvents.at(os.time()), serverDay=Progression.day(os.time())}) end
+    if changed then send(player,expired and "Unpurchased roll offers expired after 60 seconds." or nil)
+    else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=LiveEvents.at(os.time()), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), luckRemaining=math.max(0,s.luckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock()))}) end
    end
   end
  end
@@ -517,6 +552,7 @@ task.spawn(function()
        s.cash-=item.price; table.insert(s.parts,item); Tutorial.advance(s.tutorial,"buy",s.parts); table.remove(s.rolls,i)
       end
      end
+     if #s.rolls==0 then s.offerExpires=0 end
      Visuals.showRolls(s.plot,s.rolls,s.slots)
      if stopped then s.autoRolling=false; send(player,"Auto-roll stopped: not enough cash or inventory space.")
      else send(player,"Auto-roll is running.") end

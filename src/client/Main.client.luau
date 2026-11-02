@@ -4,6 +4,7 @@ local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local SoundService=game:GetService("SoundService")
 local Lighting=game:GetService("Lighting")
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local AutoFill=require(ReplicatedStorage.Shared:WaitForChild("AutoFill"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
 local sounds={}
@@ -44,25 +45,41 @@ local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.B
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
 local bulkRarity=1; local confirmBulk=nil
 local forgeIds={}; local forgeConfirm=false
+local giftButtons={}
 local function row(text, callback, color)
  local b=button(list,text,UDim2.new(1,-10,0,50),UDim2.new(),color)
  rowOrder+=1; b.LayoutOrder=rowOrder
  if callback then b.Activated:Connect(callback) end
+ return b
+end
+local function giftText(gift)
+ local left=math.max(0,gift.seconds-(state.giftElapsed or 0))
+ local status=(state.giftClaims and state.giftClaims[gift.id]) and "CLAIMED" or (left==0 and "CLAIM" or (math.floor(left/60).."m "..(left%60).."s"))
+ return gift.label.." — "..status
+end
+local function refreshTimedLabels()
+ if panel.Visible and mode=="rewards" then
+  for _,gift in ipairs(Config.SessionGifts) do
+   local b=giftButtons[gift.id]
+   if b and b.Parent then b.Text=giftText(gift) end
+  end
+ end
+ if panel.Visible and mode=="roll" then title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s" end
 end
 local function render()
  hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0)
  if not panel.Visible then return end
  local previousScroll=list.CanvasPosition
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
- rowOrder=0
+ rowOrder=0; giftButtons={}
  if mode=="roll" then
-  title.Text="ROLL STATION"
+  title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s"
   row("PULL LEVER / REROLL",function() remote:FireServer("roll") end,Color3.fromRGB(220,78,93))
   row("Auto-buy rarity: "..Config.Rarities[rarityFilter].name.." and above (tap to change)",function() rarityFilter=rarityFilter%#Config.Rarities+1; render() end,Color3.fromRGB(70,75,105))
   if state.autoRolling then row("STOP AUTO-ROLL",function() remote:FireServer("autoRoll",false) end,Color3.fromRGB(200,65,85))
@@ -78,15 +95,8 @@ local function render()
  elseif mode=="assemble" then
   title.Text="ASSEMBLY: select one of each"
   row("AUTO-FILL BEST owned part of each type",function()
-   chosen={}
-   for _,kind in ipairs(Config.Types) do
-    local best=nil; local bestScore=-1
-    for _,item in ipairs(state.parts) do
-     local score=item.income*(item.mutationMultiplier or 1)*Config.Rarities[item.rarity].multiplier
-     if item.kind==kind and score>bestScore then best=item; bestScore=score end
-    end
-    if best then chosen[kind]=best.id end
-   end
+   chosen=AutoFill.best(state.parts,Config.Rarities,Config.Types) or {}
+   if not next(chosen) then notice.Text="You need one part of each type to auto-fill." end
    render()
   end,Color3.fromRGB(60,120,180))
   row("ASSEMBLE selected parts",function() remote:FireServer("assemble",chosen); chosen={} end,Color3.fromRGB(52,170,105))
@@ -172,6 +182,11 @@ local function render()
    local value=p[quest.key] or 0
    local status=p.claimed[quest.key] and "CLAIMED" or (value>=quest.goal and "CLAIM" or "IN PROGRESS")
    row(quest.label.."  "..value.."/"..quest.goal.." | $"..quest.reward.." — "..status,function() remote:FireServer("claimQuest",quest.key) end,Color3.fromRGB(90,80,150))
+  end
+  row("SESSION GIFTS — timers reset when you leave",nil,Color3.fromRGB(70,75,105))
+  for _,gift in ipairs(Config.SessionGifts) do
+   local b=row(giftText(gift),function() remote:FireServer("claimGift",gift.id) end,Color3.fromRGB(155,105,45))
+   giftButtons[gift.id]=b
   end
   row("HOW TO PLAY",function() mode="help"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
  elseif mode=="help" then
@@ -275,9 +290,9 @@ remote.OnClientEvent:Connect(function(data)
  if data.announcement then notice.Text=data.announcement; playEffect("rare"); return end
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
- if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; eventLabel.Text=data.event or ""; state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
+ if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
  if data.open then list.CanvasPosition=Vector2.zero; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
- state=data; updateEvent(data.eventFlags); eventLabel.Text=data.event or ""; loaded=true; updateTutorial()
+ state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  render()
 end)
