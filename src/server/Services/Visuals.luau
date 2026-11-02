@@ -82,6 +82,20 @@ function Visuals.applyRewardCosmetics(plot,extras)
  local head=block(statue,"StatueHead",Vector3.new(2,2,2),base+Vector3.new(0,3.5,0),Color3.fromRGB(255,230,85),Enum.Material.Metal)
  billboard(head,"SIGMA STATUE\n+50% INCOME",2,150)
 end
+function Visuals.autoCollector(plot,enabled)
+ local folder=plot.floor.Parent
+ local drone=folder:FindFirstChild("AutoCollectorDrone")
+ if not enabled then if drone then drone:Destroy() end; return end
+ if drone then return end
+ drone=Instance.new("Folder"); drone.Name="AutoCollectorDrone"; drone.Parent=folder
+ local base=plot.atm.Position+Vector3.new(0,6,0)
+ local body=block(drone,"Body",Vector3.new(3,1.2,2),base,Color3.fromRGB(65,75,100),Enum.Material.Metal)
+ block(drone,"Eye",Vector3.new(1.2,0.4,0.1),base+Vector3.new(0,0,1.05),Color3.fromRGB(80,255,210),Enum.Material.Neon)
+ for _,x in ipairs({-2,2}) do
+  block(drone,"Rotor",Vector3.new(1.8,0.2,1.8),base+Vector3.new(x,0.5,0),Color3.fromRGB(70,230,215),Enum.Material.Neon)
+ end
+ billboard(body,"AUTO-COLLECT",1.7,130)
+end
 function Visuals.pull(plot)
  if not plot.handle or not plot.handle.Parent then return end
  local info=TweenInfo.new(0.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,0,true)

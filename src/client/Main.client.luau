@@ -46,7 +46,7 @@ local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.B
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRarity=1,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
@@ -54,6 +54,7 @@ local bulkRarity=1; local confirmBulk=nil
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
 local forgeIds={}; local forgeConfirm=false
 local giftButtons={}
+local incomeLabels={}
 local adminData=nil; local adminTarget=nil; local adminAmount="1000"; local adminCatalog=1; local adminKind=1; local pendingAdmin=nil
 local function row(text, callback, color)
  local b=button(list,text,UDim2.new(1,-10,0,50),UDim2.new(),color)
@@ -66,6 +67,15 @@ local function giftText(gift)
  local status=(state.giftClaims and state.giftClaims[gift.id]) and "CLAIMED" or (left==0 and "CLAIM" or (math.floor(left/60).."m "..(left%60).."s"))
  return gift.label.." — "..status
 end
+local function updateIncomeLabels()
+ local income=state.income or {}
+ if incomeLabels.online and incomeLabels.online.Parent then incomeLabels.online.Text=string.format("CURRENT ONLINE RATE: $%.2g/s",income.online or 0) end
+ if incomeLabels.normal and incomeLabels.normal.Parent then incomeLabels.normal.Text=string.format("NORMAL RATE: $%.2g/s | PLACED: %d",income.normal or 0,income.placed or 0) end
+ if incomeLabels.offline and incomeLabels.offline.Parent then incomeLabels.offline.Text=string.format("OFFLINE RATE: $%.2g/s (25%%; maximum 24h)",income.offline or 0) end
+ if incomeLabels.bonuses and incomeLabels.bonuses.Parent then
+  incomeLabels.bonuses.Text="ACTIVE: "..(income.statue and "Statue +50% | " or "")..(income.sigma and "Sigma x3 | " or "")..(income.weekend and "Weekend x2 | " or "")..(income.vip and "VIP x1.2" or "")
+ end
+end
 local function refreshTimedLabels()
  if panel.Visible and mode=="rewards" then
   for _,gift in ipairs(Config.SessionGifts) do
@@ -73,6 +83,7 @@ local function refreshTimedLabels()
    if b and b.Parent then b.Text=giftText(gift) end
   end
  end
+ if panel.Visible and mode=="income" then updateIncomeLabels() end
  if panel.Visible and mode=="roll" then title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s" end
 end
 local function render()
@@ -80,7 +91,7 @@ local function render()
  if not panel.Visible then return end
  local previousScroll=list.CanvasPosition
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
- rowOrder=0; giftButtons={}
+ rowOrder=0; giftButtons={}; incomeLabels={}
  if mode=="roll" then
   title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s"
   row("PULL LEVER / REROLL",function() remote:FireServer("roll") end,Color3.fromRGB(220,78,93))
@@ -157,9 +168,23 @@ local function render()
   local nextStand=state.standsUnlocked+1
   local standCost=Config.StandCosts[nextStand-12]
   row(standCost and ("Unlock stand "..nextStand.." — $"..standCost.."; rebirth "..(nextStand-12)) or "All stands unlocked",function() remote:FireServer("upgradeStands") end,Color3.fromRGB(210,130,35))
+  row("PLOT INCOME BREAKDOWN",function() mode="income"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,145,150))
+  if state.rebirth<10 then row("AUTO-COLLECTOR DRONE — unlocks at rebirth 10 (free)",nil,Color3.fromRGB(70,75,105))
+  else row("AUTO-COLLECTOR: "..(state.autoCollect and "ON" or "OFF").." (every 10 seconds while online)",function() remote:FireServer("setAutoCollect",not state.autoCollect) end,Color3.fromRGB(60,145,150)) end
   row("FUSION FORGE (REBIRTH 15+)",function() remote:FireServer("teleport","forge"); panel.Visible=false end,Color3.fromRGB(175,120,45))
   row("PLOT THEMES",function() mode="themes"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,130,160))
   row("OPEN GAMEPASS SHOP",function() mode="shop"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(180,65,160))
+ elseif mode=="income" then
+  title.Text="PLOT INCOME"
+  incomeLabels.online=row("",nil,Color3.fromRGB(52,170,105))
+  incomeLabels.normal=row("",nil,Color3.fromRGB(70,75,105))
+  incomeLabels.offline=row("",nil,Color3.fromRGB(70,75,105))
+  incomeLabels.bonuses=row("",nil,Color3.fromRGB(70,75,105))
+  row("Normal rate includes level, neighboring ascension boosts and the Sigma Statue. Online rate includes active events and VIP.",nil,Color3.fromRGB(70,75,105))
+  row("Offline earnings require a successful departure save and exclude events, VIP and EXP. Rates are estimates; server delays may reduce actual online income.",nil,Color3.fromRGB(70,75,105))
+  row("COLLECT PENDING CASH",function() remote:FireServer("collect") end,Color3.fromRGB(52,170,105))
+  row("BACK TO UPGRADES",function() mode="upgrades"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
+  updateIncomeLabels()
  elseif mode=="themes" then
   title.Text="PLOT THEMES"
   row("Cosmetic themes unlock with rebirth and cost no cash.",nil,Color3.fromRGB(70,75,105))
@@ -410,7 +435,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.announcement then notice.Text=data.announcement; playEffect("rare"); return end
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
- if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
+ if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
  if data.open then list.CanvasPosition=Vector2.zero; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end

@@ -31,6 +31,7 @@ local function validProfile(data)
   or not finite(data.rebirth,0,100) or data.rebirth%1~=0
   or type(data.parts)~="table" or #data.parts>200
   or type(data.creatures)~="table" or #data.creatures>100 then return false end
+ if data.autoCollect~=nil and type(data.autoCollect)~="boolean" then return false end
  if data.season~=nil then
   local season=data.season
   if type(season)~="table" or not finite(season.xp,0,5000) or season.xp%1~=0
