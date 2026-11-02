@@ -26,6 +26,14 @@ end
 function Config.Income(creature)
  return creature.income*(1+0.25*(creature.level-1))
 end
+-- Twelve optional stands; each becomes available after its corresponding rebirth.
+Config.StandCosts = {2500, 5000, 10000, 20000, 40000, 80000, 160000, 320000, 640000, 1280000, 2560000, 5120000}
+function Config.PartSellValue(item)
+ return math.max(1, math.floor((item.price or 10) * 0.5))
+end
+function Config.CreatureSellValue(creature)
+ return math.max(1, math.floor(creature.income * 10))
+end
 Config.Types = {"Head", "Chest", "Arms", "Legs"}
 Config.Rarities = {
  {name="Common", weight=5000, multiplier=1, color=Color3.fromRGB(180,180,180)},

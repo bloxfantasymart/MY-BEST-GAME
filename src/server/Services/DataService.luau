@@ -10,7 +10,48 @@ DataService.TestPersistence = false
 local leaseSeconds = 180
 local sessions = {}
 local function defaults()
- return {version=1, cash=200, pending=0, slots=1, rebirth=0, parts={}, creatures={}}
+ return {version=1, cash=200, pending=0, slots=1, standsUnlocked=12, rebirth=0, parts={}, creatures={}}
+end
+local function finite(value, low, high)
+ return type(value)=="number" and value==value and value>=low and value<=high
+end
+local function validPart(item)
+ return type(item)=="table" and type(item.id)=="string" and #item.id<=64
+  and type(item.name)=="string" and #item.name<=100
+  and (item.kind=="Head" or item.kind=="Chest" or item.kind=="Arms" or item.kind=="Legs")
+  and finite(item.rarity,1,8) and item.rarity%1==0 and finite(item.income,0,1e15)
+  and (item.price==nil or finite(item.price,0,1e15))
+  and (item.mutationMultiplier==nil or finite(item.mutationMultiplier,1,6))
+end
+local function validProfile(data)
+ if type(data)~="table" or (data.version~=nil and data.version~=1) then return false end
+ if not finite(data.cash,0,1e300) or not finite(data.pending,0,1e300)
+  or not finite(data.slots,1,9) or data.slots%1~=0
+  or not finite(data.rebirth,0,100) or data.rebirth%1~=0
+  or type(data.parts)~="table" or #data.parts>100
+  or type(data.creatures)~="table" or #data.creatures>100 then return false end
+ local maxStands=data.standsUnlocked or 12
+ if not finite(maxStands,12,24) or maxStands%1~=0 then return false end
+ local ids,stands={},{}
+ for _,item in ipairs(data.parts) do
+  if not validPart(item) or ids[item.id] then return false end
+  ids[item.id]=true
+ end
+ for _,creature in ipairs(data.creatures) do
+  if type(creature)~="table" or type(creature.id)~="string" or #creature.id>64 or ids[creature.id]
+   or type(creature.name)~="string" or #creature.name>120
+   or not finite(creature.income,0,1e18) or not finite(creature.level,1,1000) or creature.level%1~=0
+   or not finite(creature.stand,0,maxStands) or creature.stand%1~=0
+   or (creature.exp~=nil and not finite(creature.exp,0,1e12)) or type(creature.components)~="table" then return false end
+  ids[creature.id]=true
+  if creature.stand>0 then if stands[creature.stand] then return false end; stands[creature.stand]=true end
+  for _,kind in ipairs({"Head","Chest","Arms","Legs"}) do
+   local item=creature.components[kind]
+   if not validPart(item) or item.kind~=kind or ids[item.id] then return false end
+   ids[item.id]=true
+  end
+ end
+ return true
 end
 local function copy(data)
  return HttpService:JSONDecode(HttpService:JSONEncode(data))
@@ -26,7 +67,7 @@ function DataService.load(userId)
   local ok,result=pcall(function()
    return store:UpdateAsync(key,function(old)
     acquired=false
-    if old~=nil and (type(old)~="table" or (old.version~=nil and old.version~=1)) then return nil end
+    if old~=nil and not validProfile(old) then warn("Invalid or unsupported player profile: "..userId); return nil end
     if old and old.lock and old.lock.expires>os.time() and old.lock.token~=token then return nil end
     local profile=old or defaults()
     profile.lock={token=token,expires=os.time()+leaseSeconds}

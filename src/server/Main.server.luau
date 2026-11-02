@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
+local Debris = game:GetService("Debris")
 local DataService = require(script.Parent:WaitForChild("Services"):WaitForChild("DataService"))
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote = Instance.new("RemoteEvent")
@@ -17,16 +18,18 @@ local function activeEvents()
  local frenzy=(elapsed%1800)>=1500
  local cycle=math.floor(elapsed/900)
  local offset=elapsed%900
- local eclipse=cycle>0 and cycle%2==1 and offset<180
- local sigma=cycle>0 and cycle%2==0 and offset<120
- return frenzy,eclipse,sigma
+ local eclipse=cycle>0 and cycle%3==1 and offset<180
+ local sigma=cycle>0 and cycle%3==2 and offset<120
+ local storm=cycle>0 and cycle%3==0 and offset<120
+ return frenzy,eclipse,sigma,storm
 end
 local function eventText()
- local frenzy,eclipse,sigma=activeEvents()
+ local frenzy,eclipse,sigma,storm=activeEvents()
  local names={}
  if frenzy then table.insert(names,"2x Luck Frenzy") end
  if eclipse then table.insert(names,"50% Eclipse Discount") end
  if sigma then table.insert(names,"3x Sigma Income") end
+ if storm then table.insert(names,"Ohio Storm: collect golden drops") end
  return #names>0 and table.concat(names," + ") or "No active event"
 end
 
@@ -78,7 +81,7 @@ spawn.Parent = world
 local function send(player, message)
  local s = states[player]
  if not s then return end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or ""})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, autoRolling=s.autoRolling, autoRarity=s.autoRarity, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or ""})
 end
 local function owned(player, plot)
  return plot.owner == player and states[player] ~= nil
@@ -109,17 +112,19 @@ local function makePlot(i)
   if owned(player,plot) then remote:FireClient(player,{open="assemble"}) end
  end)
  prompt(plot.atm,"Collect").Triggered:Connect(function(player)
-  if owned(player,plot) then
+  if owned(player,plot) and DataService.isHealthy(player.UserId) then
    local s=states[player]; s.cash += math.floor(s.pending); s.pending %= 1; send(player,"Cash collected!")
   end
  end)
- for n=1,12 do
+ for n=1,24 do
   local x = ((n-1)%6)*8-20
-  local z = math.floor((n-1)/6)*10+1
+  local z = math.floor((n-1)/6)*8-5
   local stand=part(folder,"Stand "..n,Vector3.new(6,1,6),center+Vector3.new(x,1,z),Color3.fromRGB(255,205,75))
   plot.stands[n]=stand
   prompt(stand,"Place / remove").Triggered:Connect(function(player)
-   if owned(player,plot) then remote:FireClient(player,{open="stand",stand=n}) end
+   if owned(player,plot) then
+    if n <= states[player].standsUnlocked then remote:FireClient(player,{open="stand",stand=n}) else send(player,"This stand is locked. Upgrade stands from the menu.") end
+   end
   end)
  end
  return plot
@@ -129,6 +134,7 @@ local function updateStand(s, n)
  local stand=s.plot.stands[n]
  local old=stand:FindFirstChild("Display")
  if old then old:Destroy() end
+ stand.Color = n<=s.standsUnlocked and Color3.fromRGB(255,205,75) or Color3.fromRGB(90,95,110)
  for _, creature in ipairs(s.creatures) do
   if creature.stand == n then
    local m=Instance.new("Model"); m.Name="Display"; m.Parent=stand
@@ -168,6 +174,10 @@ local function roll(s)
  for _,m in ipairs(Config.Mutations) do mutationRoll-=m.weight; if mutationRoll<=0 then mutation=m; break end end
  return {mutation=mutation.name, mutationMultiplier=mutation.multiplier,id=HttpService:GenerateGUID(false), name=archetype.name, kind=kind, rarity=archetype.rarity, income=archetype.income, price=math.max(1,math.floor(math.max(10,archetype.income*5)*(eclipse and 0.5 or 1)))}
 end
+local function rollBatch(s)
+ s.rolls={}
+ for _=1,s.slots do table.insert(s.rolls,roll(s)) end
+end
 local function findById(items, id)
  if type(id) ~= "string" or #id>64 then return nil end
  for i, item in ipairs(items) do if item.id==id then return i,item end end
@@ -178,19 +188,47 @@ remote.OnServerEvent:Connect(function(player, action, value)
  if not s or type(action)~="string" then return end
  if not DataService.isHealthy(player.UserId) then player:Kick("Your data session could not be renewed. Please rejoin."); return end
  local now=os.clock()
+ if now<(s.blockUntil or 0) then return end
+ if now-(s.windowStart or 0)>=1 then s.windowStart=now; s.requestCount=0 end
+ s.requestCount=(s.requestCount or 0)+1
+ if s.requestCount>15 then s.blockUntil=now+5; return end
  if now-(s.lastAction or 0)<0.15 then return end
  s.lastAction=now
  if action=="sync" then send(player)
  elseif action=="roll" and nearby(player,s.plot.lever) then
   if now-(s.lastRoll or 0)<0.35 then return end
-  s.lastRoll=now; s.rolls={}
-  for _=1,s.slots do table.insert(s.rolls,roll(s)) end
+  s.lastRoll=now; s.autoRolling=false; rollBatch(s)
   send(player,"Choose parts to buy, or roll again.")
  elseif action=="buy" and nearby(player,s.plot.lever) then
   local i,item=findById(s.rolls,value)
   if i and s.cash>=item.price and #s.parts<100 then
    s.cash-=item.price; table.insert(s.parts,item); table.remove(s.rolls,i); send(player,"Part purchased!")
   else send(player,"Cannot buy: check cash and inventory space.") end
+ elseif action=="teleport" then
+  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm}
+  local destination=type(value)=="string" and destinations[value] or nil
+  if destination and now-(s.lastTeleport or -10)>=3 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+   s.lastTeleport=now; player.Character:PivotTo(CFrame.new(destination.Position+Vector3.new(0,4,8))); send(player,"Teleported to "..destination.Name..".")
+  end
+ elseif action=="autoRoll" then
+  if value==false then s.autoRolling=false; send(player,"Auto-roll stopped.")
+  elseif type(value)=="number" and value==value and value%1==0 and value>=1 and value<=8 and nearby(player,s.plot.lever) then
+   s.autoRarity=value; s.autoRolling=true; s.nextAuto=0; send(player,"Auto-roll started. Stay near your station.")
+  end
+ elseif action=="upgradeStands" then
+  local nextStand=s.standsUnlocked+1
+  local cost=Config.StandCosts[nextStand-12]
+  if not cost then send(player,"All 24 stands are unlocked.")
+  elseif s.rebirth<nextStand-12 then send(player,"This stand requires rebirth "..(nextStand-12)..".")
+  elseif s.cash<cost then send(player,"Not enough cash for this stand.")
+  else s.cash-=cost; s.standsUnlocked=nextStand; updateStand(s,nextStand); send(player,"Stand "..nextStand.." unlocked!") end
+ elseif action=="sellPart" then
+  local index,item=findById(s.parts,value)
+  if index then table.remove(s.parts,index); local amount=Config.PartSellValue(item); s.cash+=amount; send(player,"Part sold for $"..amount..".") end
+ elseif action=="sellCreature" then
+  local index,creature=findById(s.creatures,value)
+  if index and creature.stand==0 then table.remove(s.creatures,index); local amount=Config.CreatureSellValue(creature); s.cash+=amount; send(player,"Creature sold for $"..amount..".")
+  elseif index then send(player,"Remove the creature from its stand before selling.") end
  elseif action=="upgradeSlots" then
   local cost=Config.SlotCosts[s.slots+1]
   if cost and s.cash>=cost then s.cash-=cost; s.slots+=1; send(player,"Slot unlocked!") else send(player,"Not enough cash, or all slots unlocked.") end
@@ -209,7 +247,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   send(player,"Assembled! Take it to a stand.")
  elseif action=="stand" and type(value)=="table" then
   local n=value.stand
-  if type(n)~="number" or n~=n or n%1~=0 or n<1 or n>12 or not nearby(player,s.plot.stands[n]) then return end
+  if type(n)~="number" or n~=n or n%1~=0 or n<1 or n>s.standsUnlocked or not nearby(player,s.plot.stands[n]) then return end
   local _,creature=findById(s.creatures,value.id)
   if not creature then return end
   if creature.stand==n then creature.stand=0
@@ -233,17 +271,17 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if s.cash<Config.RebirthCost(s.rebirth) or not index then send(player,"Rebirth requires the displayed cash and creature."); return end
   local sacrificed=table.remove(s.creatures,index)
   if sacrificed.stand>0 then updateStand(s,sacrificed.stand) end
-  s.cash=0; s.slots=1; s.rolls={}; s.rebirth+=1
+  s.cash=0; s.slots=1; s.rolls={}; s.autoRolling=false; s.rebirth+=1
   send(player,"Rebirth complete! New archetypes unlocked.")
  elseif action=="collect" then
   s.cash+=math.floor(s.pending); s.pending%=1; send(player,"Cash collected!")
  end
 end)
 local function profile(s)
- return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,rebirth=s.rebirth,parts=s.parts,creatures=s.creatures}
+ return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,parts=s.parts,creatures=s.creatures}
 end
 local function clearPlot(s)
- for n=1,12 do
+ for n=1,24 do
   local display=s.plot.stands[n]:FindFirstChild("Display")
   if display then display:Destroy() end
  end
@@ -261,9 +299,9 @@ local function join(player)
   return
  end
  if not player.Parent then DataService.save(player.UserId,data,true); plot.owner=nil; plot.sign.Text="Unclaimed plot"; return end
- local s={cash=data.cash,pending=data.pending,slots=data.slots,rebirth=data.rebirth,parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
+ local s={cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRarity=1,rebirth=data.rebirth,parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
  states[player]=s; plot.sign.Text=player.DisplayName.."'s plot"
- for n=1,12 do updateStand(s,n) end
+ for n=1,24 do updateStand(s,n) end
  local function teleport(character)
   local root=character:WaitForChild("HumanoidRootPart",10)
   if root and states[player] then character:PivotTo(CFrame.new(plot.lever.Position+Vector3.new(0,4,10))) end
@@ -292,12 +330,67 @@ task.spawn(function()
      if creature.stand>0 then
       local _,_,sigma=activeEvents()
       s.pending+=Config.Income(creature)*(sigma and 3 or 1)
-      creature.exp=(creature.exp or 0)+1
-      if creature.exp>=10 and creature.level<1000 then creature.exp-=10; creature.level+=1; updateStand(s,creature.stand); changed=true end
+      if creature.level<1000 then
+       creature.exp=(creature.exp or 0)+1
+       if creature.exp>=10 then creature.exp-=10; creature.level+=1; updateStand(s,creature.stand); changed=true end
+      else creature.exp=0 end
      end
     end
     s.plot.bankLabel.Text="Bank: $"..math.floor(s.pending)
     if changed then send(player) else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText()}) end
+   end
+  end
+ end
+end)
+task.spawn(function()
+ while true do
+  task.wait(0.5)
+  for player,s in pairs(states) do
+   if s.autoRolling and os.clock()>=(s.nextAuto or 0) then
+    if not DataService.isHealthy(player.UserId) or not nearby(player,s.plot.lever) then
+     s.autoRolling=false; send(player,"Auto-roll stopped: stay near your roll station.")
+    elseif #s.parts>=100 then
+     s.autoRolling=false; send(player,"Auto-roll stopped: inventory full.")
+    else
+     s.nextAuto=os.clock()+2
+     rollBatch(s)
+     local stopped=false
+     for i=#s.rolls,1,-1 do
+      local item=s.rolls[i]
+      if item.rarity>=s.autoRarity then
+       if s.cash<item.price or #s.parts>=100 then stopped=true; break end
+       s.cash-=item.price; table.insert(s.parts,item); table.remove(s.rolls,i)
+      end
+     end
+     if stopped then s.autoRolling=false; send(player,"Auto-roll stopped: not enough cash or inventory space.")
+     else send(player,"Auto-roll is running.") end
+    end
+   end
+  end
+ end
+end)
+-- Storm rewards are created and claimed on the server, once per drop, by its plot owner.
+task.spawn(function()
+ while true do
+  task.wait(10)
+  local _,_,_,storm=activeEvents()
+  if storm then
+   for owner,s in pairs(states) do
+    if DataService.isHealthy(owner.UserId) then
+     local position=s.plot.atm.Position+Vector3.new(rng:NextNumber(-15,15),22,rng:NextNumber(5,25))
+     local drop=part(world,"Storm drop",Vector3.new(2.5,2.5,2.5),position,Color3.fromRGB(255,216,40),Enum.Material.Neon)
+     drop.Shape=Enum.PartType.Ball; drop.CanCollide=false; drop.Anchored=false
+     pcall(function() drop:SetNetworkOwner(nil) end)
+     local claimed=false
+     drop.Touched:Connect(function(hit)
+      if claimed or states[owner]~=s or not DataService.isHealthy(owner.UserId) then return end
+      local character=owner.Character
+      if character and hit:IsDescendantOf(character) then
+       claimed=true; s.cash+=50*(1+s.rebirth); drop:Destroy(); send(owner,"Ohio Storm bonus collected!")
+      end
+     end)
+     Debris:AddItem(drop,8)
+    end
    end
   end
  end
