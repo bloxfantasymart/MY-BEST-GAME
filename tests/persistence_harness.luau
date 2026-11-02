@@ -113,3 +113,15 @@ assert(a.load(502)==nil, "A claimed season tier must be unlocked")
 database.player_502.season.claimed=4; database.player_502.season.rollProgress=250001
 assert(a.load(502)==nil, "Invalid repeatable progress must not load")
 print("Season profile compatibility, round-trip and validation tests passed")
+
+database.player_503={version=1,cash=200,pending=0,slots=1,rebirth=0,parts={item("lockedPart","Head")},creatures={}}
+local protect=a.load(503); protect.parts[1].locked=true; assert(a.save(503,protect,true))
+local protected=b.load(503); assert(protected.parts[1].locked==true); assert(b.save(503,protected,true))
+database.player_503.parts[1].locked="yes"; assert(a.load(503)==nil)
+print("Inventory protection persistence tests passed")
+database.player_504={version=1,cash=200,pending=0,slots=1,rebirth=0,parts={},creatures={{id="unit504",name="Dirt Boy Abomination",income=10,level=1,stand=0,components=complete,locked=true}}}
+local protectedCreature=a.load(504); assert(protectedCreature and protectedCreature.creatures[1].locked)
+assert(a.save(504,protectedCreature,true))
+protectedCreature=b.load(504); assert(protectedCreature and protectedCreature.creatures[1].locked); assert(b.save(504,protectedCreature,true))
+database.player_504.creatures[1].locked=1; assert(a.load(504)==nil)
+print("Creature protection persistence tests passed")

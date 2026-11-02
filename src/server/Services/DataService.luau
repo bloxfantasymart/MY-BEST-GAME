@@ -20,6 +20,7 @@ local function validPart(item)
   and type(item.name)=="string" and #item.name<=100
   and (item.kind=="Head" or item.kind=="Chest" or item.kind=="Arms" or item.kind=="Legs")
   and finite(item.rarity,1,8) and item.rarity%1==0 and finite(item.income,0,1e15)
+  and (item.locked==nil or type(item.locked)=="boolean")
   and (item.price==nil or finite(item.price,0,1e15))
   and (item.mutationMultiplier==nil or finite(item.mutationMultiplier,1,6))
 end
@@ -78,7 +79,8 @@ local function validProfile(data)
    or not finite(creature.income,0,1e18) or not finite(creature.level,1,1000) or creature.level%1~=0
    or not finite(creature.stand,0,maxStands) or creature.stand%1~=0
    or (creature.exp~=nil and not finite(creature.exp,0,1e12))
-   or (creature.ascended~=nil and type(creature.ascended)~="boolean") or type(creature.components)~="table" then return false end
+   or (creature.ascended~=nil and type(creature.ascended)~="boolean")
+   or (creature.locked~=nil and type(creature.locked)~="boolean") or type(creature.components)~="table" then return false end
   ids[creature.id]=true
   if creature.stand>0 then if stands[creature.stand] then return false end; stands[creature.stand]=true end
   for _,kind in ipairs({"Head","Chest","Arms","Legs"}) do

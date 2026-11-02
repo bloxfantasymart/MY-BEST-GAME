@@ -32,3 +32,13 @@ for trial=1,120 do
  assert(math.abs(score(chosen)-maxScore)<0.00001)
 end
 print("Auto-fill matches exhaustive search across 120 randomized inventories")
+local protectedParts={}
+for i,kind in ipairs(kinds) do
+ table.insert(protectedParts,{id="unlocked"..i,kind=kind,rarity=1,income=1,mutation="Standard",mutationMultiplier=1})
+ table.insert(protectedParts,{id="locked"..i,kind=kind,rarity=4,income=1000,mutation="Standard",mutationMultiplier=1,locked=true})
+end
+local selection=AutoFill.best(protectedParts,rarities,kinds)
+for i,kind in ipairs(kinds) do assert(selection[kind]=="unlocked"..i, "Auto-fill must never select protected parts") end
+protectedParts[1].locked=true
+assert(AutoFill.best(protectedParts,rarities,kinds)==nil, "No unlocked head means no complete recipe")
+print("Auto-fill excludes protected parts")

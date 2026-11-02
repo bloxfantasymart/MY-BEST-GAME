@@ -18,3 +18,5 @@ The 24 stands form four rows of six. An ascended creature on a stand adds 20% to
 Stand labels show the creature's income including neighboring bonuses but excluding temporary events and VIP. Sigma, weekend and VIP multipliers are applied to that amount when income is earned. Offline income includes the neighbor bonuses, but not events or VIP, and pays at 25% for at most 24 hours. The backpack and showcase list display an individual creature's rate without neighboring bonuses.
 
 This is an unfinished development build. Test fusion, persistence, rejoin and hub display in a private test experience before trusting it with valuable creatures. Both places must be updated to the current code. See [TESTING.md](TESTING.md).
+
+Protected creatures cannot be fused. Use BACKPACK to unprotect them deliberately before selecting them at the forge.

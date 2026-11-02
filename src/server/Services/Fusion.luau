@@ -22,6 +22,7 @@ function Fusion.execute(creatures,ids,rebirth,cash,costFn,newId)
   local id=ids[i]
   if type(id)~="string" or #id>64 or seen[id] or not byId[id] then return nil,"Select three different owned creatures." end
   local creature=byId[id]
+  if creature.locked then return nil,"Unlock protected creatures before fusion." end
   if creature.stand~=0 then return nil,"Remove all three creatures from their stands first." end
   if creature.level<10 or creature.ascended==true then return nil,"Use three non-ascended creatures at level 10 or above." end
   seen[id]=true; chosen[i]=creature

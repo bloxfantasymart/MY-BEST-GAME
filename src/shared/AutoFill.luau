@@ -15,7 +15,7 @@ function AutoFill.best(parts,rarities,kinds)
    local highest={}; local exact={}
    for _,item in ipairs(parts) do
     local mutation=item.mutation or "Standard"
-    if item.rarity<=rarity and (group==false or mutation==group) then
+    if not item.locked and item.rarity<=rarity and (group==false or mutation==group) then
      local amount=item.income*(item.mutationMultiplier or 1)
      local current=highest[item.kind]
      if not current or amount>current.income*(current.mutationMultiplier or 1) then highest[item.kind]=item end

@@ -15,6 +15,7 @@ fail({"one","two","three"},14,999999)
 fail({"one","one","three"},15,999999)
 fail({"one","two","missing"},15,999999)
 fail({"one","two","three"},15,9999)
+roster[2].locked=true; fail({"one","two","three"},15,999999); roster[2].locked=false
 roster[2].stand=1; fail({"one","two","three"},15,999999); roster[2].stand=0
 roster[2].level=9; fail({"one","two","three"},15,999999); roster[2].level=10
 roster[2].ascended=true; fail({"one","two","three"},15,999999); roster[2].ascended=nil

@@ -486,17 +486,23 @@ remote.OnServerEvent:Connect(function(player, action, value)
   elseif s.rebirth<nextStand-12 then send(player,"This stand requires rebirth "..(nextStand-12)..".")
   elseif s.cash<cost then send(player,"Not enough cash for this stand.")
   else s.cash-=cost; s.standsUnlocked=nextStand; updateStand(s,nextStand); send(player,"Stand "..nextStand.." unlocked!") end
+ elseif action=="setItemLock" and type(value)=="table" then
+  local items=value.category=="part" and s.parts or (value.category=="creature" and s.creatures or nil)
+  if items and Inventory.setLocked(items,value.id,value.locked) then
+   send(player,value.locked and "Item protected from consumption and sale." or "Item protection removed.")
+  else send(player,"Invalid item or protection request.") end
  elseif action=="bulkSellParts" and type(value)=="table" then
   local count,total=Inventory.bulkSell(s.parts,value.rarity,value.ids,Config.PartSellValue)
   if not count then send(player,"Bulk sale cancelled: the selected items changed or were invalid.")
   else s.cash+=total; Tutorial.reconcile(s.tutorial,s.parts); send(player,"Sold "..count.." parts for $"..total..".") end
  elseif action=="sellPart" then
   local index,item=findById(s.parts,value)
-  if index then table.remove(s.parts,index); Tutorial.reconcile(s.tutorial,s.parts); local amount=Config.PartSellValue(item); s.cash+=amount; send(player,"Part sold for $"..amount..".") end
+  if index and Inventory.canConsume(item) then table.remove(s.parts,index); Tutorial.reconcile(s.tutorial,s.parts); local amount=Config.PartSellValue(item); s.cash+=amount; send(player,"Part sold for $"..amount..".")
+  elseif index then send(player,"Unlock this part before selling.") end
  elseif action=="sellCreature" then
   local index,creature=findById(s.creatures,value)
-  if index and creature.stand==0 then table.remove(s.creatures,index); local amount=Config.CreatureSellValue(creature); s.cash+=amount; send(player,"Creature sold for $"..amount..".")
-  elseif index then send(player,"Remove the creature from its stand before selling.") end
+  if index and creature.stand==0 and Inventory.canConsume(creature) then table.remove(s.creatures,index); local amount=Config.CreatureSellValue(creature); s.cash+=amount; send(player,"Creature sold for $"..amount..".")
+  elseif index then send(player,creature.locked and "Unlock this creature before selling." or "Remove the creature from its stand before selling.") end
  elseif action=="upgradeSlots" then
   local cost=Config.SlotCosts[s.slots+1]
   if cost and s.cash>=cost then s.cash-=cost; s.slots+=1; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Slot unlocked!") else send(player,"Not enough cash, or all slots unlocked.") end
@@ -505,7 +511,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local components={}; local seen={}; local sum=0; local highest=0; local dominant=nil; local firstMutation=nil; local harmony=true
   for _,kind in ipairs(Config.Types) do
    local id=value[kind]; local _,item=findById(s.parts,id)
-   if not item or item.kind~=kind or seen[id] then send(player,"Select one owned part of each type."); return end
+   if not Inventory.canConsume(item) or item.kind~=kind or seen[id] then send(player,"Select one unlocked owned part of each type."); return end
    seen[id]=true; components[kind]=item; sum+=item.income*(item.mutationMultiplier or 1)
    if firstMutation==nil then firstMutation=item.mutation or "Standard" elseif firstMutation~=(item.mutation or "Standard") then harmony=false end
    if item.rarity>highest then highest=item.rarity; dominant=item.name end
@@ -544,8 +550,8 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if not PassService.canRebirth(s.passes,s.keepSlotsEntitled) then send(player,"Keep Slots ownership could not be verified; try refreshing the shop before rebirthing."); return end
   local target=Config.RebirthTarget(s.rebirth).." Abomination"
   local index=nil
-  for i,c in ipairs(s.creatures) do if c.name==target and not c.ascended then index=i; break end end
-  if s.cash<Config.RebirthCost(s.rebirth) or not index then send(player,"Rebirth requires the displayed cash and a non-ascended target creature."); return end
+  for i,c in ipairs(s.creatures) do if c.name==target and not c.ascended and Inventory.canConsume(c) then index=i; break end end
+  if s.cash<Config.RebirthCost(s.rebirth) or not index then send(player,"Rebirth requires the displayed cash and an unlocked, non-ascended target creature."); return end
   local sacrificed=table.remove(s.creatures,index)
   if sacrificed.stand>0 then refreshStands(s) end
   s.cash=0; if not PassService.keepSlots(s.passes,s.keepSlotsEntitled) then s.slots=1 end; s.rolls={}; s.offerExpires=0; s.autoRolling=false; s.rebirth+=1; Season.addXP(s.season,100); Titles.apply(player.Character,s.rebirth,s.extras); Visuals.showRolls(s.plot,s.rolls,s.slots)
