@@ -79,4 +79,10 @@ database.player_15.theme="Void"
 assert(b.load(15)==nil, "A theme cannot be saved below its unlock rebirth")
 database.player_15.theme="Cyber"; database.player_15.tutorial.step=8
 assert(b.load(15)==nil, "Invalid tutorial state must not be loaded")
-print("Persistence lease, acquisition, inventory, tutorial and theme validation tests passed")
+database.player_16={version=1,cash=0,pending=0,slots=1,rebirth=15,parts={},creatures={{id="asc",name="Dirt Boy Abomination",components=clone(complete),income=32,level=1,stand=1,exp=0,ascended=true}}}
+local ascended=a.load(16)
+assert(ascended and ascended.creatures[1].ascended==true)
+assert(a.save(16,ascended,true))
+database.player_16.creatures[1].ascended="yes"
+assert(b.load(16)==nil, "Malformed ascension flags must not be loaded")
+print("Persistence lease, acquisition, inventory, tutorial, theme and ascension validation tests passed")

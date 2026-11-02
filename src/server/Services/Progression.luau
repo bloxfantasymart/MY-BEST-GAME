@@ -46,14 +46,17 @@ function Progression.claimQuest(progress,key,now)
  end
  return nil
 end
-function Progression.applyOffline(profile,now,incomeFn)
+function Progression.applyOffline(profile,now,incomeFn,totalFn)
  local last=profile.lastLogout or 0
  profile.lastOfflineAward=0
  if last>0 and now>last then
   local seconds=math.min(now-last,86400)
   local total=0
-  for _,creature in ipairs(profile.creatures) do
-   if creature.stand>0 then total+=incomeFn(creature) end
+  if totalFn then total=totalFn(profile.creatures,incomeFn)
+  else
+   for _,creature in ipairs(profile.creatures) do
+    if creature.stand>0 then total+=incomeFn(creature) end
+   end
   end
   local reward=math.floor(total*seconds*0.25)
   profile.pending+=reward

@@ -78,7 +78,7 @@ local function refreshBooth(booth)
    local model=Instance.new("Model"); model.Name="Showcase"; model.Parent=booth.displays
    Visuals.makeCreature(model,base,creature)
    local anchor=block(model,"CaptionAnchor",Vector3.new(0.1,0.1,0.1),base+Vector3.new(0,5,0),Color3.new(1,1,1)); anchor.Transparency=1; anchor.CanCollide=false
-   caption(anchor,creature.name.."\nLv."..creature.level.." | $"..math.floor(Config.Income(creature)).."/s",1)
+   caption(anchor,(creature.ascended and "ASCENDED " or "")..creature.name.."\nLv."..creature.level.." | $"..math.floor(Config.Income(creature)).."/s",1)
    CollectionService:AddTag(model,"BrainrotDisplay")
   end
  end
@@ -93,14 +93,14 @@ local function openBooth(player,booth)
    if c then
     local parts={}
     for _,kind in ipairs(Config.Types) do local item=c.components[kind]; table.insert(parts,(item.mutation or "Standard").." "..item.name.." "..kind) end
-    table.insert(listings,{id=c.id,name=c.name,level=c.level,income=math.floor(Config.Income(c)),parts=parts})
+    table.insert(listings,{id=c.id,name=(c.ascended and "ASCENDED " or "")..c.name,level=c.level,income=math.floor(Config.Income(c)),parts=parts})
    end
   end
  end
  local inventory={}
  if own and profiles[player] then
   for _,c in ipairs(profiles[player].profile.creatures) do
-   table.insert(inventory,{id=c.id,name=c.name,level=c.level,income=math.floor(Config.Income(c))})
+   table.insert(inventory,{id=c.id,name=(c.ascended and "ASCENDED " or "")..c.name,level=c.level,income=math.floor(Config.Income(c))})
   end
  end
  remote:FireClient(player,{open=true,booth=booth.index,owner=booth.owner and booth.owner.DisplayName or "Unclaimed",own=own,listings=listings,inventory=inventory})

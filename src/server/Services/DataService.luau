@@ -63,7 +63,8 @@ local function validProfile(data)
    or type(creature.name)~="string" or #creature.name>120
    or not finite(creature.income,0,1e18) or not finite(creature.level,1,1000) or creature.level%1~=0
    or not finite(creature.stand,0,maxStands) or creature.stand%1~=0
-   or (creature.exp~=nil and not finite(creature.exp,0,1e12)) or type(creature.components)~="table" then return false end
+   or (creature.exp~=nil and not finite(creature.exp,0,1e12))
+   or (creature.ascended~=nil and type(creature.ascended)~="boolean") or type(creature.components)~="table" then return false end
   ids[creature.id]=true
   if creature.stand>0 then if stands[creature.stand] then return false end; stands[creature.stand]=true end
   for _,kind in ipairs({"Head","Chest","Arms","Legs"}) do

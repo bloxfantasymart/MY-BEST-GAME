@@ -98,6 +98,13 @@ function Visuals.collect(plot)
  end
 end
 function Visuals.makeCreature(model,base,creature)
+ if creature.ascended then
+  local crown=block(model,"Ascension crown",Vector3.new(3.4,0.25,3.4),base+Vector3.new(0,6.1,0),Color3.fromRGB(255,220,50),Enum.Material.Neon)
+  crown.Transparency=0.15
+  for _,x in ipairs({-1,0,1}) do
+   block(model,"Crown spike",Vector3.new(0.25,0.7,0.25),base+Vector3.new(x,6.45,-1.35),Color3.fromRGB(255,235,100),Enum.Material.Neon)
+  end
+ end
  local shapes={
   {"Chest",Vector3.new(2.5,3,1.5),Vector3.new(0,2,0)},
   {"Head",Vector3.new(2,2,2),Vector3.new(0,4.5,0)},

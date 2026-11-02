@@ -52,6 +52,9 @@ end
 function Config.RebirthCost(current)
  return math.floor(1000*(current+1)^2.7)
 end
+function Config.FusionCost(creature)
+ return math.max(10000,math.floor(creature.income*100))
+end
 function Config.LevelCost(creature)
  return math.max(50,math.floor(creature.income*10*(1+creature.level*0.25)))
 end

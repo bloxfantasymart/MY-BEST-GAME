@@ -49,6 +49,7 @@ local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
 local bulkRarity=1; local confirmBulk=nil
+local forgeIds={}; local forgeConfirm=false
 local function row(text, callback, color)
  local b=button(list,text,UDim2.new(1,-10,0,50),UDim2.new(),color)
  rowOrder+=1; b.LayoutOrder=rowOrder
@@ -95,15 +96,39 @@ local function render()
     if item.kind==kind then row((item.mutation or "Standard").." "..item.name.." "..kind..(chosen[kind]==item.id and " ✓" or ""),function() chosen[kind]=item.id; render() end,Config.Rarities[item.rarity].color) end
    end
   end
+ elseif mode=="forge" then
+  title.Text="FUSION FORGE — REBIRTH 15+"
+  row("Fuse 3 unplaced matching creatures, level 10 or above. All parts and mutations must match.",nil,Color3.fromRGB(70,75,105))
+  row("The inputs are destroyed. Output starts at level 1 with 5x original base income and boosts adjacent stands.",nil,Color3.fromRGB(70,75,105))
+  local first=nil
+  for _,creature in ipairs(state.creatures) do if creature.id==forgeIds[1] then first=creature; break end end
+  local fee=first and Config.FusionCost(first) or 0
+  row("SELECTED "..#forgeIds.."/3 | FEE $"..fee.." | Cash $"..math.floor(state.cash),nil,Color3.fromRGB(70,75,105))
+  row(forgeConfirm and "CONFIRM: CONSUME 3 CREATURES AND CASH" or "FUSE SELECTED (review first)",function()
+   if #forgeIds~=3 or not first then return end
+   if forgeConfirm then remote:FireServer("fusion",forgeIds); forgeIds={}; forgeConfirm=false
+   else forgeConfirm=true; render() end
+  end,Color3.fromRGB(185,100,35))
+  for _,creature in ipairs(state.creatures) do
+   if not creature.ascended then
+    local selected=false; for _,id in ipairs(forgeIds) do if id==creature.id then selected=true end end
+    local text=(selected and "✓ " or "")..creature.name.." Lv."..creature.level.." | "..(creature.stand==0 and "Unplaced" or "Stand "..creature.stand).." | base $"..math.floor(creature.income).."/s"
+    row(text,function()
+     if selected then for i,id in ipairs(forgeIds) do if id==creature.id then table.remove(forgeIds,i); break end end
+     elseif #forgeIds<3 then table.insert(forgeIds,creature.id) end
+     forgeConfirm=false; render()
+    end,selected and Color3.fromRGB(45,150,110) or nil)
+   end
+  end
  elseif mode=="stand" then
   title.Text="STAND "..stand..": choose a creature"
   for _,c in ipairs(state.creatures) do
-   row(c.name.." | $"..math.floor(Config.Income(c)).."/s | "..(c.stand==0 and "Unplaced" or "Stand "..c.stand),function() remote:FireServer("stand",{stand=stand,id=c.id}) end)
+   row((c.ascended and "ASCENDED " or "")..c.name.." | $"..math.floor(Config.Income(c)).."/s | "..(c.stand==0 and "Unplaced" or "Stand "..c.stand),function() remote:FireServer("stand",{stand=stand,id=c.id}) end)
   end
  elseif mode=="rebirth" then
   title.Text="REBIRTH "..(state.rebirth or 0).." / 100"
   if state.rebirth>=100 then row("Maximum rebirth reached",nil) else
-   row("Cost: $"..state.rebirthCost.." | Sacrifice: "..state.target.." Abomination",nil,Color3.fromRGB(70,75,105))
+   row("Cost: $"..state.rebirthCost.." | Sacrifice (non-ascended): "..state.target.." Abomination",nil,Color3.fromRGB(70,75,105))
    row("Rebirth resets cash; roll slots reset unless Keep Slots applies. Other items remain. Luck x"..string.format("%.2f",1.15^(state.rebirth+1)),nil,Color3.fromRGB(70,75,105))
    row(confirmRebirth and "CONFIRM: RESET CASH AND SACRIFICE" or "REBIRTH (tap to review)",function()
    if confirmRebirth then remote:FireServer("rebirth"); confirmRebirth=false else confirmRebirth=true; render() end
@@ -116,6 +141,7 @@ local function render()
   local nextStand=state.standsUnlocked+1
   local standCost=Config.StandCosts[nextStand-12]
   row(standCost and ("Unlock stand "..nextStand.." — $"..standCost.."; rebirth "..(nextStand-12)) or "All stands unlocked",function() remote:FireServer("upgradeStands") end,Color3.fromRGB(210,130,35))
+  row("FUSION FORGE (REBIRTH 15+)",function() remote:FireServer("teleport","forge"); panel.Visible=false end,Color3.fromRGB(175,120,45))
   row("PLOT THEMES",function() mode="themes"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,130,160))
   row("OPEN GAMEPASS SHOP",function() mode="shop"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(180,65,160))
  elseif mode=="themes" then
@@ -161,6 +187,7 @@ local function render()
   row("ROLL STATION",function() remote:FireServer("teleport","lever"); panel.Visible=false end)
   row("ASSEMBLY POD",function() remote:FireServer("teleport","pod"); panel.Visible=false end)
   row("CASH ATM",function() remote:FireServer("teleport","atm"); panel.Visible=false end)
+  row("FUSION FORGE",function() remote:FireServer("teleport","forge"); panel.Visible=false end)
   row("TRADING HUB PORTAL",function() remote:FireServer("teleport","portal"); panel.Visible=false end)
  elseif mode=="bag" then
   title.Text="BACKPACK — "..bagTab
@@ -195,7 +222,7 @@ local function render()
   if bagTab~="Body Parts" then
    row("BRAINROTS: "..#state.creatures.." / 100 — tap to choose action",nil,Color3.fromRGB(70,75,105))
    for _,c in ipairs(state.creatures) do
-    row(c.name.." Lv."..c.level.." | $"..math.floor(Config.Income(c)).."/s | level $"..Config.LevelCost(c),function()
+    row((c.ascended and "ASCENDED " or "")..c.name.." Lv."..c.level.." | $"..math.floor(Config.Income(c)).."/s | level $"..Config.LevelCost(c),function()
      selectedSell={name=c.name,value=Config.CreatureSellValue(c),id=c.id,action="sellCreature"}; list.CanvasPosition=Vector2.zero; render()
     end)
     if selectedSell and selectedSell.id==c.id then
@@ -249,7 +276,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; eventLabel.Text=data.event or ""; state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=data.event or ""; loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  render()

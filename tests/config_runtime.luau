@@ -14,6 +14,8 @@ for tier = 0, 99 do
  assert(Config.RebirthCost(tier) > 0)
 end
 local creature = {income=100, level=1}
+assert(Config.FusionCost(creature)==10000)
+assert(Config.FusionCost({income=500})==50000)
 assert(Config.Income(creature) == 100)
 creature.level=2
 assert(Config.Income(creature) == 125)

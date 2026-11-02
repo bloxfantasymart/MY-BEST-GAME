@@ -15,6 +15,8 @@ local PassService = require(script.Parent.Services.PassService)
 local Inventory = require(script.Parent.Services.Inventory)
 local Tutorial = require(script.Parent.Services.Tutorial)
 local Titles = require(script.Parent.Services.Titles)
+local Fusion = require(script.Parent.Services.Fusion)
+local PlotEconomy = require(script.Parent.Services.PlotEconomy)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
@@ -75,6 +77,8 @@ spawn.Neutral = true
 spawn.Parent = world
 local hubPortal=part(world,"Trading hub portal",Vector3.new(10,10,2),Vector3.new(0,5,-22),Color3.fromRGB(150,65,255),Enum.Material.Neon)
 label(hubPortal,"TRADING HUB",7)
+local forge=part(world,"Fusion forge",Vector3.new(7,4,7),Vector3.new(0,2.5,20),Color3.fromRGB(255,170,40),Enum.Material.Metal)
+label(forge,"FUSION FORGE\nREBIRTH 15+",5)
 local cashBoard=part(world,"Server cash leaderboard",Vector3.new(13,9,1),Vector3.new(-22,5,10),Color3.fromRGB(25,35,75))
 local rebirthBoard=part(world,"Server rebirth leaderboard",Vector3.new(13,9,1),Vector3.new(22,5,10),Color3.fromRGB(70,30,105))
 local cashCaption=label(cashBoard,"SERVER CASH",6); cashCaption.Parent.Size=UDim2.fromOffset(250,180)
@@ -95,6 +99,10 @@ local function nearby(player, p)
  local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
  return root and (root.Position - p.Position).Magnitude <= 20
 end
+prompt(forge,"Open fusion forge").Triggered:Connect(function(player)
+ local s=states[player]
+ if s and DataService.isHealthy(player.UserId) and nearby(player,forge) then remote:FireClient(player,{open="forge"}) end
+end)
 local function collect(player,s)
  local amount=math.floor(s.pending)
  if amount<=0 then send(player,"No cash ready to collect yet."); return end
@@ -168,9 +176,10 @@ local function makePlot(i)
  return plot
 end
 for i=1,6 do plots[i]=makePlot(i) end
-local function updateStand(s, n)
+local function updateStand(s, n, rates)
  local stand=s.plot.stands[n]
  local old=stand:FindFirstChild("Display")
+ rates=rates or PlotEconomy.rates(s.creatures,Config.Income)
  stand.Color = n<=s.standsUnlocked and Color3.fromRGB(255,205,75) or Color3.fromRGB(90,95,110)
  local rim=stand:FindFirstChild("Neon rim")
  if rim then rim.Color=n<=s.standsUnlocked and Color3.fromRGB(255,238,135) or Color3.fromRGB(70,75,90) end
@@ -178,16 +187,20 @@ local function updateStand(s, n)
  for _,creature in ipairs(s.creatures) do if creature.stand==n then selected=creature; break end end
  if old and selected and old:GetAttribute("CreatureId")==selected.id then
   local caption=old:FindFirstChild("TextLabel",true)
-  if caption then caption.Text=selected.name.." Lv."..selected.level.."\n$"..math.floor(Config.Income(selected)).."/s" end
+  if caption then caption.Text=(selected.ascended and "ASCENDED " or "")..selected.name.." Lv."..selected.level.."\n$"..math.floor(rates[n] or 0).."/s" end
   return
  end
  if old then old:Destroy() end
  if not selected then return end
  local model=Instance.new("Model"); model.Name="Display"; model:SetAttribute("CreatureId",selected.id); model.Parent=stand
  Visuals.makeCreature(model,stand.Position+Vector3.new(0,1,0),selected)
- local caption=label(stand,selected.name.." Lv."..selected.level.."\n$"..math.floor(Config.Income(selected)).."/s",7)
+ local caption=label(stand,(selected.ascended and "ASCENDED " or "")..selected.name.." Lv."..selected.level.."\n$"..math.floor(rates[n] or 0).."/s",7)
  caption.Parent.Adornee=stand; caption.Parent.Parent=model
  CollectionService:AddTag(model,"BrainrotDisplay")
+end
+local function refreshStands(s)
+ local rates=PlotEconomy.rates(s.creatures,Config.Income)
+ for n=1,24 do updateStand(s,n,rates) end
 end
 local function roll(s)
  local eligible={}
@@ -301,7 +314,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if reward then s.cash+=reward; send(player,"Quest completed: $"..reward.."!")
   else send(player,"Quest is not ready or has already been claimed.") end
  elseif action=="teleport" then
-  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal}
+  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal,forge=forge}
   local destination=type(value)=="string" and destinations[value] or nil
   if destination and now-(s.lastTeleport or -10)>=3 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
    s.lastTeleport=now; player.Character:PivotTo(CFrame.new(destination.Position+Vector3.new(0,4,8))); send(player,"Teleported to "..destination.Name..".")
@@ -359,6 +372,11 @@ remote.OnServerEvent:Connect(function(player, action, value)
   for i=#s.parts,1,-1 do if seen[s.parts[i].id] then table.remove(s.parts,i) end end
   table.insert(s.creatures,{id=HttpService:GenerateGUID(false),name=dominant.." Abomination",components=components,income=sum*Config.Rarities[highest].multiplier*0.4*(harmony and 2 or 1),level=1,exp=0,stand=0})
   send(player,"Assembled! Take it to a stand.","craft")
+ elseif action=="fusion" then
+  if not nearby(player,forge) then send(player,"Move closer to the fusion forge."); return end
+  local creature,costOrError=Fusion.execute(s.creatures,value,s.rebirth,s.cash,Config.FusionCost,function() return HttpService:GenerateGUID(false) end)
+  if not creature then send(player,costOrError)
+  else s.cash-=costOrError; send(player,"Fusion complete! Your ascended creature starts at level 1.","craft") end
  elseif action=="stand" and type(value)=="table" then
   local n=value.stand
   if type(n)~="number" or n~=n or n%1~=0 or n<1 or n>s.standsUnlocked or not nearby(player,s.plot.stands[n]) then return end
@@ -369,12 +387,12 @@ remote.OnServerEvent:Connect(function(player, action, value)
    for _, c in ipairs(s.creatures) do if c.stand==n then send(player,"This stand is occupied."); return end end
    creature.stand=n; Tutorial.advance(s.tutorial,"place",s.parts)
   else send(player,"Remove this creature from its current stand first."); return end
-  updateStand(s,n); send(player,"Stand updated.")
+  refreshStands(s); send(player,"Stand updated.")
  elseif action=="level" then
   local _,creature=findById(s.creatures,value)
   if creature and creature.level<1000 then
    local cost=Config.LevelCost(creature)
-   if s.cash>=cost then s.cash-=cost; creature.level+=1; if creature.stand>0 then updateStand(s,creature.stand) end; send(player,"Level upgraded!")
+   if s.cash>=cost then s.cash-=cost; creature.level+=1; if creature.stand>0 then refreshStands(s) end; send(player,"Level upgraded!")
    else send(player,"Not enough cash to level up.") end
   end
  elseif action=="rebirth" then
@@ -382,10 +400,10 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if not PassService.canRebirth(s.passes,s.keepSlotsEntitled) then send(player,"Keep Slots ownership could not be verified; try refreshing the shop before rebirthing."); return end
   local target=Config.RebirthTarget(s.rebirth).." Abomination"
   local index=nil
-  for i,c in ipairs(s.creatures) do if c.name==target then index=i; break end end
-  if s.cash<Config.RebirthCost(s.rebirth) or not index then send(player,"Rebirth requires the displayed cash and creature."); return end
+  for i,c in ipairs(s.creatures) do if c.name==target and not c.ascended then index=i; break end end
+  if s.cash<Config.RebirthCost(s.rebirth) or not index then send(player,"Rebirth requires the displayed cash and a non-ascended target creature."); return end
   local sacrificed=table.remove(s.creatures,index)
-  if sacrificed.stand>0 then updateStand(s,sacrificed.stand) end
+  if sacrificed.stand>0 then refreshStands(s) end
   s.cash=0; if not PassService.keepSlots(s.passes,s.keepSlotsEntitled) then s.slots=1 end; s.rolls={}; s.autoRolling=false; s.rebirth+=1; Titles.apply(player.Character,s.rebirth); Visuals.showRolls(s.plot,s.rolls,s.slots)
   send(player,"Rebirth complete! New archetypes unlocked.")
  elseif action=="collect" then
@@ -409,7 +427,7 @@ local function join(player)
  if not plot then player:Kick("This server has no free plots. Please join another server."); return end
  plot.owner=player; plot.sign.Text="Loading "..player.DisplayName.."..."
  local data=DataService.load(player.UserId,function(profileData)
-  return Progression.applyOffline(profileData,os.time(),Config.Income)
+  return Progression.applyOffline(profileData,os.time(),Config.Income,PlotEconomy.total)
  end)
  if not data then
   plot.owner=nil; plot.sign.Text="Unclaimed plot"
@@ -425,7 +443,7 @@ local function join(player)
  local rebirthStat=Instance.new("IntValue"); rebirthStat.Name="Rebirths"; rebirthStat.Value=s.rebirth; rebirthStat.Parent=stats
  Tutorial.advance(s.tutorial,"sync",s.parts)
  for _,theme in ipairs(Config.Themes) do if theme.id==s.theme then Visuals.applyTheme(s.plot,theme); break end end
- for n=1,24 do updateStand(s,n) end
+ refreshStands(s)
  Visuals.showRolls(s.plot,s.rolls,s.slots)
  local function teleport(character)
   local root=character:WaitForChild("HumanoidRootPart",10)
@@ -459,15 +477,18 @@ task.spawn(function()
     local previousDay=s.progress.questDay
     Progression.refresh(s.progress,os.time())
     local changed=previousDay~=s.progress.questDay
+    local leveled=false
+    local rates=PlotEconomy.rates(s.creatures,Config.Income)
     for _,creature in ipairs(s.creatures) do
      if creature.stand>0 then
-      s.pending+=Config.Income(creature)*(incomeEvent.sigma and 3 or 1)*(incomeEvent.weekend and 2 or 1)*(PassService.owned(s.passes,"VIP") and 1.2 or 1)
+      s.pending+=(rates[creature.stand] or 0)*(incomeEvent.sigma and 3 or 1)*(incomeEvent.weekend and 2 or 1)*(PassService.owned(s.passes,"VIP") and 1.2 or 1)
       if creature.level<1000 then
        creature.exp=(creature.exp or 0)+1
-       if creature.exp>=10 then creature.exp-=10; creature.level+=1; updateStand(s,creature.stand); changed=true end
+       if creature.exp>=10 then creature.exp-=10; creature.level+=1; leveled=true; changed=true end
       else creature.exp=0 end
      end
     end
+    if leveled then refreshStands(s) end
     s.plot.bankLabel.Text="Bank: $"..math.floor(s.pending)
     if changed then send(player) else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=LiveEvents.at(os.time()), serverDay=Progression.day(os.time())}) end
    end

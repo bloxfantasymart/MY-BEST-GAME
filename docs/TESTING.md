@@ -12,6 +12,10 @@ These steps are for a **private test experience**, not your public game. The aut
 6. Open **UPGRADES → PLOT THEMES** and select an unlocked theme; locked themes must not apply. Check the title above your avatar after respawning. Test inventory filtering, selling confirmation, paid leveling, travel and upgrades. Selling is permanent. Auto-roll requires rebirth 5 or the configured pass. Test it only after reading its warning: it spends cash. Move away from the station and check it stops.
 7. Open **REWARDS → HOW TO PLAY**, check the two plaza leaderboards and the event countdown. The leaderboards cover the current server only. Use Studio's device emulator and a real mobile device to check that buttons and text remain usable.
 
+### Fusion and neighboring stands
+
+In a private test profile at rebirth 15 or above, prepare three distinct, unplaced, non-ascended creatures with the same four components and mutations, each at level 10 or higher. At the plaza forge, check that too little cash, different mutations, a placed creature, repeated selections and rebirth below 15 cannot consume anything. Confirm a valid fusion; verify exactly three inputs and the fee disappear, and one level-1 ascended creature with 5x base income appears. Place it next to another creature: the adjacent stand's displayed rate should rise by 20%. Test corners, row edges, multiple ascended neighbors and removal. Save/rejoin and visit the hub to check the flag and appearance survive. Also verify offline income includes adjacency once. These behaviors need real Studio and published-environment testing, not just the pure-logic checks.
+
 ### Daily rewards and objectives
 
 Open **REWARDS**, claim the daily reward twice, and check that only the first claim pays. Roll 50 parts (multi-slot rolls count each part), then claim the roll objective once. Complete the other objectives and verify each can only pay once. UTC midnight resets the objectives. Verify a missed UTC day resets the login streak; Studio clock changes alone should not be trusted as a server-time test.
