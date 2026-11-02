@@ -1,0 +1,1053 @@
+```markdown
+# GAME DESIGN SPECIFICATION: Roll a Brainrot
+# TARGET ENGINE: Roblox (Luau, Rojo 7.7.x, Server-Authoritative)
+# AUDIENCE: Mobile & PC Players
+
+=== 1. GAME OVERVIEW & CORE LOOP ===
+Game Title: Roll a Brainrot
+Primary Loop:
+1. Pull the Slot Lever on your plot to roll body parts (Head, Chest, Arms, Legs).
+2. Choose to BUY rolled parts for cash or SKIP/REROLL them by pulling again.
+3. Bring 4 matching or mismatched parts to the Assembly Pod to craft a custom Brainrot.
+4. Place crafted Brainrots on plot stands to generate passive $/second.
+5. Upgrade Brainrot levels to multiply passive income and collect accumulated cash.
+6. Rebirth up to 100 times by meeting cash requirements and sacrificing specific Brainrots.
+7. Use the Central Portal to visit the 15-player Trading Hub to sell Brainrots at custom player booths.
+
+Server Capacities:
+- Standard Gameplay Server: 6 Players maximum (ensures smooth plot rendering and zero lag).
+- Trading Hub Server: 15 Players maximum.
+
+---
+
+=== 2. PROCEDURAL WORLD & PLOT GENERATION ===
+All world geometry must build programmatically via code if assets are missing:
+1. Main Gameplay World:
+   - Central Spawning Plaza with leaderboards (Top Cash, Top Rebirths) and a glowing Portal to the Trading Hub.
+   - 6 Dedicated Player Plots connected to the plaza via pathways.
+   - Distinct, colorful cartoon aesthetic: bright grass, neon trim, voxel lighting, cartoon skybox.
+2. Individual Player Plot Layout:
+   - Player Nameplate billboard on the plot entrance.
+   - Lever Roll Station: Mechanical slot chassis with animated lever, status lights, and 1 to 9 visual part drop trays.
+   - Assembly Machine Pod: High-tech chamber with a glass door, 4 glowing receptor pads, and an "Assemble" control terminal.
+   - 12 Passive Income Stands: Raised pedastals displaying placed Brainrot models, level indicators, and floating $/sec badges.
+   - Cash ATM/Deposit Box: Central collection node displaying uncollected bank balance with a "Collect" step-on pad.
+3. Trading Hub Place:
+   - Circular neon bazaar with 15 interactable Vendor Booths.
+   - Safe zone (PvP disabled, collision disabled between characters).
+   - Return portal leading back to standard gameplay servers.
+
+---
+
+=== 3. BODY PARTS & BRAINROT CATALOG (50+ ARCHETYPES) ===
+Every complete Brainrot requires exactly 4 distinct body part types:
+- Head
+- Chest
+- Arms
+- Legs
+
+Rarity Tier Structure:
+- Common      (Weight: 5,000 | Stat Multiplier: 1.0x  | Color: #B4B4B4)
+- Uncommon    (Weight: 2,500 | Stat Multiplier: 1.5x  | Color: #55FF55)
+- Rare        (Weight: 1,200 | Stat Multiplier: 2.5x  | Color: #55AAFF)
+- Epic        (Weight: 600   | Stat Multiplier: 4.5x  | Color: #AA55FF)
+- Legendary   (Weight: 200   | Stat Multiplier: 10.0x | Color: #FFAA00)
+- Mythic      (Weight: 50    | Stat Multiplier: 25.0x | Color: #FF5555)
+- Godly       (Weight: 10    | Stat Multiplier: 75.0x | Color: #00FFFF)
+- Secret      (Weight: 1     | Stat Multiplier: 250.0x| Color: #FF0080)
+
+Catalog Table (Minimum 50 Archetypes with Rebirth Locks & Base Income):
+1.  Dirt Boy (Common, Rebirth 0, Base $2/s)
+2.  Nooblet (Common, Rebirth 0, Base $3/s)
+3.  Sponge Golem (Common, Rebirth 0, Base $4/s)
+4.  Skibidi Toilet (Common, Rebirth 0, Base $5/s)
+5.  Bacon Warrior (Common, Rebirth 0, Base $6/s)
+6.  Cardboard Boxman (Common, Rebirth 0, Base $7/s)
+7.  Robloxian NPC (Common, Rebirth 0, Base $8/s)
+8.  Slime Creeper (Common, Rebirth 0, Base $9/s)
+9.  Grimace Shake (Uncommon, Rebirth 1, Base $15/s)
+10. Rizzler (Uncommon, Rebirth 1, Base $18/s)
+11. Sigma King (Uncommon, Rebirth 1, Base $22/s)
+12. Mewing Chad (Uncommon, Rebirth 2, Base $28/s)
+13. Baby Gronk (Uncommon, Rebirth 2, Base $35/s)
+14. Pizza Tower Peppino (Uncommon, Rebirth 2, Base $42/s)
+15. Freddy Fazbear (Uncommon, Rebirth 3, Base $50/s)
+16. Livvy Dune (Rare, Rebirth 3, Base $65/s)
+17. Kai Cent (Rare, Rebirth 3, Base $80/s)
+18. IShowSpeed (Rare, Rebirth 4, Base $100/s)
+19. CaseOh (Rare, Rebirth 4, Base $130/s)
+20. Quandale Dingle (Rare, Rebirth 5, Base $170/s)
+21. Huggy Wuggy (Rare, Rebirth 5, Base $210/s)
+22. Banban (Rare, Rebirth 6, Base $260/s)
+23. Smurf Cat (Epic, Rebirth 6, Base $350/s)
+24. Strawberry Elephant (Epic, Rebirth 7, Base $480/s)
+25. Gigachad Prime (Epic, Rebirth 8, Base $650/s)
+26. Glitch Toilet (Epic, Rebirth 9, Base $900/s)
+27. Titan Cameraman (Epic, Rebirth 10, Base $1,250/s)
+28. Garten Stinger (Epic, Rebirth 11, Base $1,700/s)
+29. Rainbow Friend Blue (Epic, Rebirth 12, Base $2,200/s)
+30. Titan Speakerman (Legendary, Rebirth 13, Base $3,000/s)
+31. Titan TV Man (Legendary, Rebirth 15, Base $4,500/s)
+32. Aura Lord (Legendary, Rebirth 17, Base $6,800/s)
+33. Mewing Overlord (Legendary, Rebirth 20, Base $10,000/s)
+34. Ohio God (Legendary, Rebirth 23, Base $15,000/s)
+35. Camera Strider (Legendary, Rebirth 26, Base $22,000/s)
+36. G-Man Astro (Legendary, Rebirth 30, Base $32,000/s)
+37. Tungsten Cube (Mythic, Rebirth 35, Base $50,000/s)
+38. Cursed Banana (Mythic, Rebirth 40, Base $75,000/s)
+39. Subway Surfer (Mythic, Rebirth 45, Base $110,000/s)
+40. Family Guy Clip (Mythic, Rebirth 50, Base $160,000/s)
+41. Kinetic Sand (Mythic, Rebirth 55, Base $230,000/s)
+42. Soap Cutting (Mythic, Rebirth 60, Base $330,000/s)
+43. Brainrot Titan (Godly, Rebirth 65, Base $500,000/s)
+44. Infinite Rizz God (Godly, Rebirth 70, Base $800,000/s)
+45. The Ultimate Ohio (Godly, Rebirth 75, Base $1,300,000/s)
+46. Omega Skibidi (Godly, Rebirth 80, Base $2,200,000/s)
+47. Forbidden Meme (Godly, Rebirth 85, Base $4,000,000/s)
+48. Void Titan (Godly, Rebirth 90, Base $7,500,000/s)
+49. Galactic Mew (Secret, Rebirth 95, Base $25,000,000/s)
+50. God of Brainrot (Secret, Rebirth 100, Base $100,000,000/s)
+
+---
+
+=== 4. LEVER ROLLING & MULTI-SLOT SYSTEM ===
+1. Lever Interaction:
+   - Pulling the lever activates roll animations across all unlocked slots.
+   - Sound FX: Satisfying clicky mechanical ratchet sound on pull, fanfare chime on rare drops.
+2. Slot Upgrades (Max 9 Slots):
+   - Slot 1: Free (Default)
+   - Slot 2: $500
+   - Slot 3: $2,500
+   - Slot 4: $10,000
+   - Slot 5: $50,000
+   - Slot 6: $250,000
+   - Slot 7: $1,000,000
+   - Slot 8: $5,000,000
+   - Slot 9: $25,000,000
+3. Roll Resolution:
+   - When pulled, each active slot rolls an independent body part (Head, Chest, Arms, or Legs) based on player's Rebirth luck multiplier.
+   - Above each slot pad, a floating 3D part preview appears with a billboard showing:
+     * Part Name (e.g., "Skibidi Toilet Head")
+     * Rarity Badge (e.g., "[Rare 1 in 15]")
+     * Purchase Price
+   - Two buttons per slot: [BUY] or [SKIP / REROLL].
+   - Buying deducts cash and deposits the piece into the player's Backpack.
+   - Pulling the lever again automatically discards unpurchased parts and rolls a fresh batch.
+
+---
+
+=== 5. ASSEMBLY MACHINE POD (CRAFTING) ===
+1. Mechanics:
+   - Player approaches the Pod and opens the Assembly GUI.
+   - UI features 4 circular equipment sockets: [HEAD], [CHEST], [ARMS], [LEGS].
+   - Players select 1 owned piece for each socket from their inventory. Parts can belong to completely different Brainrot archetypes (e.g., Dirt Boy Head + Gigachad Prime Chest + Skibidi Toilet Arms + Mewing Chad Legs).
+2. Synthesis Output:
+   - Income Calculation: Sum of all 4 parts' base income multiplied by the highest rarity component multiplier:
+     Income/Sec = (HeadIncome + ChestIncome + ArmsIncome + LegsIncome) * (HighestComponentMultiplier * 0.4)
+   - Name Generation: "{Highest Rarity Part Name} Abomination"
+   - Model Assembly: Procedurally attaches the selected Head, Arms, and Legs onto the Torso root part using Motor6D / WeldConstraints.
+3. Level Progression:
+   - Crafted Brainrots start at Level 1.
+   - Earn 1 EXP per 10 seconds placed on a stand, or can be instantly leveled with cash.
+   - Each level increases $/sec income by +25%.
+
+---
+
+=== 6. TYCOON INCOME & STANDS ===
+1. Plot Placement:
+   - 12 total display stands per plot.
+   - Approaching an empty stand prompts player to select an assembled Brainrot from inventory.
+   - Display stand mounts the composite 3D character with an idle breathing animation.
+2. Server Income Tick:
+   - Server runs a synchronized 1-second heartbeat loop.
+   - Calculates total $/sec across all 12 stands for each player and adds to their `PendingCash` balance.
+3. ATM Cash Station:
+   - Floating green 3D numbers above the plot bank display accumulated pending money.
+   - Stepping on the collection pad or pressing the HUD button immediately transfers pending money to the player's main balance with a coin-shower particle effect.
+
+---
+
+=== 7. 100-TIER REBIRTH SYSTEM ===
+1. Rebirth Scaling:
+   - Maximum Rebirth Cap: 100.
+   - Cash Formula: math.floor(1000 * (RebirthTier + 1)^2.7)
+   - Sacrifice Requirement: Must own and sacrifice 1 specific assembled Brainrot matching the Rebirth tier bracket (e.g., Rebirth 1 requires "Dirt Boy Abomination", Rebirth 5 requires "Quandale Dingle Abomination").
+2. Standard Rebirth Reset Rules:
+   - Cash resets to $0.
+   - Roll slots reset back to 1 (unless player owns the Infinite Slots gamepass).
+   - The sacrificed Brainrot is permanently removed from inventory.
+   - Placed Brainrots, Plot Stands, and all other inventory items DO NOT reset.
+3. Rebirth Rewards:
+   - Permanent Luck Boost: +15% compound luck per rebirth level.
+   - Unlocks higher catalog archetypes for lever rolling.
+4. Robux Skip Option:
+   - Players can bypass requirements with Robux (starts at 49 Robux, increases +15 Robux per Rebirth level).
+   - Skipping with Robux does NOT wipe cash and does NOT consume any Brainrots.
+
+---
+
+=== 8. TRADING HUB & BOOTH SYSTEM ===
+1. Architecture:
+   - Main world portal teleports players to a dedicated 15-player trading place using `TeleportService`.
+2. Booth Assignment:
+   - 15 numbered booths around a town square.
+   - Interacting with an unclaimed booth claims it for the player and displays their username and avatar thumbnail.
+3. Selling & Buying:
+   - Owner can list up to 4 assembled Brainrots on their booth counter.
+   - Owner sets custom cash prices for each listing.
+   - Other players walk up, inspect the 4 combined parts and level stats via a 3D viewport, and click "Buy".
+   - Server verifies the buyer's balance, deducts cash, transfers ownership of the Brainrot, and awards cash to the seller instantly.
+4. Direct Trading Window:
+   - Players can click another player to send a trade request.
+   - Standard 2-way security trade window with a mandatory 5-second lock confirmation countdown to prevent swap scams.
+
+---
+
+=== 9. USER INTERFACE (ROBLOX-NATIVE STYLE) ===
+Visual Language:
+- Classic Roblox simulator aesthetic: Bright vibrant colors, rounded corners (UICorner 12px), bold outlines (UIStroke 3px dark shade), drop shadows.
+- Fully responsive across Mobile and PC: Uses scale-based sizing (`UDim2.new(scaleX, 0, scaleY, 0)`), `UIAspectRatioConstraint`, and large mobile-friendly touch targets.
+- Zero generic/sterile corporate web design.
+
+Main Screen HUD:
+- Top Center: Current Rebirth Tier, Luck Multiplier indicator, and Server Event banner.
+- Top Left: Cash balance with pop-up green `+$X` floats on collection.
+- Right Sidebar Action Buttons:
+  * [BACKPACK]: Tabs for `All`, `Body Parts`, `Brainrots`, and `Boosts`. Shows rarity border colors and stat chips.
+  * [REBIRTH]: Displays required cash, target Brainrot sacrifice icon, luck reward, and Robux skip button.
+  * [ROLL SLOTS]: Upgrade multi-roll slots (e.g., "Unlock Slot 3: $2,500").
+  * [SHOP]: Gamepasses, P2W crates, and cash bundles.
+  * [TELEPORT]: Instant warp to Lever Station, Assembly Pod, or Trading Hub Portal.
+
+---
+
+=== 10. MONETIZATION & GAMEPASSES ===
+1. Gamepasses:
+   - 2x Luck: Permanently doubles base roll luck.
+   - Auto-Roll: Automatically pulls the lever and sells/buys based on custom rarity filters.
+   - Keep Slots: Rebirthing never resets unlocked roll slots back to 1.
+   - +100 Backpack Space: Doubles inventory storage.
+   - VIP Rank: Gold chat tag, golden booth skin in Trading Hub, +20% passive income boost.
+2. Developer Products (Robux Purchases):
+   - Void Crate (129 R$): Drops 1 guaranteed Mythic, Godly, or Secret body part.
+   - Tiered Cash Packs: Scale dynamically based on player's current Rebirth level:
+     * Small Pack: 15 minutes of passive income.
+     * Medium Pack: 2 hours of passive income.
+     * Giant Pack: 12 hours of passive income.
+   - Instant Rebirth Skip: Bypasses cash and sacrifice requirements.
+
+---
+
+=== 11. ANTICHEAT & SECURITY ===
+1. Server Authoritative Architecture:
+   - Clients NEVER tell the server how much money they have, what parts they rolled, or what they crafted.
+   - Clients only send intent requests: `RequestRoll()`, `PurchasePart(partId)`, `Assemble(partIds)`, `CollectCash()`.
+2. Exploitation Safeguards:
+   - Proximity Validation: Player character must be within 20 studs of the Lever or Pod to invoke action remotes.
+   - Remote Throttling / Rate-Limiting: Enforce a strict 0.35-second cooldown on rolling to prevent automated exploit spamming.
+   - Numerical Sanitization: Reject `NaN`, `math.huge`, negative numbers, or non-integer inputs on all transactions.
+   - Inventory Ownership Checks: Verify that every part ID submitted for crafting exists in the player's server-stored inventory before destroying or merging.
+
+Generate all files with full, working Luau code, strictly typed, and structured cleanly for Rojo synchronization.
+
+```
+
+
+
+```markdown
+=== 12. WORLD EVENTS, WEATHER & LUCK CYCLES ===
+1. Timed Luck Cycle Engine:
+   - Server runs a global cyclical timer every 30 minutes.
+   - Cycle Display: Billboard on every player's roll station reads: "2x LUCK in: MM:SS" with an animated green gradient progress bar.
+   - Active Event Window: When the timer expires, triggers a 5-minute "Brainrot Frenzy" server event:
+     * Base roll luck is multiplied by 2x for all players.
+     * Ambient skybox shifts to a neon purple/green tint with floating meme particles.
+     * A global banner drops across all player screens: "BRAINROT FRENZY ACTIVE! 2X LUCK FOR 5 MINUTES!".
+2. Random Server Disasters/Weather (Every 15-20 Minutes):
+   - "Ohio Storm": Golden and Void rain falls across the map; collecting glowing drops grants instant bonus cash and scrap.
+   - "Skibidi Eclipse": Reduces roll prices by 50% for 3 minutes.
+   - "Sigma Awakening": Increases all passive tycoon plot stands' $/sec payout by 3x for 2 minutes.
+
+---
+
+=== 13. AUTO-ROLL, FILTERS & INVENTORY AUTO-DELETE ===
+1. Auto-Roll Mechanics (Gamepass / Unlocked at Rebirth 5):
+   - Toggle button on the roll station HUD: [AUTO-ROLL: ON/OFF].
+   - Configurable Roll Speed: Standard auto-roll ticks once every 0.6 seconds; "Super Auto-Roll" gamepass ticks once every 0.35 seconds.
+2. Auto-Filter Rules:
+   - Filter Checklist UI allows players to toggle which rarities to automatically discard:
+     * [x] Auto-Skip Common
+     * [x] Auto-Skip Uncommon
+     * [ ] Auto-Skip Rare
+     * [ ] Auto-Skip Epic
+   - Auto-Buy Setting: Allows the server to automatically purchase and deposit parts of chosen rarities straight into the backpack if the player has sufficient cash.
+3. Inventory Capacity & Management:
+   - Default Backpack: 50 Part Slots, 20 Assembled Brainrot Slots.
+   - Expandable via in-game cash upgrades (+5 slots per tier) and gamepass (+100 slots).
+   - "Quick-Sell" Feature: Players can bulk-sell body parts directly from the backpack UI for 50% of their base buy cost.
+
+---
+
+=== 14. GLOBAL RARITY ANNOUNCEMENTS & AUDIO-VISUAL POLISH ===
+1. Rarity Visual FX & Cutscenes:
+   - Common to Rare: Instant spawn on slot pad with light puff particle.
+   - Epic to Legendary: Screen flash, lever sparks, 0.5-second dramatic drum roll, beam of light descending onto the rolled part.
+   - Mythic, Godly, Secret:
+     * Full-screen camera tween zooming into the slot pad.
+     * Golden/Prismatic particle pillar bursting into the sky.
+     * Dynamic screen shake using `RunService.RenderStepped` camera offsets.
+     * Orchestral explosion / bass-boosted sound effect.
+2. Server & Global Chat Broadcasts:
+   - Mythic Drops: Server-wide chat message: "[ROLLS] {PlayerName} just rolled a {PartName} (1 in {Odds})!".
+   - Godly & Secret Drops: Cross-server announcement banner across all running servers with fireworks sound effects: "🔥 MEGA PULL! {PlayerName} rolled the SECRET {PartName}! 🔥".
+
+---
+
+=== 15. DAILY REWARDS & PLAYTIME GIFT PODS ===
+1. 12 Playtime Retention Pods (Per Session):
+   - Timed reward queue displayed on the top HUD ribbon:
+     * 1 Min: $500 Cash
+     * 3 Min: 5x Free Instant Rolls
+     * 5 Min: Uncommon Body Part Chest
+     * 10 Min: $15,000 Cash
+     * 15 Min: 10-Minute 2x Luck Potion
+     * 25 Min: Rare Brainrot Assembly Blueprint
+     * 40 Min: $100,000 Cash
+     * 60 Min: 1x Void Crate (Guaranteed Epic+)
+     * 90 Min: Secret "Ohio Crown" Cosmetic Aura
+   - Timers reset upon leaving or completing all 12 tiers.
+2. 7-Day Daily Login Calendar:
+   - Day 1: $1,000 Cash
+   - Day 2: 3x Luck Potion (15 min)
+   - Day 3: Exclusive "Golden Lever" skin (gives permanent +5% roll luck)
+   - Day 4: $50,000 Cash
+   - Day 5: 3x Free Multi-Slot Roll Tokens
+   - Day 6: $250,000 Cash
+   - Day 7: Exclusive "Sigma Giga" Brainrot Stand Statue (+50% plot income boost)
+
+---
+
+=== 16. COMPLETE DATA PERSISTENCE SCHEMA (PROFILESTORE) ===
+All player data must be structured safely with session-locking, fail-safes, and versioned migrations:
+
+```lua
+ProfileSchema = {
+    DataVersion = 1,
+    Cash = 0,
+    PendingCash = 0,
+    Rebirths = 0,
+    ActiveRollSlots = 1,
+
+    -- Inventory
+    Inventory = {
+        Parts = {
+            -- { Id = "guid", Name = "Dirt Boy Head", ModelSource = "Dirt Boy", PartType = "Head", Rarity = "Common", BuyPrice = 25, IncomeBonus = 2 }
+        },
+        Brainrots = {
+            -- { Id = "guid", Name = "Sigma King Abomination", Rarity = "Uncommon", Level = 1, CurrentExp = 0, ExpToLevel = 100, IncomePerSecond = 45, PartsUsed = { Head = "...", Chest = "...", Arms = "...", Legs = "..." } }
+        },
+    },
+
+    -- Tycoon Plot Stand Attachments (Keys "1" to "12")
+    PlacedBrainrots = {
+        -- ["1"] = BrainrotData,
+    },
+
+    -- Unlocks & Boosts
+    Gamepasses = {
+        DoubleLuck = false,
+        AutoRoll = false,
+        KeepSlots = false,
+        InfiniteBackpack = false,
+        VIP = false,
+    },
+
+    ActivePotions = {
+        -- LuckMultiplier = { DurationRemaining = 300, Multiplier = 2.0 }
+    },
+
+    PlaytimeSeconds = 0,
+    ClaimedPlaytimeGifts = {},
+    LastDailyLoginEpoch = 0,
+    LoginStreak = 1,
+}
+
+```
+
+Safety Requirements:
+
+* Save on `PlayerRemoving` and via a periodic 300-second auto-save loop.
+* Use `BindToClose` with minimum 25-second budget to prevent data loss on server shutdowns.
+* Session lock checks: prevent two servers from writing to the same player save simultaneously.
+
+---
+
+=== 17. TYPED REMOTE NETWORK CONTRACTS ===
+Centralized strictly under `ReplicatedStorage.BrainrotRemotes`:
+
+RemoteFunctions:
+
+* `RequestRoll()` -> `{ Success: boolean, Message: string?, Parts: { RolledPart }? }`
+* `PurchasePart(partId: string)` -> `{ Success: boolean, Message: string?, Bought: RolledPart? }`
+* `BuyRollSlot()` -> `{ Success: boolean, Message: string?, Slots: number? }`
+* `CraftBrainrot(partIds: { string })` -> `{ Success: boolean, Message: string?, Brainrot: AssembledBrainrot? }`
+* `PlaceBrainrot(brainrotId: string, standIndex: number)` -> `{ Success: boolean, Message: string? }`
+* `RemoveBrainrot(standIndex: number)` -> `{ Success: boolean, Message: string? }`
+* `LevelUpBrainrot(standIndex: number)` -> `{ Success: boolean, NewLevel: number?, NewIncome: number? }`
+* `CollectCash()` -> `{ Success: boolean, Amount: number }`
+* `PerformRebirth(isRobux: boolean)` -> `{ Success: boolean, Message: string?, NewRebirth: number?, LuckMultiplier: number? }`
+* `ClaimPlaytimeGift(giftIndex: number)` -> `{ Success: boolean, RewardType: string?, Value: any? }`
+* `ListBoothItem(brainrotId: string, price: number)` -> `{ Success: boolean, Message: string? }`
+* `BuyBoothItem(sellerUserId: number, brainrotId: string)` -> `{ Success: boolean, Message: string? }`
+
+RemoteEvents:
+
+* `StateUpdated(fullProfileData: table)` -> Fires to client whenever inventory, cash, or rebirths change.
+* `RollAnimationTriggered(slotIndex: number, partData: table)` -> Tells client to play mechanical rolling VFX.
+* `GlobalAnnouncement(bannerText: string, color: Color3, soundId: string)` -> Broadcasts across all clients.
+* `FloatingNotification(message: string, alertType: "Success" | "Warning" | "Error")` -> Displays clean notification toast on client.
+
+---
+
+=== 18. NPC SYSTEM & PLOT CUSTOMIZATION ===
+
+1. Automated Brainrot NPC Rigs:
+* When placed on a stand, the server constructs a custom R6/R15 humanoid model using procedural blocks:
+* Torso acts as the RootPart with attachment points for 4 sub-parts.
+* Custom MeshPart/Model overrides mapped to the 50 Brainrot definitions.
+
+
+* Overhead BillboardGui shows:
+* Custom Brainrot Name (color-coded to its composite rarity)
+* Level badge: `[LVL X]`
+* Live income rate: `+$X / sec`
+
+
+
+
+2. Wandering Ambient Plot Pets:
+* Brainrots have a toggleable "Wander" mode allowing them to roam within the plot boundary using `PathfindingService`.
+* Never wander outside the player's 60x60 plot boundary.
+
+
+
+---
+
+=== 19. ARENA AI BUILD & EXECUTION DIRECTIVES ===
+When generating files for this project:
+
+1. Do not output pseudo-code or leave placeholder comments like `-- logic goes here`.
+2. Generate each file completely, starting with strict types (`--!strict`) and all required service imports.
+3. Include automatic fallback instances (using `Instance.new`) for all 3D map elements (Baseplate, Roll Lever, Assembly Pod, Stands, Trading Booths, and Portals) so that hitting F5 in an empty baseplate boots an immediately playable, fully functioning game.
+4. Output files in logical compilation order:
+* Step 1: `src/shared/Types.luau`
+* Step 2: `src/shared/Config.luau`
+* Step 3: `src/shared/Net.luau`
+* Step 4: `src/server/Services/AntiCheat.luau`
+* Step 5: `src/server/Services/DataService.luau`
+* Step 6: `src/server/Services/RollService.luau`
+* Step 7: `src/server/Services/CraftService.luau`
+* Step 8: `src/server/Services/PlotService.luau`
+* Step 9: `src/server/Services/RebirthService.luau`
+* Step 10: `src/server/Services/MonetizationService.luau`
+* Step 11: `src/server/Services/TradingService.luau`
+* Step 12: `src/server/Main.server.luau`
+* Step 13: `src/client/Controllers/HudController.luau`
+* Step 14: `src/client/Controllers/RollController.luau`
+* Step 15: `src/client/Controllers/MachineController.luau`
+* Step 16: `src/client/Main.client.luau`
+
+
+
+```
+
+```
+
+```markdown
+=== 20. BRAINROT BATTLE ARENA & DUNGEON RAIDS (PVE / PVP) ===
+1. The Brainrot Colosseum (Plot Expansion / Map Feature):
+   - Players can bring 1 active assembled Brainrot from their plot into the Central Colosseum.
+   - Brainrot Stats derived from composite parts:
+     * HP = Combined Health pool of the 4 parts (scaled by Level).
+     * DPS = IncomePerSecond * 1.5.
+     * Speed = Driven by Leg part type.
+     * Special Attack = Driven by Head part archetype (e.g., "Skibidi Laser", "Ohio Shockwave", "Giga Roar").
+2. Boss Raids (Every 45 Minutes):
+   - A gigantic server boss spawns in the center pit (e.g., "Level 100 Colossal Toilet Titan", 10,000,000 HP).
+   - All 6 players team up, sending their Brainrots to fight.
+   - Payout on defeat: Top 3 damage dealers receive guaranteed Godly/Secret crate drops; all participants receive a 15-minute 3x Cash buff.
+3. 1v1 Friendly Duels:
+   - Challenge nearby players to a Brainrot battle without losing items.
+   - Winner earns a temporary 10% Luck boost for 10 minutes.
+
+---
+
+=== 21. SOUND DESIGN, AUDIO ENGINE & JUICE ===
+1. Audio Pipeline (`SoundService` dynamic generation):
+   - Slot Ratchet Sound: Mechanical tick on lever pull (`rbxassetid://...` fallback or procedural pitch-shifted click).
+   - Rarity Chimes: Unique pitch-tiered jingle when parts reveal (low chime for Common, booming fanfare for Mythic/Godly).
+   - Cash Register Chime: Plays on plot cash collection with pitch scaling based on payout size.
+   - Lever Clunk: Heavy metallic sound on roll station activation.
+   - Pod Welding Hiss: Steam release and laser weld audio during 4-part assembly.
+2. UI "Juice" & Spring Physics:
+   - Interactive Button Springs: All GUI buttons use spring interpolation (scale pops to 1.1x on hover, compresses to 0.95x on click).
+   - Floating World Text: Cash collection spawns physical upward-floating `+$X` Billboards that fade out smoothly.
+   - Camera Shake Controller: Mythic/Godly rolls trigger procedural 6D camera shake (rotational + positional noise).
+
+---
+
+=== 22. IN-GAME ADMIN SUITE & LIVE-OPS TOOLS ===
+1. Developer Admin Panel (`/admin` command or keybind for configured `Config.AdminUserIds`):
+   - Player Inspector: View any connected player's inventory, cash balance, current roll slots, and rebirth tier.
+   - Live Event Trigger: Instantly invoke Ohio Storm, Skibidi Eclipse, or 2x Luck Frenzy across the server.
+   - Item Granting: Spawn any specific body part or assembled Brainrot directly into a player's inventory for debugging.
+   - Stat Overrides: Give/reset Cash, Rebirths, and Luck multipliers on the fly.
+   - Server Ban / Kick: Kick or session-ban suspected exploiters directly from the UI.
+
+---
+
+=== 23. PERFORMANCE, MEMORY & ASSET OPTIMIZATION ===
+1. Client-Side Rendering Optimization:
+   - Brainrot LOD (Level of Detail): Disable particle effects and simplify animations on other players' plots if distance > 100 studs.
+   - ViewportFrame Caching: Pre-render 3D icons for inventory items once, avoiding expensive per-frame render updates.
+   - StreamingEnabled compatibility: All server scripts must support dynamic streaming of models without breaking `WaitForChild` calls.
+2. Server Memory Management:
+   - Part Cleanup: Any uncollected rolls left abandoned on the lever station auto-clear after 60 seconds to prevent workspace bloat.
+   - Garbage Collection: Disconnect all heartbeat loops, proximity prompts, and maid instances immediately when a player disconnects.
+
+---
+
+=== 24. AUTONOMOUS CREATIVE FREEDOM & ENHANCEMENT MANDATE ===
+**CRITICAL DIRECTIVE FOR THE AI AGENT:**
+You are NOT restricted to the items, numbers, or features listed in this prompt. You have full creative and architectural authority to expand, enhance, and introduce whatever additional systems, mechanics, and content will elevate "Roll a Brainrot" into a top-tier, addictive, and complete Roblox experience:
+
+1. **Expand Beyond the Spec:**
+   - Add new mini-games, secret achievements, hidden badges, unlockable lever cosmetics, custom aura trails, or plot decoration upgrades if they enrich the core loop.
+   - Expand the catalog beyond 50 Brainrots—feel free to create 70, 80, or 100 unique, humorous meme archetypes with inventive stat variations.
+   - Introduce fun emergent mechanics (e.g., "Brainrot Mutation Chamber", "Shiny / Golden Part Variants" with a 1/100 chance to double $/sec, or "Cursed Parts" with wild random effects).
+2. **Improve Balancing & Formulas:**
+   - Refine any curve, price tier, luck equation, or income rate to make the progression loop feel as rewarding, fast-paced, and engaging as possible.
+3. **Write Complete, Polished Production Code:**
+   - Never truncate, omit functions, or leave placeholders.
+   - Write out every single module completely, with robust error handling (`pcall`), strong typing (`--!strict`), and comprehensive `[BOOT]` logging.
+   - Add any helper utilities, signal libraries, or animation controllers you believe are necessary to make the game run cleanly and look visually incredible out of the box.
+
+---
+
+=== 25. COMPLETE FILE GENERATION CHECKLIST ===
+Produce full, ready-to-run Luau code for every single module in the following compilation order:
+
+1. `src/shared/Types.luau` - Complete typed interfaces for Parts, Brainrots, Profiles, Plots, and Remotes.
+2. `src/shared/Config.luau` - Full catalog (50+ Brainrots, 4 body parts each), rarities, drop weights, rebirth requirements, and gamepass IDs.
+3. `src/shared/Net.luau` - Central RemoteEvent & RemoteFunction registry with automatic replication and lazy initialization.
+4. `src/server/Services/AntiCheat.luau` - Server-side action throttling, proximity checks, and currency/number sanitizers.
+5. `src/server/Services/DataService.luau` - Session-locked player data store, autosaving, migration schemas, and safe shutdown handling.
+6. `src/server/Services/RollService.luau` - Lever roll system, slot upgrades (1-9), server roll batches, buy/skip logic, and luck scaling.
+7. `src/server/Services/CraftService.luau` - 4-part assembly pod logic, stat compounding, composite rig assembly, and inventory consumption.
+8. `src/server/Services/PlotService.luau` - Dynamic plot spawning, 12 passive stands, 1-second income engine, and ATM collection station.
+9. `src/server/Services/RebirthService.luau` - 100-tier rebirth engine, sacrifice validation, cash wipe, and permanent luck compounding.
+10. `src/server/Services/MonetizationService.luau` - Gamepass receipt handlers, dynamic cash packs, void crates, and Robux rebirth skips.
+11. `src/server/Services/TradingService.luau` - 15-player trading hub booths, item inspection, secure cash purchases, and scam-proof 2-way trade windows.
+12. `src/server/Services/AdminService.luau` - In-game developer admin commands, stat overrides, and event triggers.
+13. `src/server/Main.server.luau` - Master server bootstrap, player lifecycle, and automated diagnostic initialization logs.
+14. `src/client/Controllers/HudController.luau` - Responsive mobile/PC UI: Backpack, stats display, rebirth menu, and shop popups.
+15. `src/client/Controllers/RollController.luau` - Lever physical animations, camera zoom tweening, drop previews, and buy/reroll HUD.
+16. `src/client/Controllers/MachineController.luau` - 4-slot pod crafting interface, part selection modal, and assembly FX.
+17. `src/client/Main.client.luau` - Client initialization and controller boot manager.
+
+```
+
+```markdown
+=== 26. MUTATION & SHINY VARIANT SYSTEM ===
+1. Variant Roll Probabilities (Applied at Roll Time):
+   - Every body part rolled from the lever has a chance to generate with a special mutation tag:
+     * Standard (90% chance): Base income, standard appearance.
+     * Shiny (7% chance): +50% income bonus, twinkling sparkle particle emitter, subtle reflective surface.
+     * Golden (2.4% chance): +150% income bonus, solid reflective gold material (`Enum.Material.Metal`), golden shimmer trail.
+     * Void / Corrupted (0.5% chance): +300% income bonus, dark matter aura, inverted vertex colors, purple flame emitters.
+     * Glitched / Rainbow (0.1% chance): +500% income bonus, animated RGB shifting hue via `Color3.fromHSV()`, floating error code particles.
+2. Mutation Stacking in the Assembly Pod:
+   - When 4 mutated parts are combined in the Assembly Pod:
+     * If all 4 parts share the same mutation (e.g., 4 Golden parts), the assembled Brainrot becomes a "Pure Golden" unit, granting an extra 2x flat synergy multiplier on total $/sec.
+     * If parts have mixed mutations, the highest mutation tier sets the creature's visual aura, and individual percentage bonuses sum together.
+
+---
+
+=== 27. QUESTS & 50-TIER BRAINROT SEASON PASS ===
+1. Daily & Repeatable Quest System (`QuestService.luau`):
+   - Every 24 hours, players receive 3 randomized daily bounties:
+     * "Roll 50 body parts" -> Reward: $10,000 Cash + 50 Season EXP.
+     * "Assemble 2 Rare+ Brainrots" -> Reward: 1x 2x Luck Potion (10m) + 75 Season EXP.
+     * "Collect $500,000 from Plot ATM" -> Reward: 1x Uncommon Mystery Box + 100 Season EXP.
+   - Continuous Repeatable Quests:
+     * "Roll 250 Times" (Loops infinitely) -> Grants 1x Multi-Roll Token.
+2. Free & Premium 50-Tier Season Pass:
+   - Season Pass progression runs on Season EXP earned from rolling, assembling, rebirthing, and completing quests.
+   - Free Track: Cash bundles, luck potions, free backpack slots, and standard roll crates.
+   - Premium Track (499 Robux): Exclusive animated titles, the "Cyberpunk Lever" skin, pure Void part selector packs, and the Tier 50 exclusive "Omega Ohio Titan" pre-assembled Godly unit.
+
+---
+
+=== 28. PLOT EXPANSION, AUTOMATION & UPGRADES ===
+1. Plot Stand Expansions:
+   - Base Plot includes 12 passive income display stands.
+   - Plot Expansion Tiers (Purchased via in-game Cash & Rebirth thresholds):
+     * Tier 1 (+4 Stands, 16 Total): Requires Rebirth 5 + $100,000.
+     * Tier 2 (+4 Stands, 20 Total): Requires Rebirth 15 + $2,500,000.
+     * Tier 3 (+4 Stands, 24 Total - Maximum): Requires Rebirth 30 + $50,000,000.
+2. Tycoon Automation Gadgets:
+   - ATM Auto-Collector Drone (Unlocked at Rebirth 10 or 199 Robux):
+     * A small robotic drone hovers over the player's plot, automatically banking uncollected cash from stands directly into the player's wallet every 10 seconds.
+   - Assembly Quick-Crafter:
+     * "Auto-Fill" button inside the Pod UI that automatically pulls the 4 best matching parts from inventory to construct the highest-income Brainrot possible in one click.
+3. Plot Biome Themes (Cosmetic Plot Upgrades):
+   - Players can customize the ground and fence textures of their 60x60 plot:
+     * Classic Grass (Default)
+     * Neon Cyber Grid (Rebirth 10 reward)
+     * Volcanic Magma (Rebirth 25 reward)
+     * Golden Palace (Rebirth 50 reward)
+     * The Void Abyss (Rebirth 100 reward)
+
+---
+
+=== 29. COSMETICS, LEVER SKINS & PLAYER AURAS ===
+1. Lever Skins:
+   - Customize the visual appearance of the rolling station lever without altering hitbox functionality:
+     * Wooden Lever (Default)
+     * Diamond Lever (Gives +2% permanent roll speed)
+     * Laser Blade Lever (Emits electric zaps on pull)
+     * Golden Toilet Handle (Flushes when pulled)
+     * Cosmic Void Rod (Emits orbiting star particles)
+2. Character Auras & Overhead Titles:
+   - Players unlock cosmetic auras attached to their character's `HumanoidRootPart`:
+     * "Rookie Roller" (Default)
+     * "Sigma Grinder" (Reach Rebirth 10)
+     * "Mewing Champion" (Reach Rebirth 25)
+     * "Ohio Conqueror" (Reach Rebirth 50)
+     * "Brainrot Overlord" (Reach Rebirth 100)
+   - High-tier auras project dynamic ground decals and radiant beams visible across the entire map.
+
+---
+
+=== 30. MOBILE-FIRST RESPONSIVE UI SPECIFICATIONS ===
+1. Touch & Screen Adaptation Standards:
+   - Dynamic Viewport Bounds: All UI root frames must use `Size = UDim2.new(1, 0, 1, 0)` with a top `GuiService:GetGuiInset()` offset to prevent UI elements from hiding behind the mobile camera notch or top bar.
+   - Minimum Touch Hitbox: Every interactable button on mobile must have a minimum physical size of `48x48` pixels with `Active = true`.
+   - Dynamic Thumbstick Safe-Zone: Bottom-left screen quadrant (`AnchorPoint = Vector2.new(0, 1)`) must remain completely clear of persistent HUD buttons to prevent accidental button clicks while moving on mobile.
+2. Haptic Feedback Integration:
+   - Leverage `HapticService`:
+     * Gentle pulse on every mechanical lever click.
+     * Medium double-pulse when collecting cash from the ATM.
+     * Heavy continuous vibration on rolling a Mythic, Godly, or Secret piece.
+3. Visual Hierarchy & Color Palette:
+   - Backgrounds: Dark slate `#1E1E24` with 0.15 transparency.
+   - Borders: Vibrant high-contrast strokes `#3A3A4A` (3px thickness).
+   - Primary Buttons (Action): Bright Lime Green `#2ECC71` with darker green shadows `#27AE60`.
+   - Secondary Buttons (Cancel/Skip): Coral Red `#E74C3C` with dark red shadows `#C0392B`.
+   - Currency Displays: Bright Emerald `#00FF88` with clean white drop-shadow text.
+
+---
+
+=== 31. ERROR RECOVERY, NETWORK RESILIENCE & DATA GUARDS ===
+1. Client-Side Desync Reconciliation:
+   - If the client's local cache diverges from the server (e.g., missed remote event packet during high latency), the client automatically requests a full profile sync payload via `Net.RemoteFunctions.RequestFullSync`.
+2. Safe Remote Handling & Request Throttling:
+   - All server listeners wrapped in strict `pcall` execution blocks.
+   - Any remote call sending malformed tables, non-string IDs, or NaN numbers is silently discarded without crashing the calling thread.
+   - Rapid-fire remote spamming automatically flags the player in `AntiCheat.luau` and temporarily drops incoming requests from that `UserId` for 5 seconds.
+3. Server Shutdown Protection:
+   - `game:BindToClose()` must intercept server termination, immediately lock all incoming client actions, loop through all connected player profiles, and execute a blocking final write to the DataStore with a 25-second fail-safe timeout.
+
+---
+
+=== 32. ARENA AI AUTONOMOUS BUILD INSTRUCTIONS ===
+1. Proceed with the end-to-end generation of the entire repository.
+2. Emit every single file in its complete state. Do not leave any function bodies empty.
+3. Ensure every service module initializes clean procedural 3D models (using `Instance.new("Part")`, `WeldConstraint`, `ProximityPrompt`, and `SurfaceGui`) so that running the game inside an empty Roblox Studio baseplate automatically builds the entire playable world with zero manual setup.
+4. Begin code generation starting with `src/shared/Types.luau` and proceed sequentially through the checklist.
+
+```
+
+
+```markdown
+=== 33. TUTORIAL, ONBOARDING & RETENTION FUNNEL ===
+1. First-Time User Experience (FTUE) Engine (`TutorialController.luau`):
+   - First Join Trigger: If `profile.Rebirths == 0` and `#profile.Inventory.Parts == 0` and `#profile.Inventory.Brainrots == 0`:
+     * Step 1: Lock general HUD controls; focus a floating glowing 3D arrow pointing directly at the **Lever Rolling Station**. Display pop-up dialogue box: *"Welcome to Roll a Brainrot! Pull the lever to roll your first body part!"*.
+     * Step 2: Grant a free starter roll with guaranteed **Rare or Epic** drop rate to hook retention within the first 15 seconds.
+     * Step 3: Arrow directs player to press **[BUY]** on the rolled part.
+     * Step 4: Grant 3 complimentary starter body parts (ensuring player holds 1 Head, 1 Chest, 1 Arms, 1 Legs).
+     * Step 5: Arrow points to the **Assembly Pod**. Display dialogue: *"Walk inside the pod and press Assemble to forge your first Brainrot!"*.
+     * Step 6: Arrow guides player to Stand #1 to place the Brainrot.
+     * Step 7: Wait 5 seconds until passive income ticks, then highlight the **ATM Station** with an arrow to collect first cash.
+     * Step 8: Play confetti visual particle explosion, unlock full HUD navigation, and grant **$1,000 Starter Bonus**.
+2. Automated Weekend Events & Timed Happy Hours:
+   - Server checks `os.date("!*t")`:
+     * Every Friday 5:00 PM UTC to Sunday 11:59 PM UTC: Activate "Weekend Frenzy" (permanent 1.5x Base Luck + 2x Passive Income across all servers).
+     * Animated HUD ribbon banner displays "WEEKEND 1.5X LUCK ACTIVE" with golden glowing outline.
+
+---
+
+=== 34. AFK REWARD CHAMBER & OFFLINE EARNINGS ===
+1. Dedicated AFK Farming World (`AFKService.luau`):
+   - Main map portal titled "AFK REWARDS WORLD" teleports player to a low-poly floating relaxation lounge.
+   - Every 60 seconds spent in the AFK World awards:
+     * 1x Free Lucky Roll Spin Token.
+     * Scaled cash payout equal to `5x Current Plot $/sec`.
+     * 0.05% chance to roll an exclusive "AFK Sleeper" Secret body part.
+2. Offline Passive Income Bank:
+   - When a player leaves the game, the server records `profile.LastLogoutEpoch = os.time()`.
+   - On rejoin, calculate `offlineSeconds = math.clamp(os.time() - profile.LastLogoutEpoch, 0, 86400)` (24-hour max cap).
+   - Base Offline Yield: `offlineCash = math.floor(totalPlotIncomePerSec * offlineSeconds * 0.25)` (25% efficiency for free players).
+   - "VIP Pass" or "Offline Autopilot" gamepass upgrades offline income efficiency to 100% of live rates.
+   - Welcome-Back Modal: Pops up upon join displaying: *"While you were sleeping, your Brainrots earned you $XXX,XXX!"* with a big green **[COLLECT ALL]** button.
+
+---
+
+=== 35. ASCENDANCE & BRAINROT FUSION FORGE ===
+1. The Transcendent Fusion Anvil (Located in Central Hub):
+   - Endgame crafting mechanic unlocked at Rebirth 15+.
+   - Allows players to combine duplicate Max-Level (Level 10) Brainrots to elevate their tier:
+     * Recipe: 3x Identical Max-Level Brainrots + Cash Fee = 1x **Ascended Brainrot**.
+2. Ascended Brainrot Enhancements:
+   - Income Multiplier: 5x the base income of the original unit.
+   - Visual Ascendance Crown: An animated, spinning halo of golden meme runes hovers above the character's head.
+   - Plot Buff Aura: Any Ascended Brainrot placed on a stand radiates a local aura that increases the $/sec output of the 4 adjacent stands by +20%.
+
+---
+
+=== 36. TRADING ECONOMY GUARDS & ANTI-EXPLOIT TAX ===
+1. Booth Listing Safeguards:
+   - Minimum / Maximum Price Caps:
+     * To prevent accidental zero-dollar listings or exploit wealth dumping, minimum price is set to the combined base part cost; maximum price is capped at `100x Base Value * Rarity Multiplier`.
+   - Plot Marketplace Tax:
+     * A flat 5% transaction fee is deducted from the seller's gross payout on booth purchases to act as an economy cash sink and combat hyper-inflation.
+2. Anti-Scam Trade Window Protocol (`TradeController.luau`):
+   - When 2 players enter a direct trade:
+     * Slot verification: Both players can offer up to 4 body parts or 2 assembled Brainrots.
+     * "Ready" state locks the item grid. Any modification by either player immediately resets both players' ready states.
+     * Final Accept button locks behind a 5-second countdown timer during which both participants clearly review the item names, rarities, and income stats.
+     * Server verifies item ownership immediately prior to atomic database commit using transactional swap logic.
+
+---
+
+=== 37. SOUND FX ASSET MAP & PROCEDURAL FALLBACKS ===
+1. Dynamic Audio Generator (`SoundController.luau`):
+   - Pre-configured asset dictionary with instant synthetic fallbacks (ensures audio always plays even if Roblox moderation delays an asset or connectivity drops):
+     * `PullLever`: `rbxassetid://9114223170` (Fallback: `Instance.new("Sound")` with `Pitch = 1.2`, playback speed modulation).
+     * `CommonDrop`: `rbxassetid://9114223846`
+     * `RareDrop`: `rbxassetid://9114224522`
+     * `MythicFanfare`: `rbxassetid://9114225211`
+     * `GodlySecretChime`: `rbxassetid://9114226033`
+     * `CashCollect`: `rbxassetid://9114226850`
+     * `CraftComplete`: `rbxassetid://9114227541`
+     * `LevelUpSound`: `rbxassetid://9114228229`
+     * `RebirthBoom`: `rbxassetid://9114229014`
+2. Positional 3D Audio:
+   - Lever, Crafting Pod, and Stand sounds attach directly to their respective physical parts with `RollOffMode = Enum.RollOffMode.InverseTapered`, `MinDistance = 5`, `MaxDistance = 60` so players hear ambient assembly and rolling from neighboring plots.
+
+---
+
+=== 38. COMPLETE RUNTIME LAUNCH PROTOCOL FOR ARENA AI ===
+When building this codebase, execute the following step-by-step assembly strategy to ensure no file is cut off, misconfigured, or left incomplete:
+
+1. **Step 1: Shared Core Foundation**
+   - Output `src/shared/Types.luau`: Declare all strict Luau types (`ProfileData`, `BodyPart`, `BrainrotItem`, `StandData`, `RollBatch`).
+   - Output `src/shared/Config.luau`: Deliver the complete 50+ Brainrot catalog, rarity tables, level curves, and gamepass configuration.
+   - Output `src/shared/Net.luau`: Deliver the self-constructing networking module that dynamically provisions RemoteEvents and RemoteFunctions.
+
+2. **Step 2: Server Services Implementation**
+   - Output `src/server/Services/AntiCheat.luau`: Implement proximity validation, rate-limiting debounces, and integer sanitizers.
+   - Output `src/server/Services/DataService.luau`: Write the ProfileStore / DataStore2 wrapper with session-locking, migration logic, and safe `BindToClose` cleanup.
+   - Output `src/server/Services/RollService.luau`: Write the multi-slot roll engine, drop tables, buy/skip verification, and luck compounding.
+   - Output `src/server/Services/CraftService.luau`: Write the 4-part machine assembly service, stat compounding, and model welding.
+   - Output `src/server/Services/PlotService.luau`: Implement procedural plot geometry construction, 12 passive stands, 1-second income loop, and ATM bank.
+   - Output `src/server/Services/RebirthService.luau`: Write the 100-tier rebirth engine, sacrifice validation, reset rules, and permanent luck perks.
+   - Output `src/server/Services/MonetizationService.luau`: Implement ProcessReceipt for DevProducts, Gamepass checks, and dynamic cash packs.
+   - Output `src/server/Services/TradingService.luau`: Implement booth claiming, sales transactions, and secure player-to-player trade windows.
+   - Output `src/server/Services/AdminService.luau`: Provide developer cheat commands and live-ops event triggers.
+   - Output `src/server/Main.server.luau`: Master server bootstrap tying all services together with `[BOOT]` output diagnostics.
+
+3. **Step 3: Client Controllers & Interface**
+   - Output `src/client/Controllers/HudController.luau`: Build the full responsive screen GUI programmatically (Backpack, Rebirth modal, Cash counters, Roll HUD).
+   - Output `src/client/Controllers/RollController.luau`: Handle physical lever proximity triggers, lever pull rotation tweens, and roll previews.
+   - Output `src/client/Controllers/MachineController.luau`: Handle 4-part socket selection UI and assembly pod welding effects.
+   - Output `src/client/Controllers/SoundController.luau`: Manage all audio events, pitch shifts, and synthetic chimes.
+   - Output `src/client/Main.client.luau`: Client bootstrap initializing all controllers on `Players.LocalPlayer`.
+
+Proceed immediately to code generation. Every file must be output in full with zero omissions.
+
+```
+
+```markdown
+=== 39. EXPANSIVE WORLD ARCHITECTURE & ENVIRONMENT DESIGN (BIG MAP) ===
+1. Map Scale & Scenic Dimensions:
+   - Total Map Footprint: Minimum 2,500 x 2,500 studs. The world must feel vast, open, and immersive—not a cramped floating box.
+   - Natural Perimeter Barriers: Enclose the map using majestic, stylized Roblox Smooth Terrain mountain ranges and layered cliff walls (`Workspace.Terrain:FillBlock`, `FillBall`, or sculpted mesh terrain) to prevent players from falling into the void while creating a natural horizon.
+   - Distinct Biome Zones:
+     * Central Plaza: High-energy hub with cobblestone paths, decorative fountains, lampposts, community leaderboards, and the glowing Trading Portal.
+     * The Rolling Valley: 6 expansive, widely spaced 120x120 player plots separated by rolling grass hills, winding dirt trails, rivers, and wooden bridges.
+     * The Secret Heights: Elevated mountain plateaus, waterfalls flowing into ravines, and floating sky islands reachable via launch pads or parkour obbies.
+2. Environmental Polish & Roblox Native Assets:
+   - Foliage & Nature: Procedurally populated low-poly pine trees, birch trees, stylized rocks, flower patches, and animated wind-blown grass blades (`Workspace.Terrain.Decoration = true`).
+   - Atmosphere & Lighting Engine:
+     * Technology: `Enum.LightingTechnology.Future` (or `ShadowMap`) for rich, realistic dynamic shadows.
+     * Lighting Objects: Preset `Atmosphere` with subtle horizon haze, `Bloom` (Intensity: 0.8, Threshold: 0.95), `SunRays` (Intensity: 0.25), `ColorCorrection` (Saturation: 0.15, Contrast: 0.1 for a bright, vibrant, punchy anime/simulator look).
+     * Day/Night Cycle: Smooth 24-minute sky cycle transitioning from radiant midday sunshine to a neon, starlit purple twilight.
+
+---
+
+=== 40. BRAINROT NPC RIGGING, VISUAL FIDELITY & ANIMATIONS ===
+1. Strict Visual Quality Standard:
+   - NPCs and composite Brainrots MUST NOT be random, ugly gray primitive bricks. Every Brainrot model must be recognizable, expressive, and visually polished.
+   - Component Architecture:
+     * Head: Custom textured mesh, expressive face decals, signature headwear (e.g., toilet bowls, camera heads, crowns, anime hair, sigma jawlines).
+     * Torso/Chest: Textured clothing, armor plates, dynamic chest insignias, or themed body chassis.
+     * Arms & Legs: Scaled limbs with custom joint positioning, hand attachments, and themed footwear/weapon props.
+2. Procedural Rigging Engine (`NPCBuilder.luau`):
+   - Server-side factory dynamically generates R6/R15 humanoid rigs using `Motor6D` joints for seamless animation support.
+   - Idle & Movement Animations:
+     * Placed Stand Units: Subtle breathing/swaying idle animations, head-tracking looking at nearby players (`Neck.C0` rotational interpolation via `TweenService`).
+     * Wandering Plot Units: Natural walking cycles, occasional meme-inspired idle poses (e.g., mewing hand gesture, flex emote, hype dance).
+3. Dynamic Level Scaling & Visual Evolution:
+   - Level 1-4: Standard model scale (1.0x).
+   - Level 5-9: Model scale expands to 1.25x, eyes gain a subtle neon glow (`PointLight`), soft footstep sparkles.
+   - Level 10 (Max): Model scale expands to 1.6x, permanent colored particle aura matching its rarity, ground-shaking footstep sounds, and a golden floating prestige crown.
+
+---
+
+=== 41. MAP EXPLORATION, HIDDEN SECRETS & REWARD OBBY ===
+1. Mountain Peak Parkour (The Sigma Obby):
+   - A challenging, optional platforming course winding up the highest mountain peak.
+   - Summit Reward: The "Summit Chest" (can be claimed once every 6 hours):
+     * Awards 3x Free Multi-Roll Spin Tokens.
+     * +$50,000 Cash.
+     * 10% chance to drop the exclusive "Peak Mountain Head" body part.
+2. Hidden Caverns & Secret Shrines:
+   - Hidden Waterfall Cave: Walk through the main waterfall to uncover the "Ancient Meme Altar." Interacting with the altar grants a 10-minute 1.5x Luck blessing.
+   - Buried Treasure Chests: 10 randomized collectible treasure boxes scatter across the mountains and rivers every 15 minutes. Interacting awards instant cash and scrap.
+
+---
+
+=== 42. EXPANDED 15-PLAYER TRADING BAZAAR MAP ===
+1. Trading Hub World Design:
+   - Separate, massive neon-lit cityscape/bazaar built for 15 concurrent traders.
+   - Surrounded by towering futuristic skyscrapers, neon billboards featuring top traders, and custom ambient jazz/lo-fi background music.
+   - Central Meeting Circle: Social lounge with park benches, flex pedestals where the wealthiest player in the server can pose their top Brainrot on display, and a dedicated 1v1 trade pit.
+2. Booth Architecture:
+   - 15 fully realized 3D merchant stalls featuring wooden canopies, illuminated price boards, 3D rotating display pedestals for listed Brainrots, and interactive cashier counters.
+
+---
+
+=== 43. FINAL COMPILATION & GENERATION DIRECTIVE ===
+When implementing the codebase:
+- Use Roblox Smooth Terrain and high-quality modular environment assets to ensure the 2,500-stud map looks complete, grand, and visually stunning immediately upon loading.
+- Implement the dedicated `NPCBuilder.luau` module to ensure all 50+ Brainrots are properly rigged, textured, and animated with zero missing parts.
+- Ensure all services start up cleanly, without console errors or missing references.
+
+```
+
+
+```markdown
+# MASTER ARCHITECTURE & PRODUCTION SPECIFICATION
+## Project: "Roll a Brainrot"
+### Engine: Roblox (Luau, Rojo 7.7.x, Server-Authoritative)
+### Target Audience: PC & Mobile (Cross-Platform)
+
+---
+
+## 1. MISSION & AUTONOMOUS DIRECTIVE
+
+You are an elite Roblox Systems Architect and Principal Luau Engineer. Your directive is to build the complete, production-ready, fully playable codebase and procedural world for "Roll a Brainrot".
+
+### Full Creative & Architectural Authority
+You are NOT restricted to the base specifications below. You have full creative authority to expand features, balance equations, add new meme archetypes, invent emergent mini-games, introduce cosmetic auras, refine drop curves, and implement any supporting utility modules or libraries required to make this game an extraordinary, polished, and addictive Roblox simulator. Deliver completely realized, strictly typed (`--!strict`) code with zero placeholders or omissions.
+
+---
+
+## 2. WORLD GEOMETRY & ENVIRONMENT (BIG MAP)
+
+The map must not be a flat, generic, grey baseplate. The environment must be expansive, vibrant, and visually complete:
+
+### Map Footprint & Biomes (2,500 x 2,500 studs)
+- **Natural Boundaries:** Enclose the playable map using tall, stylized Smooth Terrain mountain ranges and layered cliff walls (`Workspace.Terrain:FillBlock` / `FillBall`) with natural horizon coverage.
+- **Central Spawning Plaza:** Cobblestone paths, lampposts, community leaderboards (Top Cash, Top Rebirths), a Parkour Obby summit path, and a radiant teleporter portal leading to the Trading Hub.
+- **The Rolling Valley (6 Player Plots):** 6 widely spaced 120x120 personal tycoon plots connected by winding dirt trails, rivers with wooden bridges, animated grass (`Terrain.Decoration = true`), low-poly pine trees, and decorative rock formations.
+- **Atmospheric Lighting:** `Lighting.Technology = Enum.LightingTechnology.Future` (or `ShadowMap`), high-contrast cartoon color correction (Saturation: 0.15, Contrast: 0.1), bloom, subtle depth haze, and an automated 24-minute sky cycle.
+- **The Trading Bazaar (Separate 15-Player Place):** Neon-lit circular plaza surrounded by skyscrapers, 15 interactable vendor stalls, display pedestals for flex items, and a safe-zone lounge.
+
+---
+
+## 3. PROCEDURAL NPC RIGGING & 3D VISUAL SYSTEM
+
+NPCs and assembled creatures must NEVER be plain blank blocks. Every Brainrot must have visual identity:
+
+### R6 / R15 Procedural Humanoid Rigging (`NPCBuilder.luau`)
+- Constructs complete humanoid character rigs using proper `Motor6D` joint configurations to support fluid animation playback.
+- **Component Attachments:**
+  - **Head:** Distinct textured headpiece, expressive face decals, signature headwear (toilet bowls, speaker cones, TV monitors, crowns, meme hair).
+  - **Torso/Chest:** Custom-colored torso chassis with themed chest decals, armor plates, or insignias.
+  - **Arms & Legs:** Proportional limbs positioned with natural stance offsets and thematic hand/foot attachments.
+- **Animations & Visual Life:**
+  - Idle breathing loop and subtle head-tracking targeting nearby players via `Neck.C0` interpolation.
+  - Placed units mount display stands with idle flourishes.
+  - Optional wandering plot units navigate using `PathfindingService` within plot boundaries.
+- **Dynamic Level Evolution:**
+  - Levels 1–4: Standard 1.0x scale.
+  - Levels 5–9: 1.25x scale, glowing neon eyes, subtle sparkle emitters.
+  - Level 10 (Max): 1.6x scale, radiant rarity-colored particle aura, floating prestige crown, and deep footstep sounds.
+
+---
+
+## 4. CATALOG, RARITY TIERS & MUTATIONS
+
+### 4-Part Anatomical Assembly
+Every Brainrot consists of 4 distinct body parts: `Head`, `Chest`, `Arms`, and `Legs`.
+
+### 8 Rarity Tiers & Drop Probabilities
+1. **Common** (Weight: 5,000 | 1.0x | `#B4B4B4`)
+2. **Uncommon** (Weight: 2,500 | 1.5x | `#55FF55`)
+3. **Rare** (Weight: 1,200 | 2.5x | `#55AAFF`)
+4. **Epic** (Weight: 600 | 4.5x | `#AA55FF`)
+5. **Legendary** (Weight: 200 | 10.0x | `#FFAA00`)
+6. **Mythic** (Weight: 50 | 25.0x | `#FF5555`)
+7. **Godly** (Weight: 10 | 75.0x | `#00FFFF`)
+8. **Secret** (Weight: 1 | 250.0x | `#FF0080`)
+
+### Mutations (Rolled as Part Modifiers)
+- **Standard (90.0%):** Default appearance and base stats.
+- **Shiny (7.0%):** +50% income bonus, reflective material, twinkle sparkles.
+- **Golden (2.4%):** +150% income bonus, solid gold metallic finish, golden dust trail.
+- **Void / Corrupted (0.5%):** +300% income bonus, dark matter aura, purple flame emitters.
+- **Glitched / Rainbow (0.1%):** +500% income bonus, cycling HSV rainbow colors, digital matrix particles.
+- *Set Bonus:* Combining 4 identically mutated parts grants a flat 2x "Pure Harmony" multiplier to total $/sec.
+
+### 50+ Brainrot Archetype Catalog
+Define a minimum of 50 structured archetypes in `Config.luau` scaling from Rebirth 0 to 100:
+- *Starter (Rebirth 0–2):* Dirt Boy, Nooblet, Sponge Golem, Skibidi Toilet, Bacon Warrior, Cardboard Boxman, Robloxian NPC, Slime Creeper.
+- *Early Game (Rebirth 1–5):* Grimace Shake, Rizzler, Sigma King, Mewing Chad, Baby Gronk, Pizza Peppino, Freddy Fazbear, Livvy Dune, Kai Cent.
+- *Mid Game (Rebirth 4–15):* IShowSpeed, CaseOh, Quandale Dingle, Huggy Wuggy, Banban, Smurf Cat, Strawberry Elephant, Gigachad Prime, Glitch Toilet, Titan Cameraman, Garten Stinger, Rainbow Friend Blue, Titan Speakerman.
+- *Late Game (Rebirth 15–40):* Titan TV Man, Aura Lord, Mewing Overlord, Ohio God, Camera Strider, G-Man Astro, Tungsten Cube, Cursed Banana.
+- *End Game (Rebirth 45–80):* Subway Surfer, Family Guy Clip, Kinetic Sand, Soap Cutting, Brainrot Titan, Infinite Rizz God, The Ultimate Ohio, Omega Skibidi.
+- *Godly / Secret Tiers (Rebirth 85–100):* Forbidden Meme, Void Titan, Galactic Mew, God of Brainrot.
+
+---
+
+## 5. CORE GAMEPLAY MECHANICS
+
+### A. Lever Rolling Station & Slot Scaling
+- **Physical Lever:** Pulling triggers mechanical ratcheting sounds, arm rotation tweens, and visual drops on 1 to 9 active drop pads.
+- **Slot Upgrades (In-Game Cash):**
+  - Slot 1: Free (Default)
+  - Slot 2: $500
+  - Slot 3: $2,500
+  - Slot 4: $10,000
+  - Slot 5: $50,000
+  - Slot 6: $250,000
+  - Slot 7: $1,000,000
+  - Slot 8: $5,000,000
+  - Slot 9: $25,000,000
+- **Buy / Skip Mechanics:** Each rolled pad displays a 3D preview, name, rarity, and buy price. Players can [BUY] to deposit into their backpack or pull the lever again to discard and reroll all slots.
+- **Auto-Roll:** Features automated rolling and customizable auto-skip/auto-buy rarity filters.
+
+### B. The 4-Part Assembly Machine Pod
+- Approaching the pod opens a 4-socket UI: `[Head]`, `[Chest]`, `[Arms]`, `[Legs]`.
+- Players can mix and match parts from any archetypes in their backpack.
+- **Synthesis:** Server verifies ownership, burns the 4 parts, welds the physical models together, and calculates composite stats:
+  $$\text{Income/Sec} = \sum(\text{Part Base Income}) \times (\text{Highest Rarity Multiplier} \times 0.4) \times \text{Mutation Bonuses}$$
+- Resulting creature is named: `"{Dominant Part} Abomination"`.
+
+### C. Tycoon Plot & Passive Income Engine
+- **Stands:** Base plot includes 12 stands (expandable up to 24 via cash and rebirth milestones).
+- **Passive Tick (1 Hz):** Server computes combined $/sec across all stands and routes earnings into the plot's `PendingCash` bank.
+- **ATM Collection:** Stepping on the plot ATM or clicking the collect button claims accumulated money with particle explosions and register audio.
+- **Leveling:** Placed Brainrots accumulate passive EXP or can be leveled up using cash, granting +25% income per level.
+
+### D. 100-Tier Rebirth System
+- **Scale:** Caps at Rebirth 100.
+- **Cash Requirement:** `math.floor(1000 * (RebirthTier + 1)^2.7)`
+- **Sacrifice Requirement:** Requires consuming 1 specific assembled Brainrot matching the tier bracket.
+- **Standard Reset:** Wipes cash to $0 and resets roll slots to 1 (unless the player owns the Keep Slots pass). Placed Brainrots, stands, and inventory items remain untouched.
+- **Reward:** Permanent +15% compound luck multiplier per rebirth and unlocks higher catalog roll tiers.
+- **Robux Skip:** Bypasses cash and sacrifice requirements without wiping cash. Price scales with tier level.
+
+### E. Dedicated Trading Hub & Booths (15 Players)
+- Accessible via the central world portal through `TeleportService`.
+- 15 interactable merchant stalls where players list up to 4 assembled Brainrots with custom cash price tags.
+- Direct 2-way trade windows featuring an item lock state and a 5-second anti-scam countdown timer.
+- Economy sink: 5% marketplace transaction fee applied on booth purchases.
+
+### F. Dynamic Live Events & Weather
+- **Timed Luck Cycle (Every 30 mins):** Triggers a 5-minute "Brainrot Frenzy" awarding 2x global roll luck with ambient neon skybox shifts.
+- **Random Disasters (Every 15–20 mins):**
+  - "Ohio Storm": Golden rain falls; touching drops grants instant bonus cash.
+  - "Skibidi Eclipse": 50% discount on all roll purchase prices for 3 minutes.
+  - "Sigma Awakening": 3x passive plot income multiplier for 2 minutes.
+
+---
+
+## 6. USER INTERFACE (ROBLOX-NATIVE STYLING)
+
+- **Aesthetic:** Clean, colorful simulator style. Vibrant UI tiles with rounded corners (`UICorner 12px`), dark bold borders (`UIStroke 3px`), drop shadows, and responsive spring animations on hover/click.
+- **Cross-Platform PC & Mobile Responsive:**
+  - Built using scale coordinates (`UDim2.new(scaleX, 0, scaleY, 0)`) and `UIAspectRatioConstraint`.
+  - Top inset offsets (`GuiService:GetGuiInset()`) to protect elements from mobile notches and topbars.
+  - Bottom-left mobile thumbstick safe zone kept completely free of buttons. Minimum touch target size of 48x48 pixels.
+- **Interface Screens:**
+  - Persistent HUD: Cash counter, Pending ATM cash button, Rebirth badge, Luck indicator, Event countdown.
+  - Backpack: Tabbed navigation (`All`, `Body Parts`, `Brainrots`, `Boosts`) with rarity border cards and quick-sell buttons.
+  - Assembly Pod Interface: 4-slot visual socket grid with an "Auto-Fill Best" button.
+  - Rebirth Menu: Progress bar, sacrifice target portrait, cash cost, luck preview, and Robux skip button.
+  - Shop: Gamepasses, tiered cash bundles scaling with rebirth tier, and P2W Void Crates.
+
+---
+
+## 7. SERVER SECURITY & ANTI-CHEAT ARCHITECTURE
+
+- **Strict Server Authority:** Clients never dictate cash, drop results, or crafting outcomes. The client sends intents; the server computes, verifies, and commits all state.
+- **Input Sanitization:** Rejects `NaN`, `math.huge`, negative numbers, strings where numbers are expected, and malformed payload tables.
+- **Rate-Limiting & Debouncing:** Enforces a hard 0.35s roll debounce and throttles remote spam by dropping abusive requests for 5 seconds.
+- **Spatial Validation:** Player character must be within 20 studs of the Lever, Pod, ATM, or Booth to trigger actions.
+- **Transactional Persistence:** ProfileStore / DataStore session-locking architecture with automatic 300s saves and a 25-second `BindToClose` shutdown fail-safe.
+
+---
+
+## 8. CODEBASE STRUCTURE & EXECUTION PLAN
+
+```text
+src/
+├── shared/
+│   ├── Types.luau            -- Strict interfaces for items, parts, mutations, plots, and network packets
+│   ├── Config.luau           -- 50+ Brainrots, rarities, mutation chances, slot costs, rebirth formulas
+│   └── Net.luau              -- Auto-initializing RemoteEvent and RemoteFunction registry
+├── server/
+│   ├── Main.server.luau      -- Master bootstrap, lifecycle supervisor, diagnostic logging
+│   └── Services/
+│       ├── AntiCheat.luau    -- Remote throttling, proximity validation, number sanitization
+│       ├── DataService.luau  -- Session-locking persistent storage, migrations, BindToClose
+│       ├── NPCBuilder.luau   -- Procedural R6/R15 humanoid rigger, motor joints, animations, scaling
+│       ├── RollService.luau  -- Lever mechanics, multi-slot rolling (1-9), drops, mutations, buy/skip
+│       ├── CraftService.luau -- 4-socket assembly chamber, part burning, composite stats calculation
+│       ├── PlotService.luau  -- Procedural world & plots builder, 1-second income engine, ATM bank
+│       ├── RebirthService.luau -- 100-tier rebirth engine, sacrifice validation, luck compounding
+│       ├── LiveOpsService.luau -- 2x Luck cycles, Ohio Storms, Skibidi Eclipses, weekend boosts
+│       ├── TradingService.luau -- 15-player trading hub teleports, booth sales, anti-scam trade windows
+│       ├── MonetizationService.luau -- Gamepasses, Void Crates, dynamic cash packs, Robux skips
+│       └── AdminService.luau -- In-game developer admin commands, stat grants, event triggers
+└── client/
+    ├── Main.client.luau      -- Client initialization and controller boot supervisor
+    └── Controllers/
+        ├── HudController.luau     -- Responsive cross-platform UI, Backpack, Rebirth modal, Shop
+        ├── RollController.luau    -- Lever interaction, visual rolling drop trays, buy/skip prompts
+        ├── MachineController.luau -- Assembly pod 4-slot interface, visual assembly effects
+        └── SoundController.luau   -- Dynamic audio manager, synthetic pitch chimes, 3D spatial sounds
+
+```
+
+### Execution Directive
+
+Generate complete, fully written, strictly typed (`--!strict`) Luau code for every single module in the project tree sequentially. Build full procedural fallbacks for all 3D assets so that launching inside a completely empty baseplate automatically builds the entire map, plots, stations, and systems ready to play immediately.
+
+```
+
+```
