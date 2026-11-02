@@ -57,6 +57,8 @@ local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
 local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false
 local giftButtons={}
 local incomeLabels={}
+local catalogOdds=nil; local catalogRarity=0; local catalogUnlockedOnly=false
+local catalogQuery=""; local catalogDraft=""; local catalogPage=1
 local adminData=nil; local adminTarget=nil; local adminAmount="1000"; local adminCatalog=1; local adminKind=1; local pendingAdmin=nil
 local function row(text, callback, color)
  local b=button(list,text,UDim2.new(1,-10,0,50),UDim2.new(),color)
@@ -109,6 +111,7 @@ local function render()
    end,Color3.fromRGB(160,75,70))
    if discardConfirm then row("CANCEL DISCARD",function() discardConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
   end
+  row("VIEW CATALOG & CURRENT ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
   for _,item in ipairs(state.rolls) do
    local rarity=Config.Rarities[item.rarity]
    local odds=item.rarityChance and string.format("%.2f%% tier",item.rarityChance*100) or rarity.name
@@ -143,6 +146,58 @@ local function render()
    else autoConfirm=true; render() end
   end,Color3.fromRGB(185,65,85))
   row("BACK TO ROLL STATION",function() autoConfirm=false; mode="roll"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
+ elseif mode=="catalog" then
+  title.Text="CATALOG & ROLL ODDS"
+  row("REFRESH SERVER ODDS",function() remote:FireServer("requestOdds") end,Color3.fromRGB(60,120,180))
+  if catalogOdds then
+   local mods=catalogOdds.modifiers
+   row("Snapshot "..os.date("!%H:%M:%S",catalogOdds.at).." UTC | Rebirth "..catalogOdds.rebirth.." | "..(catalogOdds.rebirth==state.rebirth and "current rebirth" or "REBIRTH CHANGED: REFRESH"),nil,Color3.fromRGB(70,75,105))
+   local bonuses={}
+   if mods.frenzy then table.insert(bonuses,"Frenzy x2") end
+   if mods.weekend then table.insert(bonuses,"Weekend x1.5") end
+   if mods.luckPass then table.insert(bonuses,"Luck pass x2") end
+   if mods.luck2 then table.insert(bonuses,"2x boost") end
+   if mods.luck3 then table.insert(bonuses,"3x boost") end
+   if mods.goldenLever then table.insert(bonuses,"Golden Lever x1.05") end
+   row("Non-Common weight bonuses: "..(#bonuses>0 and table.concat(bonuses,", ") or "none").." | factor x"..string.format("%.2f",catalogOdds.nonCommonFactor),nil,Color3.fromRGB(70,75,105))
+   row("Each slot rolls independently. Bonuses change weights, not final percentages; rebirth also changes weights. Refresh when events or boosts change.",nil,Color3.fromRGB(70,75,105))
+   for i,rarity in ipairs(Config.Rarities) do
+    local item=catalogOdds.tiers[i]
+    row(rarity.name..": "..string.format("%.5g%%",item.chance*100).." per slot | "..item.count.." unlocked archetypes",nil,rarity.color)
+   end
+   local mutations={}
+   for _,mutation in ipairs(Config.Mutations) do table.insert(mutations,mutation.name.." "..string.format("%.2f%%",mutation.weight/100)) end
+   row("Mutation odds (independent): "..table.concat(mutations,", "),nil,Color3.fromRGB(70,75,105))
+  else row("Loading current odds from the server...",nil,Color3.fromRGB(70,75,105)) end
+  row("CATALOG: chances below are per archetype, any part or mutation. Gift odds are different.",nil,Color3.fromRGB(70,75,105))
+  local search=Instance.new("TextBox"); search.Size=UDim2.new(1,-10,0,50); search.BackgroundColor3=Color3.fromRGB(60,65,95); search.TextColor3=Color3.new(1,1,1)
+  search.Text=catalogDraft; search.PlaceholderText="Search archetype name"; search.ClearTextOnFocus=false; search.Font=Enum.Font.GothamBold; search.TextSize=16
+  search.Parent=list; rowOrder+=1; search.LayoutOrder=rowOrder; round(search)
+  search:GetPropertyChangedSignal("Text"):Connect(function() catalogDraft=string.sub(search.Text,1,80) end)
+  row("APPLY SEARCH"..(catalogQuery~="" and (": "..catalogQuery) or ""),function() catalogQuery=catalogDraft; catalogPage=1; render() end,Color3.fromRGB(60,120,180))
+  row("RARITY: "..(catalogRarity==0 and "All" or Config.Rarities[catalogRarity].name).." (tap to change)",function() catalogRarity=(catalogRarity+1)%(#Config.Rarities+1); catalogPage=1; render() end,Color3.fromRGB(70,75,105))
+  row("SHOW: "..(catalogUnlockedOnly and "Unlocked only" or "All archetypes").." (tap to change)",function() catalogUnlockedOnly=not catalogUnlockedOnly; catalogPage=1; render() end,Color3.fromRGB(70,75,105))
+  local entries={}; local query=string.lower(catalogQuery)
+  for _,entry in ipairs(Config.Catalog) do
+   if (catalogRarity==0 or entry.rarity==catalogRarity) and (not catalogUnlockedOnly or entry.rebirth<=state.rebirth) and (query=="" or string.find(string.lower(entry.name),query,1,true)) then table.insert(entries,entry) end
+  end
+  local pages=math.max(1,math.ceil(#entries/10)); catalogPage=math.clamp(catalogPage,1,pages)
+  row("PAGE "..catalogPage.." / "..pages.." | "..#entries.." archetypes",nil,Color3.fromRGB(70,75,105))
+  if catalogPage>1 then row("PREVIOUS PAGE",function() catalogPage-=1; render() end,Color3.fromRGB(60,120,180)) end
+  if catalogPage<pages then row("NEXT PAGE",function() catalogPage+=1; render() end,Color3.fromRGB(60,120,180)) end
+  for i=(catalogPage-1)*10+1,math.min(catalogPage*10,#entries) do
+   local entry=entries[i]; local rarity=Config.Rarities[entry.rarity]
+   local unlocked=entry.rebirth<=state.rebirth
+   local chance=""
+   if catalogOdds and catalogOdds.rebirth==state.rebirth and unlocked then
+    local tier=catalogOdds.tiers[entry.rarity]
+    if tier.count>0 then chance=" | "..string.format("%.5g%%",tier.chance*100/tier.count).." per slot" end
+   end
+   local price=math.max(10,math.floor(entry.income*5))
+   row(entry.name.." ["..rarity.name.."] | "..(unlocked and "UNLOCKED" or "REBIRTH "..entry.rebirth).." | part base $"..price.." | contribution "..entry.income..chance,nil,rarity.color)
+  end
+  row("Prices shown are before Eclipse discount. An archetype is selected uniformly within its unlocked rarity tier; each part type is 25%.",nil,Color3.fromRGB(70,75,105))
+  row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="assemble" then
   title.Text="ASSEMBLY: select one of each"
   row("RARE BLUEPRINT: "..(useBlueprint and "ON" or "OFF").." | owned: "..(state.rareBlueprints or 0).." (requires 4 Rare+ parts, +25% base income)",function()
@@ -261,6 +316,7 @@ local function render()
    local status=p.claimed[quest.key] and "CLAIMED" or (value>=quest.goal and "CLAIM" or "IN PROGRESS")
    row(quest.label.."  "..value.."/"..quest.goal.." | $"..quest.reward.." — "..status,function() remote:FireServer("claimQuest",quest.key) end,Color3.fromRGB(90,80,150))
   end
+  row("CATALOG & ROLL ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
   row("OPEN FREE SEASON TRACK",function() mode="season"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(120,75,180))
   row("SESSION GIFTS — timers reset when you leave",nil,Color3.fromRGB(70,75,105))
   for _,gift in ipairs(Config.SessionGifts) do
@@ -470,6 +526,10 @@ local function updateEvent(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.oddsSnapshot then
+  catalogOdds=data.odds; if mode=="catalog" and panel.Visible then render() end
+  return
+ end
  if data.adminSnapshot then
   adminData=data; pendingAdmin=nil; if data.inspected then adminTarget=data.inspected.id end
   if mode=="admin" then render() end

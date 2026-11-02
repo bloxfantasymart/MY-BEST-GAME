@@ -25,6 +25,7 @@ local AutoCollector = require(script.Parent.Services.AutoCollector)
 local AutoRoll = require(script.Parent.Services.AutoRoll)
 local Blueprints = require(script.Parent.Services.Blueprints)
 local ShutdownGate = require(script.Parent.Services.ShutdownGate)
+local RollOdds = require(script.Parent.Services.RollOdds)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
@@ -227,16 +228,15 @@ local function refreshStands(s)
  if s.extras.sigmaStatue then for key,value in pairs(rates) do rates[key]=value*1.5 end end
  for n=1,24 do updateStand(s,n,rates) end
 end
+local function rollContext(s)
+ local now=os.time(); local event=currentEvent()
+ local modifiers={frenzy=event.frenzy,weekend=event.weekend,luckPass=PassService.owned(s.passes,"Luck"),
+  luck2=s.luckUntil>now,luck3=s.tripleLuckUntil>now,goldenLever=s.extras.goldenLever}
+ local tiers,total,factor=RollOdds.build(Config.Rarities,Config.Catalog,s.rebirth,modifiers)
+ return tiers,total,factor,event,modifiers,now
+end
 local function roll(s)
- local eligible={}
- local frenzy,eclipse,_,_,weekend=activeEvents()
- -- Choose an eligible rarity by tier weight, then an archetype within that rarity.
- for r, rarity in ipairs(Config.Rarities) do
-  local list={}
-  for _, entry in ipairs(Config.Catalog) do if entry.rarity==r and entry.rebirth<=s.rebirth then table.insert(list,entry) end end
-  if #list>0 then table.insert(eligible,{list=list, weight=rarity.weight * (1.15 ^ (s.rebirth * (r-1)/7)) * (r>1 and ((frenzy and 2 or 1)*(weekend and 1.5 or 1)*(PassService.owned(s.passes,"Luck") and 2 or 1)*(s.luckUntil>os.time() and 2 or 1)*(s.tripleLuckUntil>os.time() and 3 or 1)*(s.extras.goldenLever and 1.05 or 1)) or 1)}) end
- end
- local total=0; for _, tier in ipairs(eligible) do total+=tier.weight end
+ local eligible,total,_,event=rollContext(s)
  local pick=rng:NextNumber(0,total)
  local tier=eligible[#eligible]
  for _, t in ipairs(eligible) do pick-=t.weight; if pick<=0 then tier=t; break end end
@@ -245,7 +245,7 @@ local function roll(s)
  local mutationRoll=rng:NextInteger(1,10000)
  local mutation=Config.Mutations[1]
  for _,m in ipairs(Config.Mutations) do mutationRoll-=m.weight; if mutationRoll<=0 then mutation=m; break end end
- return {rarityChance=tier.weight/total, mutation=mutation.name, mutationMultiplier=mutation.multiplier,id=HttpService:GenerateGUID(false), name=archetype.name, kind=kind, rarity=archetype.rarity, income=archetype.income, price=math.max(1,math.floor(math.max(10,archetype.income*5)*(eclipse and 0.5 or 1)))}
+ return {rarityChance=tier.weight/total, mutation=mutation.name, mutationMultiplier=mutation.multiplier,id=HttpService:GenerateGUID(false), name=archetype.name, kind=kind, rarity=archetype.rarity, income=archetype.income, price=math.max(1,math.floor(math.max(10,archetype.income*5)*(event.eclipse and 0.5 or 1)))}
 end
 local lastAnnouncement=-10
 local function rollBatch(s)
@@ -396,6 +396,9 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="adminAction" then
   if AdminService.authorized(Config.AdminUserIds,player.UserId) then runAdmin(player,value) end
  elseif action=="sync" then send(player)
+ elseif action=="requestOdds" then
+  local tiers,total,factor,event,modifiers,now=rollContext(s)
+  remote:FireClient(player,{oddsSnapshot=true,odds={tiers=RollOdds.disclose(tiers,total,#Config.Rarities),rebirth=s.rebirth,nonCommonFactor=factor,modifiers=modifiers,eclipse=event.eclipse==true,at=now}})
  elseif action=="roll" and nearby(player,s.plot.lever) then
   if now-(s.lastRoll or 0)<0.35 then return end
   s.lastRoll=now; s.autoRolling=false; rollBatch(s)
