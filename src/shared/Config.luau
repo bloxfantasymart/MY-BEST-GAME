@@ -34,13 +34,17 @@ Config.TutorialText = {
  "Collect income from your bank.",
  "Tutorial complete!",
 }
--- Five of the requested session gifts; missing cosmetic/token/crate rewards are not yet implemented.
+Config.DailyRewardLabels = {"$1,000 cash", "3 x 15-minute 3x luck potions", "Golden Lever (+5% luck); $5,000 if owned", "$50,000 cash", "3 free-part vouchers", "$250,000 cash", "Sigma Statue (+50% income); $100,000 if owned"}
+-- Eight defined session rewards. Blueprint and three unspecified tiers are not implemented.
 Config.SessionGifts = {
  {id="cash1",seconds=60,label="$500 cash",kind="cash",value=500},
+ {id="vouchers3",seconds=180,label="5 free-part vouchers",kind="vouchers",value=5},
  {id="uncommon",seconds=300,label="One random Uncommon body part",kind="part",rarity=2},
  {id="cash10",seconds=600,label="$15,000 cash",kind="cash",value=15000},
  {id="luck",seconds=900,label="10-minute 2x luck boost",kind="luck",duration=600},
  {id="cash40",seconds=2400,label="$100,000 cash",kind="cash",value=100000},
+ {id="epic60",seconds=3600,label="Random Epic+ body part",kind="partPlus",minRarity=4},
+ {id="crown90",seconds=5400,label="Ohio Crown cosmetic",kind="crown"},
 }
 Config.SlotCosts = {0, 500, 2500, 10000, 50000, 250000, 1000000, 5000000, 25000000}
 Config.Mutations = {

@@ -161,7 +161,7 @@ local function join(player)
  local function titleWhenReady(character)
   local head=character:WaitForChild("Head",10)
   local session=profiles[player]
-  if head and session and player.Character==character then Titles.apply(character,session.profile.rebirth) end
+  if head and session and player.Character==character then Titles.apply(character,session.profile.rebirth,session.profile.extras) end
  end
  player.CharacterAdded:Connect(function(character) noCharacterCollision(character); task.spawn(titleWhenReady,character) end)
  if player.Character then noCharacterCollision(player.Character) end

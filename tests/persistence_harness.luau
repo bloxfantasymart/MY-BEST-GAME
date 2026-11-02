@@ -90,3 +90,15 @@ local boosted=a.load(17); assert(boosted and boosted.luckUntil==5000); assert(a.
 database.player_17.luckUntil=-1
 assert(b.load(17)==nil, "Invalid luck-boost expiration must not be loaded")
 print("Persistence lease, acquisition, inventory, tutorial, theme, boost and ascension validation tests passed")
+
+-- Old profiles remain loadable; new rewards survive a round trip and reject malformed fields.
+database.player_501={version=1,cash=200,pending=0,slots=1,rebirth=0,parts={},creatures={}}
+local rewards=a.load(501); assert(rewards and rewards.extras==nil)
+rewards.extras={luckPotions=3,rollVouchers=5,goldenLever=true,sigmaStatue=true,ohioCrown=true}
+rewards.tripleLuckUntil=1900000000
+assert(a.save(501,rewards,true))
+local roundtrip=b.load(501); assert(roundtrip and roundtrip.extras.sigmaStatue and roundtrip.extras.rollVouchers==5 and roundtrip.tripleLuckUntil==1900000000)
+assert(b.save(501,roundtrip,true))
+database.player_501.extras.rollVouchers=1001
+assert(a.load(501)==nil, "Malformed reward inventory must not load")
+print("Reward profile round-trip and validation tests passed")

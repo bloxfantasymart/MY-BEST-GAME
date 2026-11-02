@@ -2,7 +2,6 @@
 -- All timestamps and reward decisions are server-owned. This module is deliberately pure
 -- with respect to Roblox services so it can be tested without Studio.
 local Progression={}
-Progression.DailyCash={1000,2500,5000,50000,10000,250000,100000}
 Progression.Quests={
  {key="rolls",label="Roll 50 body parts",goal=50,reward=10000},
  {key="rareCrafts",label="Assemble 2 Rare+ creatures",goal=2,reward=25000},
@@ -22,12 +21,16 @@ function Progression.refresh(progress,now)
  end
  return day
 end
-function Progression.claimDaily(progress,now)
+function Progression.nextDaily(progress,now)
  local day=Progression.day(now)
  if day<=progress.dailyLastDay then return nil end
- local streak=progress.dailyLastDay==day-1 and progress.dailyStreak%7+1 or 1
- progress.dailyStreak=streak; progress.dailyLastDay=day
- return Progression.DailyCash[streak],streak
+ return progress.dailyLastDay==day-1 and progress.dailyStreak%7+1 or 1
+end
+function Progression.claimDaily(progress,now)
+ local streak=Progression.nextDaily(progress,now)
+ if not streak then return nil end
+ progress.dailyStreak=streak; progress.dailyLastDay=Progression.day(now)
+ return streak
 end
 function Progression.increment(progress,key,amount,now)
  local day=Progression.refresh(progress,now)

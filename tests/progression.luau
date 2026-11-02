@@ -1,9 +1,9 @@
 local p=Progression.new()
 local start=10*86400
-assert(Progression.claimDaily(p,start)==1000)
+assert(Progression.claimDaily(p,start)==1)
 assert(Progression.claimDaily(p,start+200)==nil)
-assert(Progression.claimDaily(p,start+86400)==2500)
-assert(Progression.claimDaily(p,start+3*86400)==1000, "Missing a UTC day resets streak")
+assert(Progression.claimDaily(p,start+86400)==2)
+assert(Progression.claimDaily(p,start+3*86400)==1, "Missing a UTC day resets streak")
 assert(Progression.claimDaily(p,start)==nil, "Clock rollback must not enable a claim")
 Progression.increment(p,"rolls",49,start+3*86400)
 assert(Progression.claimQuest(p,"rolls",start+3*86400)==nil)

@@ -30,6 +30,13 @@ local function validProfile(data)
   or not finite(data.rebirth,0,100) or data.rebirth%1~=0
   or type(data.parts)~="table" or #data.parts>200
   or type(data.creatures)~="table" or #data.creatures>100 then return false end
+ if data.extras~=nil then
+  local e=data.extras
+  if type(e)~="table" or not finite(e.luckPotions,0,100) or e.luckPotions%1~=0
+   or not finite(e.rollVouchers,0,1000) or e.rollVouchers%1~=0
+   or type(e.goldenLever)~="boolean" or type(e.sigmaStatue)~="boolean" or type(e.ohioCrown)~="boolean" then return false end
+ end
+ if data.tripleLuckUntil~=nil and (not finite(data.tripleLuckUntil,0,1e12) or data.tripleLuckUntil%1~=0) then return false end
  if data.tutorial~=nil then
   if type(data.tutorial)~="table" or not finite(data.tutorial.step,1,7) or data.tutorial.step%1~=0 then return false end
  end

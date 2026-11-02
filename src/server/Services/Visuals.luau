@@ -66,6 +66,22 @@ function Visuals.applyTheme(plot,theme)
  plot.floor.Material=Enum.Material[theme.material]
  for _,boundary in ipairs(plot.boundaries) do boundary.Color=theme.trim end
 end
+function Visuals.applyRewardCosmetics(plot,extras)
+ if plot.handle then
+  plot.handle.Color=extras.goldenLever and Color3.fromRGB(255,215,60) or Color3.fromRGB(230,230,240)
+  plot.handle.Material=Enum.Material.Metal
+ end
+ local folder=plot.floor.Parent
+ local statue=folder:FindFirstChild("SigmaStatue")
+ if not extras.sigmaStatue then if statue then statue:Destroy() end; return end
+ if statue then return end
+ statue=Instance.new("Folder"); statue.Name="SigmaStatue"; statue.Parent=folder
+ local base=plot.atm.Position+Vector3.new(0,0,-5)
+ block(statue,"Pedestal",Vector3.new(4,1,4),base+Vector3.new(0,-1,0),Color3.fromRGB(210,165,30),Enum.Material.Metal)
+ block(statue,"StatueBody",Vector3.new(2,3,1.5),base+Vector3.new(0,1,0),Color3.fromRGB(245,205,55),Enum.Material.Metal)
+ local head=block(statue,"StatueHead",Vector3.new(2,2,2),base+Vector3.new(0,3.5,0),Color3.fromRGB(255,230,85),Enum.Material.Metal)
+ billboard(head,"SIGMA STATUE\n+50% INCOME",2,150)
+end
 function Visuals.pull(plot)
  if not plot.handle or not plot.handle.Parent then return end
  local info=TweenInfo.new(0.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,0,true)

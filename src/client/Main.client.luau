@@ -45,7 +45,7 @@ local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.B
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
@@ -91,6 +91,9 @@ local function render()
    local rarity=Config.Rarities[item.rarity]
    local odds=item.rarityChance and string.format("%.2f%% tier",item.rarityChance*100) or rarity.name
    row("BUY "..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..rarity.name..", "..odds.."]  $"..item.price,function() remote:FireServer("buy",item.id) end,rarity.color)
+   if state.extras and state.extras.rollVouchers>0 then
+    row("FREE PART VOUCHER: "..item.name.." "..item.kind.." ("..state.extras.rollVouchers.." left)",function() remote:FireServer("buyWithVoucher",item.id) end,Color3.fromRGB(60,145,150))
+   end
    row("SKIP "..item.name.." "..item.kind,function() remote:FireServer("skip",item.id) end,Color3.fromRGB(70,75,105))
   end
  elseif mode=="assemble" then
@@ -177,8 +180,12 @@ local function render()
   local p=state.progress
   local available=state.serverDay>p.dailyLastDay
   local nextDay=(p.dailyLastDay==state.serverDay-1) and (p.dailyStreak%7+1) or 1
-  row(available and ("CLAIM DAY "..nextDay.." — $"..(state.dailyCash[nextDay] or 0)) or "DAILY REWARD CLAIMED — returns at UTC midnight",function() remote:FireServer("dailyReward") end,Color3.fromRGB(52,170,105))
-  row("Consecutive UTC days build a 7-day cash streak; missing a day resets it.",nil,Color3.fromRGB(70,75,105))
+  row(available and ("CLAIM DAY "..nextDay.." — "..(Config.DailyRewardLabels[nextDay] or "reward")) or "DAILY REWARD CLAIMED — returns at UTC midnight",function() remote:FireServer("dailyReward") end,Color3.fromRGB(52,170,105))
+  row("Consecutive UTC days build a 7-day streak; missing a day resets it.",nil,Color3.fromRGB(70,75,105))
+  local extras=state.extras or {}
+  row("USE 3x LUCK POTION (15 min) — "..(extras.luckPotions or 0).." owned",function() remote:FireServer("useLuckPotion") end,Color3.fromRGB(125,75,175))
+  row("Free-part vouchers: "..(extras.rollVouchers or 0).." — use at roll station; rolls are already free.",nil,Color3.fromRGB(70,75,105))
+  row("Golden Lever: "..(extras.goldenLever and "unlocked (+5% non-common weight)" or "locked").." | Sigma Statue: "..(extras.sigmaStatue and "unlocked (+50% income)" or "locked"),nil,Color3.fromRGB(70,75,105))
   for _,quest in ipairs(state.quests) do
    local value=p[quest.key] or 0
    local status=p.claimed[quest.key] and "CLAIMED" or (value>=quest.goal and "CLAIM" or "IN PROGRESS")
@@ -189,6 +196,9 @@ local function render()
    local b=row(giftText(gift),function() remote:FireServer("claimGift",gift.id) end,Color3.fromRGB(155,105,45))
    giftButtons[gift.id]=b
   end
+  local total=0; for i=4,#Config.Rarities do total+=Config.Rarities[i].weight end
+  local odds={}; for i=4,#Config.Rarities do table.insert(odds,Config.Rarities[i].name.." "..string.format("%.2f%%",100*Config.Rarities[i].weight/total)) end
+  row("60m Epic+ gift tier odds: "..table.concat(odds,", ")..". Standard mutation; any rebirth.",nil,Color3.fromRGB(70,75,105))
   if state.isAdmin then row("DEVELOPER ADMIN",function() pendingAdmin=nil; mode="admin"; list.CanvasPosition=Vector2.zero; remote:FireServer("adminOpen",adminTarget); render() end,Color3.fromRGB(155,65,65)) end
   row("HOW TO PLAY",function() mode="help"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
  elseif mode=="admin" then
@@ -351,9 +361,9 @@ remote.OnClientEvent:Connect(function(data)
  if data.announcement then notice.Text=data.announcement; playEffect("rare"); return end
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
- if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
+ if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
  if data.open then list.CanvasPosition=Vector2.zero; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
- state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or ""); loaded=true; updateTutorial()
+ state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  render()
 end)

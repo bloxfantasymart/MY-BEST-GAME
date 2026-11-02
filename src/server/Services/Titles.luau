@@ -7,10 +7,18 @@ function Titles.forRebirth(rebirth)
  if rebirth>=10 then return "Sigma Grinder" end
  return "Rookie Roller"
 end
-function Titles.apply(character,rebirth)
+function Titles.apply(character,rebirth,extras)
  local head=character and character:FindFirstChild("Head")
  if not head or not head:IsA("BasePart") then return end
  local old=head:FindFirstChild("BrainrotTitle"); if old then old:Destroy() end
+ local oldCrown=head:FindFirstChild("OhioCrown"); if oldCrown then oldCrown:Destroy() end
+ if extras and extras.ohioCrown then
+  local crown=Instance.new("Part"); crown.Name="OhioCrown"; crown.Size=Vector3.new(2.4,0.35,2.4)
+  crown.Color=Color3.fromRGB(255,215,40); crown.Material=Enum.Material.Neon
+  crown.Anchored=false; crown.CanCollide=false; crown.CanTouch=false; crown.Massless=true
+  crown.CFrame=head.CFrame*CFrame.new(0,1.2,0); crown.Parent=head
+  local weld=Instance.new("WeldConstraint"); weld.Part0=head; weld.Part1=crown; weld.Parent=crown
+ end
  local gui=Instance.new("BillboardGui"); gui.Name="BrainrotTitle"; gui.Size=UDim2.fromOffset(180,35)
  gui.StudsOffset=Vector3.new(0,3,0); gui.AlwaysOnTop=true; gui.Parent=head
  local label=Instance.new("TextLabel"); label.Size=UDim2.fromScale(1,1); label.BackgroundTransparency=1

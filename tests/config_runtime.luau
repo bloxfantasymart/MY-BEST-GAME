@@ -30,7 +30,12 @@ for price=1,1000 do
 end
 assert(#Config.StandCosts == 12 and #Config.SlotCosts == 9)
 assert(#Config.Themes==5 and #Config.TutorialText==7)
-assert(#Config.SessionGifts==5)
+assert(#Config.SessionGifts==8 and #Config.DailyRewardLabels==7)
+for rarity=4,8 do
+ local present=false
+ for _,entry in ipairs(Config.Catalog) do if entry.rarity==rarity then present=true end end
+ assert(present, "Epic+ odds require an item in every listed tier")
+end
 local giftIds={}
 for i,gift in ipairs(Config.SessionGifts) do
  assert(not giftIds[gift.id] and gift.seconds>0)
