@@ -6,10 +6,10 @@ These steps are for a **private test experience**, not your public game. The aut
 
 1. Follow the Rojo connection steps in the README. In Roblox Studio, use **View → Output** to see errors.
 2. Click **Play**. Your character should appear near your plot. Check that the plot has a nameplate, three stations and 24 stands; the first 12 should be yellow and the rest gray.
-3. Walk to the red station and use its prompt. Pull the lever; check that a tray shows an offer. Buy it or press its Skip button. Try walking away and trying to roll: the server should reject the action.
+3. Check the tutorial goal and station highlight. Walk to the red station and use its prompt. Pull the lever; check that a tray shows an offer. Buy it or press its Skip button. Try walking away and trying to roll: the server should reject the action.
 4. Keep rolling and buying until you have a Head, Chest, Arms and Legs. Go to the purple pod. Select each part (or use auto-fill), then assemble. Verify the parts disappear and the creature appears in the backpack.
-5. Use a yellow stand prompt and select the creature. It should appear, move gently and earn pending cash. Step on the green pad or tap the cash counter to collect. Check the displayed balance and level increase over time.
-6. Test inventory filtering, selling confirmation, paid leveling, travel and upgrades. Selling is permanent. Auto-roll requires rebirth 5 or the configured pass. Test it only after reading its warning: it spends cash. Move away from the station and check it stops.
+5. Use a yellow stand prompt and select the creature. It should appear, move gently and earn pending cash. Step on the green pad or tap the cash counter to collect. Check the displayed balance and level increase over time. Verify tutorial completion grants $1,000 once, stays complete after rejoining, and does not pay again.
+6. Open **UPGRADES → PLOT THEMES** and select an unlocked theme; locked themes must not apply. Check the title above your avatar after respawning. Test inventory filtering, selling confirmation, paid leveling, travel and upgrades. Selling is permanent. Auto-roll requires rebirth 5 or the configured pass. Test it only after reading its warning: it spends cash. Move away from the station and check it stops.
 7. Open **REWARDS → HOW TO PLAY**, check the two plaza leaderboards and the event countdown. The leaderboards cover the current server only. Use Studio's device emulator and a real mobile device to check that buttons and text remain usable.
 
 ### Daily rewards and objectives
@@ -31,3 +31,7 @@ In Studio's **Test** tab start a server with two or more clients. Each player sh
 ## 4. Before publishing broadly
 
 The optional [showcase hub](TRADING_HUB_SETUP.md) is not a marketplace yet. Trading and developer products are not implemented. Optional gamepass hooks are disabled by default; see the [gamepass guide](GAMEPASS_SETUP.md) and do not enable public sales before testing. Complete and test them separately before charging players. Review third-party character names, licensed assets and Roblox policies. Check performance with a full six-player server, including many placed creatures and events. Event timings are based on UTC, so servers should agree when their clocks agree.
+
+## Deploying schema changes
+
+Update and publish both the main place and the hub when scripts or profile fields change. Existing servers can continue running older code after publishing; shut down old private test servers before testing new profile fields, or an old server could save without them. Do not rely on production data until save/rejoin and cross-place compatibility have been verified.

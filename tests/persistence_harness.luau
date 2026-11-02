@@ -71,4 +71,12 @@ database.player_14={version=1,cash=0,pending=0,slots=1,rebirth=0,parts=extraPart
 local expanded=a.load(14)
 assert(expanded and #expanded.parts==150, "Expanded backpacks must remain loadable without live entitlement lookup")
 assert(a.save(14,expanded,true))
-print("Persistence lease, atomic acquisition, expanded inventory, and invalid-profile mock tests passed")
+database.player_15={version=1,cash=0,pending=0,slots=1,rebirth=10,parts={},creatures={},tutorial={step=7},theme="Cyber"}
+local themed=a.load(15)
+assert(themed and themed.tutorial.step==7 and themed.theme=="Cyber")
+assert(a.save(15,themed,true))
+database.player_15.theme="Void"
+assert(b.load(15)==nil, "A theme cannot be saved below its unlock rebirth")
+database.player_15.theme="Cyber"; database.player_15.tutorial.step=8
+assert(b.load(15)==nil, "Invalid tutorial state must not be loaded")
+print("Persistence lease, acquisition, inventory, tutorial and theme validation tests passed")

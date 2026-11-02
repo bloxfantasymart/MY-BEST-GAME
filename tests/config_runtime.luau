@@ -27,4 +27,11 @@ for price=1,1000 do
  assert(Config.CreatureSellValue(combined)<=price*4, "Crafting must not create a resale profit")
 end
 assert(#Config.StandCosts == 12 and #Config.SlotCosts == 9)
+assert(#Config.Themes==5 and #Config.TutorialText==7)
+local themeIds={}
+for i,theme in ipairs(Config.Themes) do
+ assert(not themeIds[theme.id] and theme.rebirth>=0 and theme.rebirth<=100)
+ if i>1 then assert(theme.rebirth>Config.Themes[i-1].rebirth) end
+ themeIds[theme.id]=true
+end
 print("Config runtime tests passed")

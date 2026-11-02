@@ -16,6 +16,22 @@ Config.PassDescriptions = {
 }
 -- Replace 0 with IDs of audio you have permission to use. 0 means silent.
 Config.AudioIds = {roll=0, buy=0, craft=0, collect=0, rare=0}
+Config.Themes = {
+ {id="Classic",name="Classic Grass",rebirth=0,floor=Color3.fromRGB(75,160,95),trim=Color3.fromRGB(100,255,245),material="Grass"},
+ {id="Cyber",name="Neon Cyber Grid",rebirth=10,floor=Color3.fromRGB(30,35,95),trim=Color3.fromRGB(40,240,255),material="Metal"},
+ {id="Magma",name="Volcanic Magma",rebirth=25,floor=Color3.fromRGB(95,35,25),trim=Color3.fromRGB(255,95,20),material="Slate"},
+ {id="Gold",name="Golden Palace",rebirth=50,floor=Color3.fromRGB(180,130,30),trim=Color3.fromRGB(255,225,85),material="Metal"},
+ {id="Void",name="Void Abyss",rebirth=100,floor=Color3.fromRGB(34,20,55),trim=Color3.fromRGB(180,55,255),material="SmoothPlastic"},
+}
+Config.TutorialText = {
+ "Pull the lever at your roll station.",
+ "Buy your first body part.",
+ "Buy a Head, Chest, Arms and Legs.",
+ "Assemble four parts at the pod.",
+ "Place your creature on a stand.",
+ "Collect income from your bank.",
+ "Tutorial complete!",
+}
 Config.SlotCosts = {0, 500, 2500, 10000, 50000, 250000, 1000000, 5000000, 25000000}
 Config.Mutations = {
  {name="Standard", weight=9000, multiplier=1},

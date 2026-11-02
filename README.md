@@ -1,6 +1,6 @@
 # Roll a Brainrot — playable development build
 
-This repository contains an **unfinished Roblox game**: a generated six-plot world, server-owned rolling and crafting, stands and income, mutations, leveling, rebirths, UTC-synchronized events, daily quests and rewards, capped offline earnings, animated placeholder displays and a first persistence implementation. The separate hub currently supports showcases only; item trading, developer products and many polish features are not yet implemented. Optional gamepass hooks exist but are disabled until configured. See [the roadmap](docs/ROADMAP.md).
+This repository contains an **unfinished Roblox game**: a generated six-plot world, server-owned rolling and crafting, stands and income, mutations, leveling, rebirths, UTC-synchronized events, daily quests and rewards, a guided tutorial, plot themes and titles, capped offline earnings, animated placeholder displays and a first persistence implementation. The separate hub currently supports showcases only; item trading, developer products and many polish features are not yet implemented. Optional gamepass hooks exist but are disabled until configured. See [the roadmap](docs/ROADMAP.md).
 
 **Please test this in a private test experience first.** It has not been run in Roblox Studio in this environment. Do not sell paid items or advertise it as complete. We cannot guarantee saving or prevent data loss until Studio and live multiplayer tests have passed.
 
@@ -17,6 +17,9 @@ Alternative: `rojo build default.project.json -o RollABrainrot.rbxlx` creates a 
 
 ### More gameplay controls
 
+- **Tutorial:** follow the goal at the top left and the highlighted station. Complete all six server-verified steps for a one-time $1,000 bonus. The tutorial state is saved with your profile; older profiles can complete it too.
+- **Plot themes and titles:** choose **UPGRADES → PLOT THEMES**. Themes unlock at rebirth 0, 10, 25, 50 and 100 and are cosmetic. Rebirth titles appear above your character automatically.
+- **Rare announcements:** Mythic or higher roll offers can be announced to the current server. An announced offer has not necessarily been purchased.
 - **Auto-roll:** at your roll station, tap the rarity filter to choose the minimum rarity, then start auto-roll. It buys matching drops every two seconds using your cash, and stops when you move away, run out of cash or fill your part inventory. It unlocks at rebirth 5, or earlier with the optional AutoRoll gamepass (if configured).
 - **Auto-fill:** in the assembly menu, this chooses an estimated strongest owned part for each socket. You can change its selections before assembling.
 - **Extra stands:** buy stands 13–24 in UPGRADES. Stand 13 requires rebirth 1, stand 14 rebirth 2, and so on. Your extra stands persist through rebirth.
@@ -52,4 +55,4 @@ For a more detailed step-by-step verification list, see [Studio testing](docs/TE
 
 ## Developer checks
 
-`python3 tests/check_config.py` checks catalog structure. With the standalone Luau CLI installed, run `python3 tests/run_luau_tests.py`, `python3 tests/run_persistence_tests.py`, `python3 tests/run_booth_tests.py`, `python3 tests/run_progression_tests.py`, `python3 tests/run_pass_tests.py` and `python3 tests/run_inventory_tests.py` (or pass the path to `luau` as an argument). The persistence test uses a synchronous mock, **not** Roblox DataStore services. These checks do not replace Studio or published multiplayer tests.
+`python3 tests/check_config.py` checks catalog structure. With the standalone Luau CLI installed, run `python3 tests/run_luau_tests.py`, `python3 tests/run_persistence_tests.py`, `python3 tests/run_booth_tests.py`, `python3 tests/run_progression_tests.py`, `python3 tests/run_pass_tests.py`, `python3 tests/run_inventory_tests.py` and `python3 tests/run_tutorial_tests.py` (or pass the path to `luau` as an argument). The persistence test uses a synchronous mock, **not** Roblox DataStore services. These checks do not replace Studio or published multiplayer tests.

@@ -34,12 +34,17 @@ local rewards=button(gui,"REWARDS",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,224)
 local rebirth=button(gui,"REBIRTH",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,116),Color3.fromRGB(218,65,135))
 local eventLabel=Instance.new("TextLabel"); eventLabel.BackgroundTransparency=1; eventLabel.Size=UDim2.new(1,-155,0,28); eventLabel.Position=UDim2.new(0.02,0,0,98); eventLabel.TextColor3=Color3.fromRGB(255,225,80); eventLabel.TextStrokeTransparency=0; eventLabel.Font=Enum.Font.GothamBold; eventLabel.TextScaled=true; eventLabel.Parent=gui
 local notice=Instance.new("TextLabel"); notice.BackgroundTransparency=1; notice.Size=UDim2.new(1,-155,0,30); notice.Position=UDim2.new(0.02,0,0,67); notice.TextColor3=Color3.new(1,1,1); notice.TextStrokeTransparency=0; notice.Font=Enum.Font.GothamBold; notice.TextScaled=true; notice.Parent=gui
+local guidance=Instance.new("TextLabel"); guidance.Size=UDim2.new(1,-155,0,42); guidance.Position=UDim2.new(0.02,0,0,130)
+guidance.BackgroundColor3=Color3.fromRGB(105,75,30); guidance.TextColor3=Color3.new(1,1,1); guidance.TextWrapped=true
+guidance.Font=Enum.Font.GothamBold; guidance.TextSize=14; guidance.Visible=false; guidance.Parent=gui; round(guidance)
+local guideHighlight=Instance.new("Highlight"); guideHighlight.Name="TutorialTarget"; guideHighlight.FillColor=Color3.fromRGB(255,220,60)
+guideHighlight.OutlineColor=Color3.new(1,1,1); guideHighlight.FillTransparency=0.65; guideHighlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; guideHighlight.Enabled=false; guideHighlight.Parent=workspace
 local panel=Instance.new("Frame"); panel.Size=UDim2.new(0.85,0,0.68,0); panel.Position=UDim2.new(0.075,0,0.2,0); panel.BackgroundColor3=Color3.fromRGB(37,39,70); panel.Visible=false; panel.Parent=gui; round(panel)
 local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.BackgroundTransparency=1; title.TextColor3=Color3.new(1,1,1); title.Font=Enum.Font.GothamBold; title.TextSize=20; title.Parent=panel
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
@@ -111,7 +116,15 @@ local function render()
   local nextStand=state.standsUnlocked+1
   local standCost=Config.StandCosts[nextStand-12]
   row(standCost and ("Unlock stand "..nextStand.." — $"..standCost.."; rebirth "..(nextStand-12)) or "All stands unlocked",function() remote:FireServer("upgradeStands") end,Color3.fromRGB(210,130,35))
+  row("PLOT THEMES",function() mode="themes"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,130,160))
   row("OPEN GAMEPASS SHOP",function() mode="shop"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(180,65,160))
+ elseif mode=="themes" then
+  title.Text="PLOT THEMES"
+  row("Cosmetic themes unlock with rebirth and cost no cash.",nil,Color3.fromRGB(70,75,105))
+  for _,theme in ipairs(Config.Themes) do
+   local status=state.theme==theme.id and "ACTIVE" or (state.rebirth>=theme.rebirth and "SELECT" or "REBIRTH "..theme.rebirth)
+   row(theme.name.." — "..status,function() remote:FireServer("theme",theme.id) end,theme.floor)
+  end
  elseif mode=="shop" then
   title.Text="GAMEPASS SHOP"
   row("Passes are optional. Roblox shows the price before you confirm.",nil,Color3.fromRGB(70,75,105))
@@ -200,6 +213,28 @@ slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgra
 travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
 rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; confirmRebirth=false; mode="rebirth"; panel.Visible=true; render() end)
 bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; confirmBulk=nil; mode="bag"; panel.Visible=true; render() end)
+local function updateTutorial()
+ local step=state.tutorial and state.tutorial.step or 7
+ guidance.Visible=step<7
+ if step<7 then
+  local instruction=Config.TutorialText[step] or ""
+  if step==3 then
+   local found={}; for _,item in ipairs(state.parts) do found[item.kind]=true end
+   local missing={}; for _,kind in ipairs(Config.Types) do if not found[kind] then table.insert(missing,kind) end end
+   if #missing>0 then instruction="Still need: "..table.concat(missing,", ") end
+  end
+  guidance.Text="GOAL "..step.."/6: "..instruction.."  (+$1,000 on completion)"
+ end
+ local world=workspace:FindFirstChild("GeneratedWorld")
+ local plot=world and world:FindFirstChild("Plot"..tostring(state.plotIndex))
+ local targetName=(step<=3 and "Roll station") or (step==4 and "Assembly pod") or (step==5 and "Stand 1") or (step==6 and "Cash ATM") or nil
+ local target=plot and targetName and plot:FindFirstChild(targetName)
+ guideHighlight.Adornee=target
+ guideHighlight.Enabled=step<7 and target~=nil
+end
+task.spawn(function()
+ while true do task.wait(2); if loaded then updateTutorial() end end
+end)
 local tint=Instance.new("ColorCorrectionEffect"); tint.Name="BrainrotEventTint"; tint.Enabled=false; tint.Parent=Lighting
 local function updateEvent(flags)
  if not flags then return end
@@ -210,11 +245,12 @@ local function updateEvent(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.announcement then notice.Text=data.announcement; playEffect("rare"); return end
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; eventLabel.Text=data.event or ""; state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
  if data.open then list.CanvasPosition=Vector2.zero; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
- state=data; updateEvent(data.eventFlags); eventLabel.Text=data.event or ""; loaded=true
+ state=data; updateEvent(data.eventFlags); eventLabel.Text=data.event or ""; loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  render()
 end)

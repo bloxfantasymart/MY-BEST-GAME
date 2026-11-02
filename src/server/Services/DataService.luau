@@ -30,6 +30,13 @@ local function validProfile(data)
   or not finite(data.rebirth,0,100) or data.rebirth%1~=0
   or type(data.parts)~="table" or #data.parts>200
   or type(data.creatures)~="table" or #data.creatures>100 then return false end
+ if data.tutorial~=nil then
+  if type(data.tutorial)~="table" or not finite(data.tutorial.step,1,7) or data.tutorial.step%1~=0 then return false end
+ end
+ if data.theme~=nil then
+  local thresholds={Classic=0,Cyber=10,Magma=25,Gold=50,Void=100}
+  if type(data.theme)~="string" or not thresholds[data.theme] or data.rebirth<thresholds[data.theme] then return false end
+ end
  if data.keepSlotsEntitled~=nil and type(data.keepSlotsEntitled)~="boolean" then return false end
  if data.lastLogout~=nil and (not finite(data.lastLogout,0,1e12) or data.lastLogout%1~=0) then return false end
  if data.lastOfflineAward~=nil and not finite(data.lastOfflineAward,0,1e300) then return false end

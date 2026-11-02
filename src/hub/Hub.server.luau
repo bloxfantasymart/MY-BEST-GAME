@@ -9,6 +9,7 @@ local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Conf
 local DataService=require(script.Parent.Services.DataService)
 local Visuals=require(script.Parent.Services.Visuals)
 local BoothLogic=require(script.Parent.BoothLogic)
+local Titles=require(script.Parent.Services.Titles)
 local remote=Instance.new("RemoteEvent"); remote.Name="HubAction"; remote.Parent=ReplicatedStorage
 local profiles={}
 local booths={}
@@ -157,12 +158,18 @@ local function releaseBooth(s)
  local booth=booths[s.booth]; BoothLogic.release(booth,booth.owner,s); refreshBooth(booth)
 end
 local function join(player)
- player.CharacterAdded:Connect(noCharacterCollision)
+ local function titleWhenReady(character)
+  local head=character:WaitForChild("Head",10)
+  local session=profiles[player]
+  if head and session and player.Character==character then Titles.apply(character,session.profile.rebirth) end
+ end
+ player.CharacterAdded:Connect(function(character) noCharacterCollision(character); task.spawn(titleWhenReady,character) end)
  if player.Character then noCharacterCollision(player.Character) end
  local profile=DataService.load(player.UserId)
  if not profile then if player.Parent then player:Kick("Could not load your profile safely. Please retry after the previous session closes.") end; return end
  if not player.Parent then DataService.save(player.UserId,profile,true); return end
  profiles[player]={profile=profile,booth=nil}
+ if player.Character then task.spawn(titleWhenReady,player.Character) end
  text(player,"Claim a booth to display creatures. Trading is not enabled yet.")
 end
 Players.PlayerAdded:Connect(join)

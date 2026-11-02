@@ -56,9 +56,15 @@ function Visuals.decoratePlot(plot,folder,center)
   block(stand,"Neon rim",Vector3.new(6.2,0.15,6.2),stand.Position+Vector3.new(0,0.52,0),Color3.fromRGB(255,238,135),Enum.Material.Neon)
  end
  -- A few bold plot edge accents help distinguish areas from the grass.
+ plot.boundaries={}
  for _,x in ipairs({-26,26}) do
-  block(folder,"Boundary",Vector3.new(0.35,0.35,54),center+Vector3.new(x,0.8,0),neon,Enum.Material.Neon)
+  table.insert(plot.boundaries,block(folder,"Boundary",Vector3.new(0.35,0.35,54),center+Vector3.new(x,0.8,0),neon,Enum.Material.Neon))
  end
+end
+function Visuals.applyTheme(plot,theme)
+ plot.floor.Color=theme.floor
+ plot.floor.Material=Enum.Material[theme.material]
+ for _,boundary in ipairs(plot.boundaries) do boundary.Color=theme.trim end
 end
 function Visuals.pull(plot)
  if not plot.handle or not plot.handle.Parent then return end
