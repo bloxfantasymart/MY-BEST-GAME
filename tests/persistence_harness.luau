@@ -102,3 +102,14 @@ assert(b.save(501,roundtrip,true))
 database.player_501.extras.rollVouchers=1001
 assert(a.load(501)==nil, "Malformed reward inventory must not load")
 print("Reward profile round-trip and validation tests passed")
+database.player_502={version=1,cash=200,pending=0,slots=1,rebirth=0,parts={},creatures={}}
+local old=a.load(502); assert(old and old.season==nil)
+old.season={xp=456,claimed=4,rollProgress=777}
+assert(a.save(502,old,true))
+local saved=b.load(502); assert(saved and saved.season.xp==456 and saved.season.claimed==4 and saved.season.rollProgress==777)
+assert(b.save(502,saved,true))
+database.player_502.season.claimed=5
+assert(a.load(502)==nil, "A claimed season tier must be unlocked")
+database.player_502.season.claimed=4; database.player_502.season.rollProgress=250001
+assert(a.load(502)==nil, "Invalid repeatable progress must not load")
+print("Season profile compatibility, round-trip and validation tests passed")

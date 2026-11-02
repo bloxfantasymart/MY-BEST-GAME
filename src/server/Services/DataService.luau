@@ -30,6 +30,12 @@ local function validProfile(data)
   or not finite(data.rebirth,0,100) or data.rebirth%1~=0
   or type(data.parts)~="table" or #data.parts>200
   or type(data.creatures)~="table" or #data.creatures>100 then return false end
+ if data.season~=nil then
+  local season=data.season
+  if type(season)~="table" or not finite(season.xp,0,5000) or season.xp%1~=0
+   or not finite(season.claimed,0,50) or season.claimed%1~=0 or season.claimed>math.floor(season.xp/100)
+   or not finite(season.rollProgress,0,250000) or season.rollProgress%1~=0 then return false end
+ end
  if data.extras~=nil then
   local e=data.extras
   if type(e)~="table" or not finite(e.luckPotions,0,100) or e.luckPotions%1~=0

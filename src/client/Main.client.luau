@@ -45,7 +45,7 @@ local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.B
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,autoRolling=false,autoRarity=1,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
@@ -191,6 +191,7 @@ local function render()
    local status=p.claimed[quest.key] and "CLAIMED" or (value>=quest.goal and "CLAIM" or "IN PROGRESS")
    row(quest.label.."  "..value.."/"..quest.goal.." | $"..quest.reward.." — "..status,function() remote:FireServer("claimQuest",quest.key) end,Color3.fromRGB(90,80,150))
   end
+  row("OPEN FREE SEASON TRACK",function() mode="season"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(120,75,180))
   row("SESSION GIFTS — timers reset when you leave",nil,Color3.fromRGB(70,75,105))
   for _,gift in ipairs(Config.SessionGifts) do
    local b=row(giftText(gift),function() remote:FireServer("claimGift",gift.id) end,Color3.fromRGB(155,105,45))
@@ -201,6 +202,20 @@ local function render()
   row("60m Epic+ gift tier odds: "..table.concat(odds,", ")..". Standard mutation; any rebirth.",nil,Color3.fromRGB(70,75,105))
   if state.isAdmin then row("DEVELOPER ADMIN",function() pendingAdmin=nil; mode="admin"; list.CanvasPosition=Vector2.zero; remote:FireServer("adminOpen",adminTarget); render() end,Color3.fromRGB(155,65,65)) end
   row("HOW TO PLAY",function() mode="help"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
+ elseif mode=="season" then
+  title.Text="FREE SEASON TRACK"
+  local season=state.season or {xp=0,claimed=0,rollProgress=0}
+  local unlocked=math.floor(season.xp/100)
+  row("Season XP: "..season.xp.." / 5000 | tiers unlocked: "..unlocked.." / 50",nil,Color3.fromRGB(70,75,105))
+  row("Earn XP: +1 per part rolled, +20 per assembly, +100 per rebirth; daily quests award 50/75/100.",nil,Color3.fromRGB(70,75,105))
+  local nextTier=season.claimed+1
+  if nextTier<=50 then
+   local desc=nextTier%3==1 and ("$"..(nextTier*1000).." cash") or (nextTier%3==2 and "one 3x luck potion" or "two free-part vouchers")
+   row("TIER "..nextTier.." — "..desc.." — "..(nextTier<=unlocked and "CLAIM" or "LOCKED"),function() remote:FireServer("claimSeason") end,Color3.fromRGB(120,75,180))
+  else row("All 50 free tiers claimed!",nil,Color3.fromRGB(52,170,105)) end
+  row("Repeatable: roll 250 parts for one free-part voucher. Progress: "..season.rollProgress.." (claims: "..math.floor(season.rollProgress/250)..")",function() remote:FireServer("claimRepeatRolls") end,Color3.fromRGB(60,145,150))
+  row("Permanent prototype track; no season reset or premium purchase. Free tiers are claimed in order.",nil,Color3.fromRGB(70,75,105))
+  row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="admin" then
   title.Text="DEVELOPER ADMIN — CURRENT SERVER"
   if not state.isAdmin then row("Not authorized.",nil,Color3.fromRGB(150,50,60))

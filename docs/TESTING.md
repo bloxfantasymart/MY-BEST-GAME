@@ -26,6 +26,10 @@ Roll a part and leave the offer unpurchased for more than 60 seconds. Its tray s
 
 Open **REWARDS**, claim the daily reward twice, and check that only the first claim pays. With controlled test profiles, check all seven streak days, potion/voucher caps, duplicate unlock cash, 3x potion countdown and stacking, Golden Lever odds, and Sigma Statue income online and offline. Verify the unlock visuals, save/rejoin, hub round trip and plot cleanup. Verify the 60-minute gift tier distribution against the shown weights. Roll 50 parts (multi-slot rolls count each part), then claim the roll objective once. Complete the other objectives and verify each can only pay once. UTC midnight resets the objectives. Verify a missed UTC day resets the login streak; Studio clock changes alone should not be trusted as a server-time test.
 
+### Free season track and repeatable rolls
+
+In a private test place, open **REWARDS → OPEN FREE SEASON TRACK**. Roll parts with one and multiple slots and check +1 XP and one objective count per generated part, including unpurchased offers and auto-roll. Assemble a creature (+20 XP), rebirth (+100 XP), and claim each daily objective (50/75/100 XP, only once). Verify a tier cannot be claimed early, earned tiers are claimed in order exactly once, cash/potions/vouchers match the shown reward, and full potion or voucher inventories prevent the relevant claim without consuming it. Roll at least 500 parts and claim the repeatable objective twice, verifying excess carries over and the voucher cap blocks a claim without losing progress. Save/rejoin and visit the hub to check XP, claims and progress survive; old profiles should start at zero. Also test two clients and forged/repeated requests. This permanent prototype has no premium purchase or season reset.
+
 ## 2. Test multiple players
 
 In Studio's **Test** tab start a server with two or more clients. Each player should get a different plot. A player must not be able to buy from another player's roll station, place creatures on another plot, or collect another plot's bank. Check that leaderboards update. Studio's default test profiles are temporary, even after a rejoin.
