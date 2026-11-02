@@ -10,7 +10,11 @@ These steps are for a **private test experience**, not your public game. The aut
 4. Keep rolling and buying until you have a Head, Chest, Arms and Legs. Go to the purple pod. Select each part (or use auto-fill), then assemble. Verify the parts disappear and the creature appears in the backpack.
 5. Use a yellow stand prompt and select the creature. It should appear, move gently and earn pending cash. Step on the green pad or tap the cash counter to collect. Check the displayed balance and level increase over time.
 6. Test inventory filtering, selling confirmation, paid leveling, travel and upgrades. Selling is permanent. Test auto-roll only after reading its warning: it spends cash. Move away from the station and check it stops.
-7. Check the **HELP** menu, the two plaza leaderboards and the event countdown. The leaderboards cover the current server only. Use Studio's device emulator and a real mobile device to check that buttons and text remain usable.
+7. Open **REWARDS → HOW TO PLAY**, check the two plaza leaderboards and the event countdown. The leaderboards cover the current server only. Use Studio's device emulator and a real mobile device to check that buttons and text remain usable.
+
+### Daily rewards and objectives
+
+Open **REWARDS**, claim the daily reward twice, and check that only the first claim pays. Roll 50 parts (multi-slot rolls count each part), then claim the roll objective once. Complete the other objectives and verify each can only pay once. UTC midnight resets the objectives. Verify a missed UTC day resets the login streak; Studio clock changes alone should not be trusted as a server-time test.
 
 ## 2. Test multiple players
 
@@ -19,11 +23,11 @@ In Studio's **Test** tab start a server with two or more clients. Each player sh
 ## 3. Test real saving carefully
 
 1. Publish a **separate private test experience**, then follow the README's instructions to enable Studio API access and `DataService.TestPersistence`. Studio can modify real DataStore data for that experience.
-2. Earn cash, buy parts, craft and place a creature, then stop and rejoin. Check cash, inventory, levels and placements. Test upgraded stands when you've earned them. Do not assume a single successful test proves saving is reliable.
+2. Earn cash, buy parts, craft and place a creature, then stop and rejoin. Check cash, inventory, levels and placements. Leave a creature on a stand, leave for a few minutes, then return and verify the 25% capped offline amount appears in pending cash only once. Test entering and returning from the hub too. Test upgraded stands when you've earned them. Do not assume a single successful test proves saving is reliable.
 3. Try a second session on the same account: it must not load while the first session holds its lease. If a server crashes, the lease can take up to 180 seconds to expire. A failed load should not create a fresh profile.
 4. Test server shutdown, disconnect during saves, service errors, and retry/rejoin behavior in a controlled private environment. Check Output for warnings. An unsuccessful final save can still lose progress.
 5. Restore `DataService.TestPersistence = false` after testing in Studio. Published servers use the live DataStore regardless of this Studio-only switch.
 
 ## 4. Before publishing broadly
 
-The optional [showcase hub](TRADING_HUB_SETUP.md) is not a marketplace yet. Trading, paid products and passes are not implemented. Complete and test them separately before charging players. Review third-party character names, licensed assets and Roblox policies. Check performance with a full six-player server, including many placed creatures and events. Event timings are relative to each server's start, so two servers need not have the same event.
+The optional [showcase hub](TRADING_HUB_SETUP.md) is not a marketplace yet. Trading, paid products and passes are not implemented. Complete and test them separately before charging players. Review third-party character names, licensed assets and Roblox policies. Check performance with a full six-player server, including many placed creatures and events. Event timings are based on UTC, so servers should agree when their clocks agree.

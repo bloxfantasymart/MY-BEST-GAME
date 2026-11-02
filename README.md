@@ -1,6 +1,6 @@
 # Roll a Brainrot — playable development build
 
-This repository contains an **unfinished Roblox game**: a generated six-plot world, server-owned rolling and crafting, stands and income, mutations, leveling, rebirths, timed events, animated placeholder displays and a first persistence implementation. The separate hub currently supports showcases only; item trading, Robux purchases and many polish features are not yet implemented. See [the roadmap](docs/ROADMAP.md).
+This repository contains an **unfinished Roblox game**: a generated six-plot world, server-owned rolling and crafting, stands and income, mutations, leveling, rebirths, UTC-synchronized events, daily quests and rewards, capped offline earnings, animated placeholder displays and a first persistence implementation. The separate hub currently supports showcases only; item trading, Robux purchases and many polish features are not yet implemented. See [the roadmap](docs/ROADMAP.md).
 
 **Please test this in a private test experience first.** It has not been run in Roblox Studio in this environment. Do not sell paid items or advertise it as complete. We cannot guarantee saving or prevent data loss until Studio and live multiplayer tests have passed.
 
@@ -21,13 +21,19 @@ Alternative: `rojo build default.project.json -o RollABrainrot.rbxlx` creates a 
 - **Auto-fill:** in the assembly menu, this chooses an estimated strongest owned part for each socket. You can change its selections before assembling.
 - **Extra stands:** buy stands 13–24 in UPGRADES. Stand 13 requires rebirth 1, stand 14 rebirth 2, and so on. Your extra stands persist through rebirth.
 - **Selling:** choose an item in BACKPACK and confirm the sale. Remove a creature from its stand before selling it. Sales are permanent; a creature resells for half the total original prices of its four parts.
-- **HELP** explains the loop in-game. Plaza leaderboards show only the current server, not all players worldwide. Roll offer odds are for a rarity tier, not a specific item or mutation.
+- **REWARDS** opens daily cash rewards and quests; its **HOW TO PLAY** button explains the loop. Plaza leaderboards show only the current server, not all players worldwide. Roll offer odds are for a rarity tier, not a specific item or mutation.
 - **Showcase hub:** there is a disabled-by-default portal to a separate place with 15 booths. Configure it using [the hub setup guide](docs/TRADING_HUB_SETUP.md). There are no sales or trades yet.
 - **Audio:** the game is silent by default. To add sounds you have permission to use, replace the `0` values in `Config.AudioIds` in `src/shared/Config.luau` with your Roblox audio asset IDs; sync using Rojo. Roblox must allow your experience to use the assets.
 
+### Daily rewards, quests and offline cash
+
+- Open **REWARDS** to claim a daily cash reward and view three fixed daily objectives. They reset at midnight UTC; claiming on consecutive UTC days increases the reward day, and missing a day resets the streak. All seven rewards are currently cash-only prototype substitutes, not the final cosmetics or potions in the design.
+- Your placed creatures earn 25% of their normal base stand income while you are away, for up to 24 hours. This amount is added to your pending bank when you return to the main place. Event multipliers and offline EXP are not included. If a server crashes or the final save fails, offline time may not be recorded.
+- Events use a shared UTC schedule across servers. Every Friday 17:00 UTC through Sunday 23:59 UTC, Weekend Frenzy increases non-common rarity weights by 1.5 and stand income by 2. See the roadmap for how multipliers stack.
+
 ## Saving and Studio testing
 
-- Published servers attempt to save in Roblox DataStore `RollABrainrotProfiles_v1`, with a session lease, periodic saves, retries and a shutdown save. A failed load kicks the player instead of silently overwriting data. Offline income is not implemented.
+- Published servers attempt to save in Roblox DataStore `RollABrainrotProfiles_v1`, with a session lease, periodic saves, retries and a shutdown save. A failed load kicks the player instead of silently overwriting data. Offline income requires a successfully recorded departure; it is capped at 24 hours and is credited atomically when loading the main place.
 - **Studio defaults to temporary in-memory data**, so progress resets on leaving. To test real persistence, publish a **separate test experience**, enable **Game Settings → Security → Enable Studio Access to API Services**, then set `DataService.TestPersistence = true` in `src/server/Services/DataService.luau` and sync with Rojo. Studio API access can affect the published experience's actual data, so never test on your live game. Set the flag back to `false` after testing.
 - Verify rejoin, two concurrent sessions, save errors and shutdown in the test experience before trusting the system with real players. Roblox services can fail; unsuccessful final saves can lose progress.
 
@@ -45,4 +51,4 @@ For a more detailed step-by-step verification list, see [Studio testing](docs/TE
 
 ## Developer checks
 
-`python3 tests/check_config.py` checks catalog structure. With the standalone Luau CLI installed, run `python3 tests/run_luau_tests.py`, `python3 tests/run_persistence_tests.py` and `python3 tests/run_booth_tests.py` (or pass the path to `luau` as an argument). The persistence test uses a synchronous mock, **not** Roblox DataStore services. These checks do not replace Studio or published multiplayer tests.
+`python3 tests/check_config.py` checks catalog structure. With the standalone Luau CLI installed, run `python3 tests/run_luau_tests.py`, `python3 tests/run_persistence_tests.py` and `python3 tests/run_booth_tests.py` and `python3 tests/run_progression_tests.py` (or pass the path to `luau` as an argument). The persistence test uses a synchronous mock, **not** Roblox DataStore services. These checks do not replace Studio or published multiplayer tests.

@@ -30,6 +30,19 @@ local function validProfile(data)
   or not finite(data.rebirth,0,100) or data.rebirth%1~=0
   or type(data.parts)~="table" or #data.parts>100
   or type(data.creatures)~="table" or #data.creatures>100 then return false end
+ if data.lastLogout~=nil and (not finite(data.lastLogout,0,1e12) or data.lastLogout%1~=0) then return false end
+ if data.lastOfflineAward~=nil and not finite(data.lastOfflineAward,0,1e300) then return false end
+ if data.progress~=nil then
+  local p=data.progress
+  if type(p)~="table" or not finite(p.dailyLastDay,-1,1e9) or p.dailyLastDay%1~=0
+   or not finite(p.dailyStreak,0,7) or p.dailyStreak%1~=0
+   or not finite(p.questDay,-1,1e9) or p.questDay%1~=0
+   or not finite(p.rolls,0,50) or not finite(p.rareCrafts,0,2) or not finite(p.collected,0,500000)
+   or type(p.claimed)~="table" then return false end
+  for key,value in pairs(p.claimed) do
+   if (key~="rolls" and key~="rareCrafts" and key~="collected") or value~=true then return false end
+  end
+ end
  local maxStands=data.standsUnlocked or 12
  if not finite(maxStands,12,24) or maxStands%1~=0 then return false end
  local ids,stands={},{}
@@ -56,9 +69,9 @@ end
 local function copy(data)
  return HttpService:JSONDecode(HttpService:JSONEncode(data))
 end
-function DataService.load(userId)
+function DataService.load(userId,onAcquire)
  if RunService:IsStudio() and not DataService.TestPersistence then
-  sessions[userId]={memory=true, lastSuccess=os.clock()}; return defaults()
+  sessions[userId]={memory=true, lastSuccess=os.clock()}; local data=defaults(); if onAcquire then data=onAcquire(data) end; return data
  end
  local token=HttpService:GenerateGUID(false)
  local key="player_"..userId
@@ -70,6 +83,8 @@ function DataService.load(userId)
     if old~=nil and not validProfile(old) then warn("Invalid or unsupported player profile: "..userId); return nil end
     if old and old.lock and old.lock.expires>os.time() and old.lock.token~=token then return nil end
     local profile=old or defaults()
+    if onAcquire then profile=onAcquire(profile) end
+    if not validProfile(profile) then return nil end
     profile.lock={token=token,expires=os.time()+leaseSeconds}
     acquired=true
     return profile

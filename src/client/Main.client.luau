@@ -2,6 +2,7 @@
 local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local SoundService=game:GetService("SoundService")
+local Lighting=game:GetService("Lighting")
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
@@ -29,7 +30,7 @@ local bag=button(gui,"BACKPACK",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,8))
 local slots=button(gui,"UPGRADES",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,62),Color3.fromRGB(230,135,40))
 
 local travel=button(gui,"TRAVEL",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,170),Color3.fromRGB(39,145,180))
-local help=button(gui,"HELP",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,224),Color3.fromRGB(66,155,115))
+local rewards=button(gui,"REWARDS",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,224),Color3.fromRGB(66,155,115))
 local rebirth=button(gui,"REBIRTH",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,116),Color3.fromRGB(218,65,135))
 local eventLabel=Instance.new("TextLabel"); eventLabel.BackgroundTransparency=1; eventLabel.Size=UDim2.new(1,-155,0,28); eventLabel.Position=UDim2.new(0.02,0,0,98); eventLabel.TextColor3=Color3.fromRGB(255,225,80); eventLabel.TextStrokeTransparency=0; eventLabel.Font=Enum.Font.GothamBold; eventLabel.TextScaled=true; eventLabel.Parent=gui
 local notice=Instance.new("TextLabel"); notice.BackgroundTransparency=1; notice.Size=UDim2.new(1,-155,0,30); notice.Position=UDim2.new(0.02,0,0,67); notice.TextColor3=Color3.new(1,1,1); notice.TextStrokeTransparency=0; notice.Font=Enum.Font.GothamBold; notice.TextScaled=true; notice.Parent=gui
@@ -38,7 +39,7 @@ local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.B
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,autoRolling=false,autoRarity=1,rebirth=0,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={}}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,autoRolling=false,autoRarity=1,rebirth=0,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},dailyCash={},serverDay=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local rarityFilter=1; local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
@@ -107,6 +108,19 @@ local function render()
   local nextStand=state.standsUnlocked+1
   local standCost=Config.StandCosts[nextStand-12]
   row(standCost and ("Unlock stand "..nextStand.." — $"..standCost.."; rebirth "..(nextStand-12)) or "All stands unlocked",function() remote:FireServer("upgradeStands") end,Color3.fromRGB(210,130,35))
+ elseif mode=="rewards" then
+  title.Text="DAILY REWARDS & QUESTS"
+  local p=state.progress
+  local available=state.serverDay>p.dailyLastDay
+  local nextDay=(p.dailyLastDay==state.serverDay-1) and (p.dailyStreak%7+1) or 1
+  row(available and ("CLAIM DAY "..nextDay.." — $"..(state.dailyCash[nextDay] or 0)) or "DAILY REWARD CLAIMED — returns at UTC midnight",function() remote:FireServer("dailyReward") end,Color3.fromRGB(52,170,105))
+  row("Consecutive UTC days build a 7-day cash streak; missing a day resets it.",nil,Color3.fromRGB(70,75,105))
+  for _,quest in ipairs(state.quests) do
+   local value=p[quest.key] or 0
+   local status=p.claimed[quest.key] and "CLAIMED" or (value>=quest.goal and "CLAIM" or "IN PROGRESS")
+   row(quest.label.."  "..value.."/"..quest.goal.." | $"..quest.reward.." — "..status,function() remote:FireServer("claimQuest",quest.key) end,Color3.fromRGB(90,80,150))
+  end
+  row("HOW TO PLAY",function() mode="help"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
  elseif mode=="help" then
   title.Text="HOW TO PLAY"
   row("1. At your red roll station, pull the lever and buy one Head, Chest, Arms and Legs.",nil,Color3.fromRGB(70,75,105))
@@ -157,17 +171,26 @@ local function render()
   if panel.Visible then list.CanvasPosition=previousScroll end
  end)
 end
-help.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="help"; panel.Visible=true; render() end)
+rewards.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="rewards"; panel.Visible=true; render() end)
 slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgrades"; panel.Visible=true; render() end)
 travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
 rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; confirmRebirth=false; mode="rebirth"; panel.Visible=true; render() end)
 bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; mode="bag"; panel.Visible=true; render() end)
+local tint=Instance.new("ColorCorrectionEffect"); tint.Name="BrainrotEventTint"; tint.Enabled=false; tint.Parent=Lighting
+local function updateEvent(flags)
+ if not flags then return end
+ if flags.eclipse then tint.TintColor=Color3.fromRGB(255,170,175); tint.Enabled=true
+ elseif flags.storm then tint.TintColor=Color3.fromRGB(255,235,155); tint.Enabled=true
+ elseif flags.frenzy then tint.TintColor=Color3.fromRGB(215,180,255); tint.Enabled=true
+ elseif flags.sigma then tint.TintColor=Color3.fromRGB(180,225,255); tint.Enabled=true
+ else tint.Enabled=false end
+end
 remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
- if data.tick then eventLabel.Text=data.event or ""; state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
+ if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; eventLabel.Text=data.event or ""; state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
  if data.open then list.CanvasPosition=Vector2.zero; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
- state=data; eventLabel.Text=data.event or ""; loaded=true
+ state=data; updateEvent(data.eventFlags); eventLabel.Text=data.event or ""; loaded=true
  if data.message and data.message~="" then notice.Text=data.message end
  render()
 end)

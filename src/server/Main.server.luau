@@ -8,6 +8,8 @@ local CollectionService = game:GetService("CollectionService")
 local TeleportService = game:GetService("TeleportService")
 local DataService = require(script.Parent:WaitForChild("Services"):WaitForChild("DataService"))
 local Visuals = require(script.Parent:WaitForChild("Services"):WaitForChild("Visuals"))
+local Progression = require(script.Parent.Services.Progression)
+local LiveEvents = require(script.Parent.Services.LiveEvents)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
@@ -15,29 +17,12 @@ remote.Parent = ReplicatedStorage
 local rng = Random.new()
 local states = {}
 local plots = {}
-local startedAt=os.clock()
 local function activeEvents()
- local elapsed=os.clock()-startedAt
- local frenzy=(elapsed%1800)>=1500
- local cycle=math.floor(elapsed/900)
- local offset=elapsed%900
- local eclipse=cycle>0 and cycle%3==1 and offset<180
- local sigma=cycle>0 and cycle%3==2 and offset<120
- local storm=cycle>0 and cycle%3==0 and offset<120
- return frenzy,eclipse,sigma,storm
+ local event=LiveEvents.at(os.time())
+ return event.frenzy,event.eclipse,event.sigma,event.storm,event.weekend
 end
 local function eventText()
- local frenzy,eclipse,sigma,storm=activeEvents()
- local elapsed=os.clock()-startedAt
- local names={}
- if frenzy then table.insert(names,"Luck Frenzy "..math.ceil(1800-elapsed%1800).."s") end
- if eclipse then table.insert(names,"Eclipse "..math.ceil(180-elapsed%900).."s") end
- if sigma then table.insert(names,"Sigma "..math.ceil(120-elapsed%900).."s") end
- if storm then table.insert(names,"Ohio Storm "..math.ceil(120-elapsed%900).."s") end
- if #names>0 then return table.concat(names," | ") end
- local nextFrenzy=1500-elapsed%1800
- local nextDisaster=900-elapsed%900
- return "Next event in "..math.ceil(math.min(nextFrenzy,nextDisaster)).."s"
+ return LiveEvents.text(LiveEvents.at(os.time()))
 end
 local function part(parent, name, size, position, color, material)
  local p = Instance.new("Part")
@@ -93,9 +78,10 @@ local rebirthCaption=label(rebirthBoard,"SERVER REBIRTHS",6); rebirthCaption.Par
 local function send(player, message, effect)
  local s = states[player]
  if not s then return end
+ Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, autoRolling=s.autoRolling, autoRarity=s.autoRarity, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, autoRolling=s.autoRolling, autoRarity=s.autoRarity, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=LiveEvents.at(os.time()), serverDay=Progression.day(os.time()), progress=s.progress, quests=Progression.Quests, dailyCash=Progression.DailyCash, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -108,6 +94,7 @@ local function collect(player,s)
  local amount=math.floor(s.pending)
  if amount<=0 then send(player,"No cash ready to collect yet."); return end
  s.cash+=amount; s.pending-=amount
+ Progression.increment(s.progress,"collected",amount,os.time())
  if os.clock()-(s.lastCollectEffect or -10)>1 then s.lastCollectEffect=os.clock(); Visuals.collect(s.plot) end
  send(player,"Collected $"..amount.."!","collect")
 end
@@ -197,12 +184,12 @@ local function updateStand(s, n)
 end
 local function roll(s)
  local eligible={}
- local frenzy,eclipse=activeEvents()
+ local frenzy,eclipse,_,_,weekend=activeEvents()
  -- Choose an eligible rarity by tier weight, then an archetype within that rarity.
  for r, rarity in ipairs(Config.Rarities) do
   local list={}
   for _, entry in ipairs(Config.Catalog) do if entry.rarity==r and entry.rebirth<=s.rebirth then table.insert(list,entry) end end
-  if #list>0 then table.insert(eligible,{list=list, weight=rarity.weight * (1.15 ^ (s.rebirth * (r-1)/7)) * ((frenzy and r>1) and 2 or 1)}) end
+  if #list>0 then table.insert(eligible,{list=list, weight=rarity.weight * (1.15 ^ (s.rebirth * (r-1)/7)) * (r>1 and ((frenzy and 2 or 1)*(weekend and 1.5 or 1)) or 1)}) end
  end
  local total=0; for _, tier in ipairs(eligible) do total+=tier.weight end
  local pick=rng:NextNumber(0,total)
@@ -218,6 +205,7 @@ end
 local function rollBatch(s)
  s.rolls={}
  for _=1,s.slots do table.insert(s.rolls,roll(s)) end
+ Progression.increment(s.progress,"rolls",s.slots,os.time())
  Visuals.showRolls(s.plot,s.rolls,s.slots); Visuals.pull(s.plot)
  remote:FireClient(s.player,{effectOnly="roll"})
 end
@@ -247,6 +235,14 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if i and s.cash>=item.price and #s.parts<100 then
    s.cash-=item.price; table.insert(s.parts,item); table.remove(s.rolls,i); Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Part purchased!",item.rarity>=4 and "rare" or "buy")
   else send(player,"Cannot buy: check cash and inventory space.") end
+ elseif action=="dailyReward" then
+  local reward,day=Progression.claimDaily(s.progress,os.time())
+  if reward then s.cash+=reward; send(player,"Day "..day.." reward: $"..reward.."!")
+  else send(player,"Daily reward already claimed. Come back after UTC midnight.") end
+ elseif action=="claimQuest" then
+  local reward=Progression.claimQuest(s.progress,value,os.time())
+  if reward then s.cash+=reward; send(player,"Quest completed: $"..reward.."!")
+  else send(player,"Quest is not ready or has already been claimed.") end
  elseif action=="teleport" then
   local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal}
   local destination=type(value)=="string" and destinations[value] or nil
@@ -288,6 +284,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
    if firstMutation==nil then firstMutation=item.mutation or "Standard" elseif firstMutation~=(item.mutation or "Standard") then harmony=false end
    if item.rarity>highest then highest=item.rarity; dominant=item.name end
   end
+  if highest>=3 then Progression.increment(s.progress,"rareCrafts",1,os.time()) end
   for i=#s.parts,1,-1 do if seen[s.parts[i].id] then table.remove(s.parts,i) end end
   table.insert(s.creatures,{id=HttpService:GenerateGUID(false),name=dominant.." Abomination",components=components,income=sum*Config.Rarities[highest].multiplier*0.4*(harmony and 2 or 1),level=1,exp=0,stand=0})
   send(player,"Assembled! Take it to a stand.","craft")
@@ -323,8 +320,8 @@ remote.OnServerEvent:Connect(function(player, action, value)
   collect(player,s)
  end
 end)
-local function profile(s)
- return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,parts=s.parts,creatures=s.creatures}
+local function profile(s,closing)
+ return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,parts=s.parts,creatures=s.creatures,progress=s.progress,lastLogout=closing and os.time() or 0}
 end
 local function clearPlot(s)
  for n=1,24 do
@@ -339,14 +336,16 @@ local function join(player)
  for _,p in ipairs(plots) do if not p.owner then plot=p; break end end
  if not plot then player:Kick("This server has no free plots. Please join another server."); return end
  plot.owner=player; plot.sign.Text="Loading "..player.DisplayName.."..."
- local data=DataService.load(player.UserId)
+ local data=DataService.load(player.UserId,function(profileData)
+  return Progression.applyOffline(profileData,os.time(),Config.Income)
+ end)
  if not data then
   plot.owner=nil; plot.sign.Text="Unclaimed plot"
   if player.Parent then player:Kick("Could not load your data safely. Please try again later.") end
   return
  end
- if not player.Parent then DataService.save(player.UserId,data,true); plot.owner=nil; plot.sign.Text="Unclaimed plot"; return end
- local s={player=player,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRarity=1,rebirth=data.rebirth,parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
+ if not player.Parent then data.lastLogout=os.time(); DataService.save(player.UserId,data,true); plot.owner=nil; plot.sign.Text="Unclaimed plot"; return end
+ local s={player=player,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRarity=1,rebirth=data.rebirth,progress=data.progress or Progression.new(),parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
  states[player]=s; plot.sign.Text=player.DisplayName.."'s plot"
  local stats=Instance.new("Folder"); stats.Name="leaderstats"; stats.Parent=player
  local cashStat=Instance.new("NumberValue"); cashStat.Name="Cash"; cashStat.Value=s.cash; cashStat.Parent=stats
@@ -359,13 +358,14 @@ local function join(player)
  end
  player.CharacterAdded:Connect(teleport)
  if player.Character then task.spawn(teleport,player.Character) end
- send(player,"Welcome! Roll at your station.")
+ if (data.lastOfflineAward or 0)>0 then send(player,"Welcome back! $"..data.lastOfflineAward.." was added to your bank while away.")
+ else send(player,"Welcome! Roll at your station.") end
 end
 Players.PlayerAdded:Connect(join)
 Players.PlayerRemoving:Connect(function(player)
  local s=states[player]; if not s then return end
  states[player]=nil
- local snapshot=profile(s)
+ local snapshot=profile(s,true)
  clearPlot(s)
  if not DataService.save(player.UserId,snapshot,true) then warn("Failed to save profile for "..player.UserId) end
 end)
@@ -373,14 +373,16 @@ for _,player in ipairs(Players:GetPlayers()) do task.spawn(join,player) end
 task.spawn(function()
  while true do
   task.wait(1)
+  local incomeEvent=LiveEvents.at(os.time())
   for player,s in pairs(states) do
    if not DataService.isHealthy(player.UserId) then player:Kick("Data connection lost; please rejoin.")
    else
-    local changed=false
+    local previousDay=s.progress.questDay
+    Progression.refresh(s.progress,os.time())
+    local changed=previousDay~=s.progress.questDay
     for _,creature in ipairs(s.creatures) do
      if creature.stand>0 then
-      local _,_,sigma=activeEvents()
-      s.pending+=Config.Income(creature)*(sigma and 3 or 1)
+      s.pending+=Config.Income(creature)*(incomeEvent.sigma and 3 or 1)*(incomeEvent.weekend and 2 or 1)
       if creature.level<1000 then
        creature.exp=(creature.exp or 0)+1
        if creature.exp>=10 then creature.exp-=10; creature.level+=1; updateStand(s,creature.stand); changed=true end
@@ -388,7 +390,7 @@ task.spawn(function()
      end
     end
     s.plot.bankLabel.Text="Bank: $"..math.floor(s.pending)
-    if changed then send(player) else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText()}) end
+    if changed then send(player) else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=LiveEvents.at(os.time()), serverDay=Progression.day(os.time())}) end
    end
   end
  end
@@ -477,7 +479,7 @@ game:BindToClose(function()
  for player,s in pairs(states) do
   states[player]=nil; remaining+=1
   task.spawn(function()
-   if not DataService.save(player.UserId,profile(s),true) then warn("Shutdown save failed for "..player.UserId) end
+   if not DataService.save(player.UserId,profile(s,true),true) then warn("Shutdown save failed for "..player.UserId) end
    remaining-=1
   end)
  end

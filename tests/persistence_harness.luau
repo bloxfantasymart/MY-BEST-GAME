@@ -54,4 +54,15 @@ assert(a.save(12,valid,true))
 database.player_12.creatures[1].stand=14
 assert(b.load(12)==nil, "A creature on a locked stand should be rejected")
 assert(database.player_12.creatures[1].stand==14, "Invalid profile must not be overwritten")
-print("Persistence lease and invalid-profile mock tests passed")
+database.player_13={version=1,cash=200,pending=0,slots=1,rebirth=0,parts={},creatures={},lastLogout=100}
+local function awardOffline(data)
+ if (data.lastLogout or 0)>0 then data.pending+=25; data.lastLogout=0 end
+ return data
+end
+local once=a.load(13,awardOffline)
+assert(once and once.pending==25 and database.player_13.lastLogout==0)
+assert(a.save(13,once,true))
+local twice=b.load(13,awardOffline)
+assert(twice and twice.pending==25, "Acquisition must not award the same interval twice")
+assert(b.save(13,twice,true))
+print("Persistence lease, atomic acquisition, and invalid-profile mock tests passed")
