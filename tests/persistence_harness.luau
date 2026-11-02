@@ -43,4 +43,15 @@ assert(database.player_42.cash==777)
 database.player_11={version=1,cash=-1,pending=0,slots=1,rebirth=0,parts={},creatures={}}
 assert(a.load(11)==nil, "Malformed data must not be replaced")
 assert(database.player_11.cash==-1)
+local function item(id,kind)
+ return {id=id,name="Dirt Boy",kind=kind,rarity=1,income=2,price=10,mutation="Standard",mutationMultiplier=1}
+end
+local complete={Head=item("h","Head"),Chest=item("c","Chest"),Arms=item("a","Arms"),Legs=item("l","Legs")}
+database.player_12={version=1,cash=500,pending=12.5,slots=2,rebirth=1,standsUnlocked=13,parts={},creatures={{id="brainrot",name="Dirt Boy Abomination",components=complete,income=6.4,level=2,stand=13,exp=2}}}
+local valid=a.load(12)
+assert(valid and valid.creatures[1].stand==13, "Valid expanded-stand profile should load")
+assert(a.save(12,valid,true))
+database.player_12.creatures[1].stand=14
+assert(b.load(12)==nil, "A creature on a locked stand should be rejected")
+assert(database.player_12.creatures[1].stand==14, "Invalid profile must not be overwritten")
 print("Persistence lease and invalid-profile mock tests passed")

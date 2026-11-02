@@ -1,6 +1,6 @@
 # Roll a Brainrot — playable development build
 
-This repository contains an **unfinished Roblox game**: a generated six-plot world, server-owned rolling and crafting, stands and income, mutations, leveling, rebirths, timed events and a first persistence implementation. Trading, Robux purchases and many polish features are not yet implemented. See [the roadmap](docs/ROADMAP.md).
+This repository contains an **unfinished Roblox game**: a generated six-plot world, server-owned rolling and crafting, stands and income, mutations, leveling, rebirths, timed events, animated placeholder displays and a first persistence implementation. Trading, Robux purchases and many polish features are not yet implemented. See [the roadmap](docs/ROADMAP.md).
 
 **Please test this in a private test experience first.** It has not been run in Roblox Studio in this environment. Do not sell paid items or advertise it as complete. We cannot guarantee saving or prevent data loss until Studio and live multiplayer tests have passed.
 
@@ -20,7 +20,9 @@ Alternative: `rojo build default.project.json -o RollABrainrot.rbxlx` creates a 
 - **Auto-roll:** at your roll station, tap the rarity filter to choose the minimum rarity, then start auto-roll. It buys matching drops every two seconds using your cash, and stops when you move away, run out of cash or fill your part inventory. This is currently a free prototype feature, not a gamepass.
 - **Auto-fill:** in the assembly menu, this chooses an estimated strongest owned part for each socket. You can change its selections before assembling.
 - **Extra stands:** buy stands 13–24 in UPGRADES. Stand 13 requires rebirth 1, stand 14 rebirth 2, and so on. Your extra stands persist through rebirth.
-- **Selling:** choose an item in BACKPACK and confirm the sale. Remove a creature from its stand before selling it. Sales are permanent.
+- **Selling:** choose an item in BACKPACK and confirm the sale. Remove a creature from its stand before selling it. Sales are permanent; a creature resells for half the total original prices of its four parts.
+- **HELP** explains the loop in-game. Plaza leaderboards show only the current server, not all players worldwide. Roll offer odds are for a rarity tier, not a specific item or mutation.
+- **Audio:** the game is silent by default. To add sounds you have permission to use, replace the `0` values in `Config.AudioIds` in `src/shared/Config.luau` with your Roblox audio asset IDs; sync using Rojo. Roblox must allow your experience to use the assets.
 
 ## Saving and Studio testing
 
@@ -37,6 +39,8 @@ Alternative: `rojo build default.project.json -o RollABrainrot.rbxlx` creates a 
 - **Studio data resets:** this is the default. See the saving section above.
 
 The catalog contains names that may involve third-party intellectual property; review names and obtain appropriate rights before publishing.
+
+For a more detailed step-by-step verification list, see [Studio testing](docs/TESTING.md).
 
 ## Developer checks
 

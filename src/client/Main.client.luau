@@ -1,9 +1,19 @@
 --!strict
 local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
+local SoundService=game:GetService("SoundService")
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
+local sounds={}
+local function playEffect(name)
+ local id=Config.AudioIds[name]
+ if type(id)~="number" or id<=0 then return end
+ if not sounds[name] then
+  local sound=Instance.new("Sound"); sound.Name="Brainrot_"..name; sound.SoundId="rbxassetid://"..id; sound.Volume=0.5; sound.Parent=SoundService; sounds[name]=sound
+ end
+ sounds[name]:Play()
+end
 local gui=Instance.new("ScreenGui"); gui.Name="BrainrotUI"; gui.ResetOnSpawn=false; gui.Parent=player:WaitForChild("PlayerGui")
 local function round(frame)
  local corner=Instance.new("UICorner"); corner.CornerRadius=UDim.new(0,12); corner.Parent=frame
@@ -19,9 +29,10 @@ local bag=button(gui,"BACKPACK",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,8))
 local slots=button(gui,"UPGRADES",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,62),Color3.fromRGB(230,135,40))
 
 local travel=button(gui,"TRAVEL",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,170),Color3.fromRGB(39,145,180))
+local help=button(gui,"HELP",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,224),Color3.fromRGB(66,155,115))
 local rebirth=button(gui,"REBIRTH",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,116),Color3.fromRGB(218,65,135))
-local eventLabel=Instance.new("TextLabel"); eventLabel.BackgroundTransparency=1; eventLabel.Size=UDim2.new(0.6,0,0,28); eventLabel.Position=UDim2.new(0.02,0,0,98); eventLabel.TextColor3=Color3.fromRGB(255,225,80); eventLabel.TextStrokeTransparency=0; eventLabel.Font=Enum.Font.GothamBold; eventLabel.TextScaled=true; eventLabel.Parent=gui
-local notice=Instance.new("TextLabel"); notice.BackgroundTransparency=1; notice.Size=UDim2.new(0.65,0,0,30); notice.Position=UDim2.new(0.02,0,0,67); notice.TextColor3=Color3.new(1,1,1); notice.TextStrokeTransparency=0; notice.Font=Enum.Font.GothamBold; notice.TextScaled=true; notice.Parent=gui
+local eventLabel=Instance.new("TextLabel"); eventLabel.BackgroundTransparency=1; eventLabel.Size=UDim2.new(1,-155,0,28); eventLabel.Position=UDim2.new(0.02,0,0,98); eventLabel.TextColor3=Color3.fromRGB(255,225,80); eventLabel.TextStrokeTransparency=0; eventLabel.Font=Enum.Font.GothamBold; eventLabel.TextScaled=true; eventLabel.Parent=gui
+local notice=Instance.new("TextLabel"); notice.BackgroundTransparency=1; notice.Size=UDim2.new(1,-155,0,30); notice.Position=UDim2.new(0.02,0,0,67); notice.TextColor3=Color3.new(1,1,1); notice.TextStrokeTransparency=0; notice.Font=Enum.Font.GothamBold; notice.TextScaled=true; notice.Parent=gui
 local panel=Instance.new("Frame"); panel.Size=UDim2.new(0.85,0,0.68,0); panel.Position=UDim2.new(0.075,0,0.2,0); panel.BackgroundColor3=Color3.fromRGB(37,39,70); panel.Visible=false; panel.Parent=gui; round(panel)
 local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.BackgroundTransparency=1; title.TextColor3=Color3.new(1,1,1); title.Font=Enum.Font.GothamBold; title.TextSize=20; title.Parent=panel
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
@@ -39,6 +50,7 @@ end
 local function render()
  hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0)
  if not panel.Visible then return end
+ local previousScroll=list.CanvasPosition
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
  rowOrder=0
  if mode=="roll" then
@@ -49,7 +61,9 @@ local function render()
   else row("START AUTO-ROLL (buys matching parts)",function() remote:FireServer("autoRoll",rarityFilter) end,Color3.fromRGB(52,170,105)) end
   for _,item in ipairs(state.rolls) do
    local rarity=Config.Rarities[item.rarity]
-   row("BUY "..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..rarity.name.."]  $"..item.price,function() remote:FireServer("buy",item.id) end,rarity.color)
+   local odds=item.rarityChance and string.format("%.2f%% tier",item.rarityChance*100) or rarity.name
+   row("BUY "..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..rarity.name..", "..odds.."]  $"..item.price,function() remote:FireServer("buy",item.id) end,rarity.color)
+   row("SKIP "..item.name.." "..item.kind,function() remote:FireServer("skip",item.id) end,Color3.fromRGB(70,75,105))
   end
  elseif mode=="assemble" then
   title.Text="ASSEMBLY: select one of each"
@@ -93,6 +107,14 @@ local function render()
   local nextStand=state.standsUnlocked+1
   local standCost=Config.StandCosts[nextStand-12]
   row(standCost and ("Unlock stand "..nextStand.." — $"..standCost.."; rebirth "..(nextStand-12)) or "All stands unlocked",function() remote:FireServer("upgradeStands") end,Color3.fromRGB(210,130,35))
+ elseif mode=="help" then
+  title.Text="HOW TO PLAY"
+  row("1. At your red roll station, pull the lever and buy one Head, Chest, Arms and Legs.",nil,Color3.fromRGB(70,75,105))
+  row("2. Use the purple assembly pod to combine your four owned parts.",nil,Color3.fromRGB(70,75,105))
+  row("3. Place your creature on a yellow stand. It earns cash and levels up while placed.",nil,Color3.fromRGB(70,75,105))
+  row("4. Step on the green ATM pad or tap the cash counter to collect your earnings.",nil,Color3.fromRGB(70,75,105))
+  row("5. Upgrade, then open REBIRTH to see the cash and creature you must sacrifice.",nil,Color3.fromRGB(70,75,105))
+  row("Tier odds show the chance of the rarity tier, not an individual part or mutation. Auto-roll spends cash!",nil,Color3.fromRGB(70,75,105))
  elseif mode=="travel" then
   title.Text="TRAVEL AROUND YOUR PLOT"
   row("ROLL STATION",function() remote:FireServer("teleport","lever"); panel.Visible=false end)
@@ -114,7 +136,7 @@ local function render()
    row("BODY PARTS: "..#state.parts.." / 100 — tap a part to sell",nil,Color3.fromRGB(70,75,105))
    for _,item in ipairs(state.parts) do
     row((item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] | sell $"..Config.PartSellValue(item),function()
-     selectedSell={name=item.name.." "..item.kind,value=Config.PartSellValue(item),id=item.id,action="sellPart"}; render()
+     selectedSell={name=item.name.." "..item.kind,value=Config.PartSellValue(item),id=item.id,action="sellPart"}; list.CanvasPosition=Vector2.zero; render()
     end,Config.Rarities[item.rarity].color)
    end
   end
@@ -122,7 +144,7 @@ local function render()
    row("BRAINROTS: "..#state.creatures.." / 100 — tap to choose action",nil,Color3.fromRGB(70,75,105))
    for _,c in ipairs(state.creatures) do
     row(c.name.." Lv."..c.level.." | $"..math.floor(Config.Income(c)).."/s | level $"..Config.LevelCost(c),function()
-     selectedSell={name=c.name,value=Config.CreatureSellValue(c),id=c.id,action="sellCreature"}; render()
+     selectedSell={name=c.name,value=Config.CreatureSellValue(c),id=c.id,action="sellCreature"}; list.CanvasPosition=Vector2.zero; render()
     end)
     if selectedSell and selectedSell.id==c.id then
      row("LEVEL UP "..c.name.." for $"..Config.LevelCost(c),function() remote:FireServer("level",c.id); selectedSell=nil end,Color3.fromRGB(52,170,105))
@@ -130,14 +152,20 @@ local function render()
    end
   end
  end
+ task.defer(function()
+  if panel.Visible then list.CanvasPosition=previousScroll end
+ end)
 end
-slots.Activated:Connect(function() mode="upgrades"; panel.Visible=true; render() end)
-travel.Activated:Connect(function() mode="travel"; panel.Visible=true; render() end)
-rebirth.Activated:Connect(function() confirmRebirth=false; mode="rebirth"; panel.Visible=true; render() end)
-bag.Activated:Connect(function() selectedSell=nil; mode="bag"; panel.Visible=true; render() end)
+help.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="help"; panel.Visible=true; render() end)
+slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgrades"; panel.Visible=true; render() end)
+travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
+rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; confirmRebirth=false; mode="rebirth"; panel.Visible=true; render() end)
+bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; mode="bag"; panel.Visible=true; render() end)
 remote.OnClientEvent:Connect(function(data)
+ if data.effectOnly then playEffect(data.effectOnly); return end
+ if data.effect then playEffect(data.effect) end
  if data.tick then eventLabel.Text=data.event or ""; state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; eventLabel.Text=data.event or ""; loaded=true
  if data.message and data.message~="" then notice.Text=data.message end
  render()

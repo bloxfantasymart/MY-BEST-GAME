@@ -1,5 +1,7 @@
 --!strict
 local Config = {}
+-- Replace 0 with IDs of audio you have permission to use. 0 means silent.
+Config.AudioIds = {roll=0, buy=0, craft=0, collect=0, rare=0}
 Config.SlotCosts = {0, 500, 2500, 10000, 50000, 250000, 1000000, 5000000, 25000000}
 Config.Mutations = {
  {name="Standard", weight=9000, multiplier=1},
@@ -32,7 +34,12 @@ function Config.PartSellValue(item)
  return math.max(1, math.floor((item.price or 10) * 0.5))
 end
 function Config.CreatureSellValue(creature)
- return math.max(1, math.floor(creature.income * 10))
+ -- Resale must not exceed the original part prices: assembling cannot mint cash.
+ local total=0
+ for _,item in pairs(creature.components or {}) do
+  total += item.price or math.max(10,math.floor(item.income*5))
+ end
+ return math.max(1, math.floor(total * 0.5))
 end
 Config.Types = {"Head", "Chest", "Arms", "Legs"}
 Config.Rarities = {

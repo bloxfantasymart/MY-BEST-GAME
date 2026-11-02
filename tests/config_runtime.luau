@@ -19,6 +19,12 @@ creature.level=2
 assert(Config.Income(creature) == 125)
 assert(Config.LevelCost(creature) == 1500)
 assert(Config.PartSellValue({price=101}) == 50)
-assert(Config.CreatureSellValue(creature) == 1000)
+creature.components={Head={price=100},Chest={price=80},Arms={price=10},Legs={price=10}}
+assert(Config.CreatureSellValue(creature) == 100)
+for price=1,1000 do
+ local part={price=price}
+ local combined={components={Head=part,Chest=part,Arms=part,Legs=part}}
+ assert(Config.CreatureSellValue(combined)<=price*4, "Crafting must not create a resale profit")
+end
 assert(#Config.StandCosts == 12 and #Config.SlotCosts == 9)
 print("Config runtime tests passed")
