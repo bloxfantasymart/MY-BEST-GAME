@@ -12,6 +12,7 @@ local FusionRecipe=require(ReplicatedStorage.Shared:WaitForChild("FusionRecipe")
 local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView"))
 local TutorialGuide=require(ReplicatedStorage.Shared:WaitForChild("TutorialGuide"))
 local StandLayout=require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
+local CollectionIndex=require(ReplicatedStorage.Shared:WaitForChild("CollectionIndex"))
 local SeasonRewards=require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
@@ -111,7 +112,7 @@ local eventInfo={
  {key="storm",name="OHIO STORM",description="Your plot spawns collectible drops every 10 seconds; each pays $50 x (rebirth + 1)."},
  {key="weekend",name="WEEKEND FRENZY",description="Friday 17:00 to Monday 00:00 UTC: 1.5x non-Common weight and 2x online income."},
 }
-local catalogOdds=nil; local catalogRarity=0; local catalogUnlockedOnly=false
+local catalogOdds=nil; local catalogRarity=0; local catalogUnlockedOnly=false; local catalogCollectionFilter="All"
 local catalogQuery=""; local catalogDraft=""; local catalogPage=1
 local seasonPage=1
 local adminData=nil; local adminTarget=nil; local adminAmount="1000"; local adminCatalog=1; local adminKind=1; local pendingAdmin=nil
@@ -248,6 +249,10 @@ render=function()
   row("BACK TO ROLL STATION",function() autoConfirm=false; mode="roll"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="catalog" then
   title.Text="CATALOG & ROLL ODDS"
+  local collection=state.collection or {}
+  local stats=CollectionIndex.summary(collection,Config.Catalog)
+  row("COLLECTION: "..stats.parts.."/"..stats.totalParts.." part types discovered | "..stats.seen.."/"..stats.totalArchetypes.." archetypes started | "..stats.complete.."/"..stats.totalArchetypes.." complete",nil,Color3.fromRGB(60,120,180))
+  row("Discovery is permanent when saved, not current ownership. Only acquired parts and creature components count; offers do not. Parts sold before this update cannot be recovered. No rewards.",nil,Color3.fromRGB(70,75,105))
   row("REFRESH SERVER ODDS",function() remote:FireServer("requestOdds") end,Color3.fromRGB(60,120,180))
   if catalogOdds then
    local mods=catalogOdds.modifiers
@@ -277,9 +282,19 @@ render=function()
   row("APPLY SEARCH"..(catalogQuery~="" and (": "..catalogQuery) or ""),function() catalogQuery=catalogDraft; catalogPage=1; render() end,Color3.fromRGB(60,120,180))
   row("RARITY: "..(catalogRarity==0 and "All" or Config.Rarities[catalogRarity].name).." (tap to change)",function() catalogRarity=(catalogRarity+1)%(#Config.Rarities+1); catalogPage=1; render() end,Color3.fromRGB(70,75,105))
   row("SHOW: "..(catalogUnlockedOnly and "Unlocked only" or "All archetypes").." (tap to change)",function() catalogUnlockedOnly=not catalogUnlockedOnly; catalogPage=1; render() end,Color3.fromRGB(70,75,105))
+  row("COLLECTION FILTER: "..catalogCollectionFilter.." (tap to change)",function()
+   if catalogCollectionFilter=="All" then catalogCollectionFilter="Missing parts"
+   elseif catalogCollectionFilter=="Missing parts" then catalogCollectionFilter="Started"
+   elseif catalogCollectionFilter=="Started" then catalogCollectionFilter="Complete"
+   elseif catalogCollectionFilter=="Complete" then catalogCollectionFilter="Unseen"
+   else catalogCollectionFilter="All" end
+   catalogPage=1; render()
+  end,Color3.fromRGB(70,75,105))
   local entries={}; local query=string.lower(catalogQuery)
   for _,entry in ipairs(Config.Catalog) do
-   if (catalogRarity==0 or entry.rarity==catalogRarity) and (not catalogUnlockedOnly or entry.rebirth<=state.rebirth) and (query=="" or string.find(string.lower(entry.name),query,1,true)) then table.insert(entries,entry) end
+   local mask=collection[entry.name] or 0
+   local collectionMatch=CollectionIndex.matches(mask,catalogCollectionFilter)
+   if collectionMatch and (catalogRarity==0 or entry.rarity==catalogRarity) and (not catalogUnlockedOnly or entry.rebirth<=state.rebirth) and (query=="" or string.find(string.lower(entry.name),query,1,true)) then table.insert(entries,entry) end
   end
   local pages=math.max(1,math.ceil(#entries/10)); catalogPage=math.clamp(catalogPage,1,pages)
   row("PAGE "..catalogPage.." / "..pages.." | "..#entries.." archetypes",nil,Color3.fromRGB(70,75,105))
@@ -294,7 +309,9 @@ render=function()
     if tier.count>0 then chance=" | "..string.format("%.5g%%",tier.chance*100/tier.count).." per slot" end
    end
    local price=math.max(10,math.floor(entry.income*5))
-   row(entry.name.." ["..rarity.name.."] | "..(unlocked and "UNLOCKED" or "REBIRTH "..entry.rebirth).." | part base $"..price.." | contribution "..entry.income..chance,nil,rarity.color)
+   local discovered={}; local mask=collection[entry.name] or 0
+   for _,kind in ipairs(Config.Types) do table.insert(discovered,kind..(CollectionIndex.has(mask,kind) and " ✓" or " —")) end
+   row(entry.name.." ["..rarity.name.."] | "..(unlocked and "UNLOCKED" or "REBIRTH "..entry.rebirth).." | part base $"..price.." | contribution "..entry.income..chance.."\nDiscovered: "..table.concat(discovered,"  |  "),nil,rarity.color)
   end
   row("Prices shown are before Eclipse discount. An archetype is selected uniformly within its unlocked rarity tier; each part type is 25%.",nil,Color3.fromRGB(70,75,105))
   row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))

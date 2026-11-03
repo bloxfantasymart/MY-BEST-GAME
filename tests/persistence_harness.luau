@@ -284,3 +284,32 @@ for _,invalid in ipairs({0,19,1.5,"1",true}) do
  assert(a.load(517)==nil and database.player_517.progress.questVariant==invalid)
 end
 print("Daily quest variant legacy compatibility, round trip and validation passed")
+-- Legacy collection data is optional; valid masks survive main/hub-style save round trips.
+database.player_518={version=1,cash=0,pending=0,slots=1,rebirth=0,parts={},creatures={}}
+local oldCollection=a.load(518); assert(oldCollection and oldCollection.collection==nil)
+oldCollection.collection={['Dirt Boy']=15,Retired=1}
+assert(a.save(518,oldCollection,true))
+local loadedCollection=b.load(518)
+assert(loadedCollection.collection['Dirt Boy']==15 and loadedCollection.collection.Retired==1)
+assert(b.save(518,loadedCollection,true))
+for _,bad in ipairs({0,16,1.5,-1,"15",true,math.huge}) do
+ database.player_518.collection['Dirt Boy']=bad
+ assert(a.load(518)==nil and database.player_518.collection['Dirt Boy']==bad)
+end
+database.player_518.collection={['']=1}; assert(a.load(518)==nil)
+database.player_518.collection={[1]=1}; assert(a.load(518)==nil)
+database.player_518.collection={[string.rep("x",101)]=1}; assert(a.load(518)==nil)
+database.player_518.collection={}; for i=1,200 do database.player_518.collection["old"..i]=1 end
+local limit=a.load(518); assert(limit and a.save(518,limit,true))
+database.player_518.collection.extra=1; assert(a.load(518)==nil and database.player_518.collection.extra==1)
+print("Collection legacy compatibility, bounds, malformed profiles and round-trip tests passed")
+database.player_519={version=1,cash=0,pending=0,slots=1,rebirth=0,parts={item("loose","Head")},creatures={{id="unit",name="Dirt Boy Abomination",income=10,level=1,stand=0,components=clone(complete)}}}
+local bootstrap=a.load(519); bootstrap.collection=bootstrap.collection or {}
+local known=CollectionIndex.catalogNames({{name="Dirt Boy"}})
+assert(CollectionIndex.record(bootstrap.collection,bootstrap.parts,bootstrap.creatures,known)==4)
+bootstrap.parts={}; bootstrap.creatures={}
+assert(a.save(519,bootstrap,true))
+local retained=b.load(519)
+assert(retained.collection["Dirt Boy"]==15 and #retained.parts==0 and #retained.creatures==0)
+assert(b.save(519,retained,true))
+print("Collection bootstrap from legacy inventory survives later removal and save")

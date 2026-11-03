@@ -34,6 +34,8 @@ local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
+local CollectionIndex = require(ReplicatedStorage.Shared:WaitForChild("CollectionIndex"))
+local collectionNames=CollectionIndex.catalogNames(Config.Catalog)
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
 remote.Parent = ReplicatedStorage
@@ -120,11 +122,12 @@ end
 local function send(player, message, effect)
  local s = states[player]
  if not s then return end
+ CollectionIndex.record(s.collection,s.parts,s.creatures,collectionNames)
  Tutorial.reconcile(s.tutorial,s.parts,s.creatures,s.pending)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -661,7 +664,8 @@ remote.OnServerEvent:Connect(function(player, action, value)
  end
 end)
 local function profile(s,closing)
- return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,backpackUpgrades=s.backpackUpgrades,rareBlueprints=s.rareBlueprints,autoCollect=s.autoCollector.enabled,parts=s.parts,creatures=s.creatures,progress=s.progress,season=s.season,extras=s.extras,luckUntil=s.luckUntil,tripleLuckUntil=s.tripleLuckUntil,tutorial=s.tutorial,theme=s.theme,keepSlotsEntitled=s.keepSlotsEntitled,lastLogout=closing and os.time() or 0}
+ CollectionIndex.record(s.collection,s.parts,s.creatures,collectionNames)
+ return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,backpackUpgrades=s.backpackUpgrades,rareBlueprints=s.rareBlueprints,autoCollect=s.autoCollector.enabled,parts=s.parts,creatures=s.creatures,collection=s.collection,progress=s.progress,season=s.season,extras=s.extras,luckUntil=s.luckUntil,tripleLuckUntil=s.tripleLuckUntil,tutorial=s.tutorial,theme=s.theme,keepSlotsEntitled=s.keepSlotsEntitled,lastLogout=closing and os.time() or 0}
 end
 local function clearPlot(s)
  for n=1,24 do
@@ -693,11 +697,12 @@ local function joinImpl(player,context)
   context.data=nil
   plot.owner=nil; plot.sign.Text="Unclaimed plot"; return
  end
- local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),lastIncomeClock=os.clock(),incomeEvent=currentEvent(),incomeDirty=false,giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
+ local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),lastIncomeClock=os.clock(),incomeEvent=currentEvent(),incomeDirty=false,giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),collection=data.collection or {},parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
  if (data.lastOfflineAward or 0)>0 then
   -- This is informational only: the amount was already credited atomically on acquisition.
   s.offlineReport={amount=data.lastOfflineAward,seconds=data.lastOfflineSeconds,rate=data.lastOfflineRate,capped=data.lastOfflineCapped}
  end
+ CollectionIndex.record(s.collection,s.parts,s.creatures,collectionNames)
  states[player]=s; context.data=nil; plot.sign.Text=player.DisplayName.."'s plot"
  for _,key in ipairs(Config.PassOrder) do refreshPass(player,s,key) end
  local stats=Instance.new("Folder"); stats.Name="leaderstats"; stats.Parent=player

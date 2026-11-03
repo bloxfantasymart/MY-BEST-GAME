@@ -80,6 +80,16 @@ local function validProfile(data)
  if data.lastOfflineSeconds~=nil and (not finite(data.lastOfflineSeconds,0,86400) or data.lastOfflineSeconds%1~=0) then return false end
  if data.lastOfflineRate~=nil and not finite(data.lastOfflineRate,0,1e300) then return false end
  if data.lastOfflineCapped~=nil and type(data.lastOfflineCapped)~="boolean" then return false end
+ -- Matches CollectionIndex.MaxNames. Preserve unknown old/future archetype names.
+ if data.collection~=nil then
+  if type(data.collection)~="table" then return false end
+  local count=0
+  for name,mask in pairs(data.collection) do
+   count+=1
+   if count>200 or type(name)~="string" or #name<1 or #name>100
+    or not finite(mask,1,15) or mask%1~=0 then return false end
+  end
+ end
  if data.progress~=nil then
   local p=data.progress
   if type(p)~="table" or not finite(p.dailyLastDay,-1,1e9) or p.dailyLastDay%1~=0
