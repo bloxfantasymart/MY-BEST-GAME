@@ -7,7 +7,9 @@ local function clone(value)
 end
 local database = {}
 local store = {}
+local pauseNextStore=false
 function store:UpdateAsync(key, callback)
+ if pauseNextStore then pauseNextStore=false; coroutine.yield("store") end
  local newValue = callback(clone(database[key]))
  if newValue ~= nil then database[key] = clone(newValue) end
  return clone(newValue)
@@ -24,7 +26,8 @@ local services = {
  HttpService = http,
 }
 local game = {GetService=function(_,name) return services[name] end}
-local task = {wait=function() end}
+local yieldWait=false
+local task = {wait=function() if yieldWait then coroutine.yield("wait") end end}
 local warn = function() end
 local function makeService()
 -- INSERT_SERVICE_SOURCE
@@ -172,3 +175,63 @@ database.player_510.extras.doubleLuckPotions=101; assert(a.load(510)==nil)
 database.player_510.extras.doubleLuckPotions=1; database.player_510.extras.uncommonBoxes=0.5; assert(a.load(510)==nil)
 database.player_510.extras.uncommonBoxes=-1; assert(a.load(510)==nil)
 print("Quest consumable compatibility, round-trip and validation tests passed")
+
+-- Invalid inventory shapes or lease metadata must never be silently rewritten.
+local function badData(parts,creatures,lock)
+ return {version=1,cash=200,pending=0,slots=1,rebirth=0,parts=parts,creatures=creatures,lock=lock}
+end
+database.player_511=badData({[1]=item("v1","Head"),extra=item("v2","Legs")},{})
+assert(a.load(511)==nil and database.player_511.parts.extra.id=="v2")
+database.player_511=badData({[1]=item("v1","Head"),[3]=item("v3","Legs")},{})
+assert(a.load(511)==nil and database.player_511.parts[3].id=="v3")
+database.player_511=badData({item("","Head")},{})
+assert(a.load(511)==nil)
+database.player_511=badData({}, {[2]={id="hidden",name="test"}})
+assert(a.load(511)==nil, "Sparse creatures must be rejected")
+database.player_511=badData({}, {{id="",name="Dirt Boy Abomination",components=clone(complete),income=10,level=1,stand=0}})
+assert(a.load(511)==nil, "Empty creature IDs must be rejected")
+database.player_511=badData({}, {}, "invalid")
+assert(a.load(511)==nil and database.player_511.lock=="invalid")
+database.player_511=badData({}, {}, {token="abc",expires="tomorrow"})
+assert(a.load(511)==nil and database.player_511.lock.expires=="tomorrow")
+local profile512=a.load(512); assert(profile512)
+profile512.parts.extra=item("hidden","Legs")
+assert(not a.save(512,profile512,false) and database.player_512.parts.extra==nil)
+profile512.parts.extra=nil; assert(a.save(512,profile512,true))
+print("Sparse inventories, invalid IDs and malformed leases are rejected")
+
+-- Explicitly resume waiters in the opposite order from their creation order.
+local function startSave(user,data,release)
+ local thread=coroutine.create(function() return a.save(user,data,release) end)
+ local ok,result=coroutine.resume(thread); assert(ok,result)
+ return thread,result
+end
+local function resume(thread)
+ local ok,result=coroutine.resume(thread); assert(ok,result); return result
+end
+local base=a.load(513); assert(base)
+local first=clone(base); first.cash=100
+local older=clone(base); older.cash=200
+local newer=clone(base); newer.cash=300
+pauseNextStore=true; yieldWait=true
+local firstThread,step=startSave(513,first,false); assert(step=="store")
+local olderThread,oldWait=startSave(513,older,false); assert(oldWait=="wait")
+local newerThread,newWait=startSave(513,newer,false); assert(newWait=="wait")
+assert(resume(firstThread)==true and resume(newerThread)==true and database.player_513.cash==300)
+assert(resume(olderThread)==true and database.player_513.cash==300, "An earlier waiter must not overwrite the newer snapshot")
+assert(a.save(513,newer,true))
+local ending=a.load(514); assert(ending)
+local prior=clone(ending); prior.cash=20
+local waiting=clone(ending); waiting.cash=30
+local final=clone(ending); final.cash=40; final.parts={item("kept","Head")}
+pauseNextStore=true
+local priorThread=startSave(514,prior,false)
+local waitingThread=startSave(514,waiting,false)
+local finalThread=startSave(514,final,true)
+final.parts[1].name="mutated after queueing"
+assert(resume(priorThread)==true)
+assert(resume(waitingThread)==true and database.player_514.cash==20, "Final save should supersede waiting autosaves")
+assert(resume(finalThread)==true and database.player_514.cash==40 and database.player_514.parts[1].name=="Dirt Boy")
+yieldWait=false
+local finalLoaded=b.load(514); assert(finalLoaded and finalLoaded.cash==40 and #finalLoaded.parts==1); assert(b.save(514,finalLoaded,true))
+print("Out-of-order save waiters, final-save priority and snapshot isolation tests passed")

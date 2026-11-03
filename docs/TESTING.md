@@ -12,6 +12,12 @@ These steps are for a **private test experience**, not your public game. The aut
 6. Open **UPGRADES → PLOT THEMES** and select an unlocked theme; locked themes must not apply. Check the title above your avatar after respawning. Test inventory filtering, selling confirmation, paid leveling, travel and upgrades. Selling is permanent. Auto-roll requires rebirth 5 or the configured pass. Test it only after reading its warning: it spends cash. Move away from the station and check it stops.
 7. Open **REWARDS → HOW TO PLAY**, check the two plaza leaderboards and the event countdown. The leaderboards cover the current server only. Use Studio's device emulator and a real mobile device to check that buttons and text remain usable.
 
+### Persistence ordering and malformed profiles
+
+Use a separate private published test experience with Studio API access enabled only for that experience. With test-only instrumentation or a controlled DataStore wrapper, delay one autosave and enqueue two later snapshots; resume the newer waiter before the older one and verify the older snapshot cannot overwrite it. Repeat with a departure or shutdown while saves are queued: the final snapshot should supersede waiting autosaves and retain its inventory even if the live tables change after it was queued. Simulate failed writes, a lost lease, timeouts and shutdowns; these guards cannot guarantee a successful final save.
+
+Inject malformed data only into disposable test keys: sparse/dictionary-shaped part and creature inventories, empty IDs and invalid lease fields must fail to load and leave the stored profile untouched. Existing valid empty and populated inventories should still load. Do not test by modifying real player data; there is no automatic repair tool, so preserve backups and investigate a rejected profile before any manual intervention. The standalone tests simulate concurrency with coroutines, not Roblox DataStore scheduling or outages.
+
 ### Daily quest item rewards and free mystery boxes
 
 In a private test place, complete all three daily objectives and check their displayed cash/item rewards and 50/75/100 season XP. Claim each twice and send forged quest keys; only the first valid claim pays. Set a test profile's 2x-potion inventory to 100 and its box inventory to 100, complete the corresponding quests and verify the claims remain available without losing their rewards until space is made (or UTC midnight resets the quests). Test 2x potion activation, extension of the existing 2x timer, stacking with 3x weight boosts, save/rejoin and hub travel.

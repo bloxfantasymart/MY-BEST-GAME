@@ -15,8 +15,21 @@ end
 local function finite(value, low, high)
  return type(value)=="number" and value==value and value>=low and value<=high
 end
+-- Reject sparse or dictionary-shaped inventory arrays: ipairs/JSON could silently
+-- skip items or change their representation. Empty legacy arrays remain valid.
+local function denseArray(value,limit)
+ if type(value)~="table" then return false end
+ local length=#value
+ if length>limit then return false end
+ local count=0
+ for key in pairs(value) do
+  count+=1
+  if count>limit or type(key)~="number" or key%1~=0 or key<1 or key>length then return false end
+ end
+ return count==length
+end
 local function validPart(item)
- return type(item)=="table" and type(item.id)=="string" and #item.id<=64
+ return type(item)=="table" and type(item.id)=="string" and #item.id>=1 and #item.id<=64
   and type(item.name)=="string" and #item.name<=100
   and (item.kind=="Head" or item.kind=="Chest" or item.kind=="Arms" or item.kind=="Legs")
   and finite(item.rarity,1,8) and item.rarity%1==0 and finite(item.income,0,1e15)
@@ -30,8 +43,10 @@ local function validProfile(data)
  if not finite(data.cash,0,1e300) or not finite(data.pending,0,1e300)
   or not finite(data.slots,1,9) or data.slots%1~=0
   or not finite(data.rebirth,0,100) or data.rebirth%1~=0
-  or type(data.parts)~="table" or #data.parts>250
-  or type(data.creatures)~="table" or #data.creatures>100 then return false end
+  or not denseArray(data.parts,250)
+  or not denseArray(data.creatures,100) then return false end
+ if data.lock~=nil and (type(data.lock)~="table" or type(data.lock.token)~="string" or #data.lock.token<1 or #data.lock.token>64
+  or not finite(data.lock.expires,0,1e12) or data.lock.expires%1~=0) then return false end
  if data.backpackUpgrades~=nil and (not finite(data.backpackUpgrades,0,10) or data.backpackUpgrades%1~=0) then return false end
  if data.rareBlueprints~=nil and (not finite(data.rareBlueprints,0,100) or data.rareBlueprints%1~=0) then return false end
  if data.autoCollect~=nil and type(data.autoCollect)~="boolean" then return false end
@@ -80,7 +95,7 @@ local function validProfile(data)
   ids[item.id]=true
  end
  for _,creature in ipairs(data.creatures) do
-  if type(creature)~="table" or type(creature.id)~="string" or #creature.id>64 or ids[creature.id]
+  if type(creature)~="table" or type(creature.id)~="string" or #creature.id<1 or #creature.id>64 or ids[creature.id]
    or type(creature.name)~="string" or #creature.name>120
    or not finite(creature.income,0,1e18) or not finite(creature.level,1,1000) or creature.level%1~=0
    or not finite(creature.stand,0,maxStands) or creature.stand%1~=0
@@ -123,7 +138,7 @@ function DataService.load(userId,onAcquire)
    end)
   end)
   if ok and acquired and result then
-   sessions[userId]={token=token,lastSuccess=os.clock(),busy=false}
+   sessions[userId]={token=token,lastSuccess=os.clock(),busy=false,issued=0,lastWritten=0,closing=false}
    result.lock=nil
    return result
   end
@@ -133,20 +148,22 @@ function DataService.load(userId,onAcquire)
 end
 function DataService.save(userId, data, release)
  local session=sessions[userId]
- if not session then return false end
+ if not session or session.closing then return false end
  if not validProfile(data) then warn("Refusing to save invalid profile: "..userId); return false end
  if session.memory then if release then sessions[userId]=nil end; return true end
- -- Serialize operations; never allow an earlier save to overwrite a later one.
+ -- Snapshot before waiting so scalar and table fields describe the same moment.
+ local copied,snapshot=pcall(copy,data)
+ if not copied then warn("Failed to copy player profile: "..userId); return false end
+ if not validProfile(snapshot) then warn("Refusing to save invalid profile snapshot: "..userId); return false end
+ session.issued+=1
+ local sequence=session.issued
+ if release then session.closing=true end
+ -- Waiters are not guaranteed FIFO. A later completed snapshot supersedes older
+ -- queued snapshots; a final save also prevents queued autosaves from delaying it.
  while session.busy do task.wait(0.1) end
  if sessions[userId]~=session then return false end
+ if not release and (session.closing or sequence<=session.lastWritten) then return true end
  session.busy=true
- local copied,snapshot=pcall(copy,data)
- if not copied then
-  session.busy=false; warn("Failed to copy player profile: "..userId); return false
- end
- if not validProfile(snapshot) then
-  session.busy=false; warn("Refusing to save invalid profile snapshot: "..userId); return false
- end
  local saved=false
  for attempt=1,3 do
   local wrote=false
@@ -159,7 +176,7 @@ function DataService.save(userId, data, release)
     return snapshot
    end)
   end)
-  if ok and wrote then saved=true; session.lastSuccess=os.clock(); break end
+  if ok and wrote then saved=true; session.lastSuccess=os.clock(); session.lastWritten=sequence; break end
   if attempt<3 then task.wait(attempt*2) end
  end
  session.busy=false
