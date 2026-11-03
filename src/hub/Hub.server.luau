@@ -9,6 +9,7 @@ local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Conf
 local DataService=require(script.Parent.Services.DataService)
 local Visuals=require(script.Parent.Services.Visuals)
 local BoothLogic=require(script.Parent.BoothLogic)
+local ShowcaseView=require(script.Parent.Services.ShowcaseView)
 local Titles=require(script.Parent.Services.Titles)
 local ShutdownGate=require(script.Parent.Services.ShutdownGate)
 local remote=Instance.new("RemoteEvent"); remote.Name="HubAction"; remote.Parent=ReplicatedStorage
@@ -87,7 +88,7 @@ local function refreshBooth(booth)
   end
  end
 end
-local function openBooth(player,booth)
+local function openBooth(player,booth,fromPrompt)
  local own=booth.owner==player
  local listings={}
  local session=booth.owner and profiles[booth.owner]
@@ -95,19 +96,17 @@ local function openBooth(player,booth)
   for _,id in ipairs(booth.listings) do
    local c=findCreature(session.profile,id)
    if c then
-    local parts={}
-    for _,kind in ipairs(Config.Types) do local item=c.components[kind]; table.insert(parts,(item.mutation or "Standard").." "..item.name.." "..kind) end
-    table.insert(listings,{id=c.id,name=(c.ascended and "ASCENDED " or "")..c.name,level=c.level,income=math.floor(Config.Income(c)),parts=parts})
+    table.insert(listings,ShowcaseView.describe(c,Config.Rarities,Config.Income,false))
    end
   end
  end
  local inventory={}
  if own and profiles[player] then
   for _,c in ipairs(profiles[player].profile.creatures) do
-   table.insert(inventory,{id=c.id,name=(c.ascended and "ASCENDED " or "")..c.name,level=c.level,income=math.floor(Config.Income(c))})
+   table.insert(inventory,ShowcaseView.describe(c,Config.Rarities,Config.Income,true))
   end
  end
- remote:FireClient(player,{open=true,booth=booth.index,owner=booth.owner and booth.owner.DisplayName or "Unclaimed",own=own,listings=listings,inventory=inventory})
+ remote:FireClient(player,{open=true,fromPrompt=fromPrompt==true,booth=booth.index,owner=booth.owner and booth.owner.DisplayName or "Unclaimed",own=own,listings=listings,inventory=inventory})
 end
 for i=1,15 do
  local angle=(i-1)*2*math.pi/15
@@ -126,7 +125,7 @@ for i=1,15 do
    if not ok then text(player,reason); return end
    refreshBooth(booth)
   end
-  openBooth(player,booth)
+  openBooth(player,booth,true)
  end)
 end
 remote.OnServerEvent:Connect(function(player,action,payload)
@@ -147,7 +146,7 @@ remote.OnServerEvent:Connect(function(player,action,payload)
  if action=="refresh" then openBooth(player,booth); return end
  if booth.owner~=player then return end
  if action=="release" then
-  BoothLogic.release(booth,player,s); refreshBooth(booth); remote:FireClient(player,{close=true,message="Booth released."}); return
+  BoothLogic.release(booth,player,s); refreshBooth(booth); remote:FireClient(player,{close=true,booth=booth.index,message="Booth released."}); return
  elseif action=="add" then
   local ok,reason=BoothLogic.add(booth,player,s,payload.id)
   if not ok then text(player,reason); return end
