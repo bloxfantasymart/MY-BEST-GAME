@@ -30,6 +30,7 @@ local Crafting = require(script.Parent.Services.Crafting)
 local ShutdownGate = require(script.Parent.Services.ShutdownGate)
 local RollOdds = require(script.Parent.Services.RollOdds)
 local Rebirth = require(script.Parent.Services.Rebirth)
+local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local remote = Instance.new("RemoteEvent")
@@ -615,12 +616,10 @@ remote.OnServerEvent:Connect(function(player, action, value)
   else send(player,"Remove this creature from its current stand first."); return end
   refreshStands(s); send(player,"Stand updated.")
  elseif action=="level" then
-  local _,creature=findById(s.creatures,value)
-  if creature and creature.level<1000 then
-   local cost=Config.LevelCost(creature)
-   if s.cash>=cost then s.cash-=cost; creature.level+=1; if creature.stand>0 then refreshStands(s) end; send(player,"Level upgraded!")
-   else send(player,"Not enough cash to level up.") end
-  end
+  local creature,costOrReason=LevelUpgrade.execute(s,value,Config.LevelCost)
+  if not creature then send(player,costOrReason); return end
+  if creature.stand>0 then refreshStands(s) end
+  send(player,"Level upgraded for $"..costOrReason.."!")
  elseif action=="rebirthReview" then
   s.rebirthQuote=nil
   local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)

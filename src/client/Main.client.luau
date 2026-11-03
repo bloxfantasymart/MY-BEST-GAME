@@ -81,7 +81,7 @@ applyLayout()
 local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,backpackUpgrades=0,rareBlueprints=0,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
-local bagTab="All"; local selectedSell=nil; local rebirthSelected=nil; local rebirthQuote=nil
+local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
 local bulkRarity=1; local confirmBulk=nil
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
 local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local craftConfirm=false
@@ -619,7 +619,7 @@ render=function()
   else
    row("Parts "..#state.parts.."/"..state.partCapacity.." | Creatures "..#state.creatures.."/100",nil,Color3.fromRGB(70,75,105))
    local search=Instance.new("TextBox"); search.Size=UDim2.new(1,-10,0,50); search.BackgroundColor3=Color3.fromRGB(60,65,95); search.TextColor3=Color3.new(1,1,1)
-   search.Text=bagDraft; search.PlaceholderText="Search names, part types or mutations"; search.ClearTextOnFocus=false; search.Font=Enum.Font.GothamBold; search.TextSize=16
+   search.Text=bagDraft; search.PlaceholderText="Search names, components, types or mutations"; search.ClearTextOnFocus=false; search.Font=Enum.Font.GothamBold; search.TextSize=16
    search.Parent=list; rowOrder+=1; search.LayoutOrder=rowOrder; round(search)
    search:GetPropertyChangedSignal("Text"):Connect(function() bagDraft=string.sub(search.Text,1,80) end)
    row("APPLY SEARCH"..(bagQuery~="" and (": "..bagQuery) or ""),function()
@@ -633,20 +633,53 @@ render=function()
     if bagSort=="Newest" then bagSort="Rarity" elseif bagSort=="Rarity" then bagSort="Income" elseif bagSort=="Income" then bagSort="Name" else bagSort="Newest" end
     bagPage=1; selectedSell=nil; confirmBulk=nil; render()
    end,Color3.fromRGB(70,75,105))
+   if not selectedSell then levelReview=nil end
    if selectedSell then
-    row((selectedSell.locked and "UNPROTECT " or "PROTECT ")..selectedSell.name,function()
-     remote:FireServer("setItemLock",{category=selectedSell.category,id=selectedSell.id,locked=not selectedSell.locked}); selectedSell=nil; confirmBulk=nil
-    end,Color3.fromRGB(60,120,180))
-    if selectedSell.locked then row("Protected items cannot be sold, crafted, fused or sacrificed.",nil,Color3.fromRGB(70,75,105))
+    local selected=InventoryView.find(state.parts,state.creatures,selectedSell.category,selectedSell.id)
+    if not selected then
+     selectedSell=nil; levelReview=nil
+     row("Selected item is no longer in your inventory.",nil,Color3.fromRGB(150,65,65))
     else
-     row("CONFIRM SELL "..selectedSell.name.." for $"..selectedSell.value,function()
-      remote:FireServer(selectedSell.action,selectedSell.id); selectedSell=nil
-     end,Color3.fromRGB(200,65,85))
+     local category=selectedSell.category
+     local name=selected.name..(category=="part" and (" "..selected.kind) or "")
+     local resale=category=="part" and Config.PartSellValue(selected) or Config.CreatureSellValue(selected)
+     row("ITEM DETAILS: "..name.." #"..string.sub(selected.id,-6),nil,Color3.fromRGB(60,120,180))
+     if category=="part" then
+      row(Config.Rarities[selected.rarity].name.." | "..(selected.mutation or "Standard").." x"..(selected.mutationMultiplier or 1).." | base contribution "..string.format("%.4g",selected.income).." | mutated contribution "..string.format("%.4g",selected.income*(selected.mutationMultiplier or 1)),nil,Color3.fromRGB(70,75,105))
+      row("Original recorded price: $"..(selected.price or 10).." | resale: $"..resale.." | "..(selected.locked and "Protected" or "Unprotected"),nil,Color3.fromRGB(70,75,105))
+     else
+      row((selected.ascended and "ASCENDED | " or "")..(selected.blueprintApplied and "BLUEPRINT | " or "")..Config.Rarities[InventoryView.creatureRarity(selected)].name.." | Lv."..selected.level.." | "..(selected.stand==0 and "Unplaced" or "Stand "..selected.stand).." | "..(selected.locked and "Protected" or "Unprotected"),nil,Color3.fromRGB(70,75,105))
+      row("Base income $"..string.format("%.4g",selected.income).."/s | Lv."..selected.level.." income $"..string.format("%.4g",Config.Income(selected)).."/s before stand/event bonuses | resale $"..resale,nil,Color3.fromRGB(70,75,105))
+      for _,kind in ipairs(Config.Types) do
+       local component=selected.components[kind]
+       row(kind..": "..component.name.." ["..Config.Rarities[component.rarity].name.."] | "..(component.mutation or "Standard").." x"..(component.mutationMultiplier or 1).." | base contribution "..string.format("%.4g",component.income),nil,Color3.fromRGB(70,75,105))
+      end
+     end
+     row((selected.locked and "UNPROTECT " or "PROTECT ")..name,function()
+      remote:FireServer("setItemLock",{category=category,id=selected.id,locked=not selected.locked}); selectedSell=nil; levelReview=nil; confirmBulk=nil
+     end,Color3.fromRGB(60,120,180))
+     if selected.locked then row("Protected items cannot be sold, crafted, fused or sacrificed.",nil,Color3.fromRGB(70,75,105))
+     elseif category=="creature" and selected.stand>0 then row("Remove this creature from its stand before selling.",nil,Color3.fromRGB(70,75,105))
+     else
+      row("CONFIRM PERMANENT SALE: "..name.." for $"..resale,function()
+       remote:FireServer(category=="part" and "sellPart" or "sellCreature",selected.id); selectedSell=nil; levelReview=nil
+      end,Color3.fromRGB(200,65,85))
+     end
+     if category=="creature" then
+      if selected.level>=1000 then levelReview=nil; row("Maximum creature level reached.",nil,Color3.fromRGB(70,75,105))
+      else
+       local cost=Config.LevelCost(selected)
+       if levelReview and (levelReview.id~=selected.id or levelReview.level~=selected.level or levelReview.cost~=cost) then levelReview=nil end
+       local review=levelReview
+       row(review and ("CONFIRM LEVEL UP: Lv."..review.level.." → "..(review.level+1).." for $"..review.cost) or ("REVIEW LEVEL UP: Lv."..selected.level.." → "..(selected.level+1).." for $"..cost),function()
+        if review then remote:FireServer("level",review); levelReview=nil
+        else levelReview={id=selected.id,level=selected.level,cost=cost}; render() end
+       end,Color3.fromRGB(52,170,105))
+       if review then row("CANCEL LEVEL UP",function() levelReview=nil; render() end,Color3.fromRGB(70,75,105)) end
+      end
+     end
+     row("CANCEL SELECTION",function() selectedSell=nil; levelReview=nil; render() end,Color3.fromRGB(70,75,105))
     end
-    if selectedSell.category=="creature" then
-     row("LEVEL UP "..selectedSell.name.." for $"..selectedSell.levelCost,function() remote:FireServer("level",selectedSell.id); selectedSell=nil end,Color3.fromRGB(52,170,105))
-    end
-    row("CANCEL SELECTION",function() selectedSell=nil; render() end,Color3.fromRGB(70,75,105))
    end
    if bagTab~="Brainrots" then
     row("BULK SELL UP TO "..Config.Rarities[bulkRarity].name.." (tap to change rarity)",function() bulkRarity=bulkRarity%#Config.Rarities+1; confirmBulk=nil; render() end,Color3.fromRGB(85,85,120))
@@ -670,11 +703,11 @@ render=function()
     local item=entry.item; local protected=item.locked and "[PROTECTED] " or ""
     if entry.category=="part" then
      row(protected..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] | sell $"..Config.PartSellValue(item),function()
-      selectedSell={name=item.name.." "..item.kind,value=Config.PartSellValue(item),id=item.id,action="sellPart",category="part",locked=item.locked==true}; confirmBulk=nil; list.CanvasPosition=Vector2.zero; render()
+      selectedSell={id=item.id,category="part"}; levelReview=nil; confirmBulk=nil; list.CanvasPosition=Vector2.zero; render()
      end,Config.Rarities[item.rarity].color)
     else
      row(protected..(item.ascended and "ASCENDED " or "")..(item.blueprintApplied and "[BLUEPRINT] " or "")..item.name.." Lv."..item.level.." | $"..math.floor(entry.income).."/s | "..(item.stand==0 and "Unplaced" or "Stand "..item.stand),function()
-      selectedSell={name=item.name,value=Config.CreatureSellValue(item),id=item.id,action="sellCreature",category="creature",locked=item.locked==true,levelCost=Config.LevelCost(item)}; confirmBulk=nil; list.CanvasPosition=Vector2.zero; render()
+      selectedSell={id=item.id,category="creature"}; levelReview=nil; confirmBulk=nil; list.CanvasPosition=Vector2.zero; render()
      end,Config.Rarities[entry.rarity].color)
     end
    end

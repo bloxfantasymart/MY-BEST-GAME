@@ -6,6 +6,12 @@ function InventoryView.creatureRarity(creature)
  for _,part in pairs(creature.components or {}) do rarity=math.max(rarity,part.rarity or 1) end
  return rarity
 end
+function InventoryView.find(parts,creatures,category,id)
+ local source=category=="part" and parts or (category=="creature" and creatures or nil)
+ if not source or type(id)~="string" then return nil end
+ for _,item in ipairs(source) do if item.id==id then return item end end
+ return nil
+end
 function InventoryView.build(parts,creatures,tab,query,protection,sortMode,incomeFn)
  local entries={}; local text=string.lower(query or "")
  local function add(category,item,index)
@@ -13,7 +19,13 @@ function InventoryView.build(parts,creatures,tab,query,protection,sortMode,incom
   if protection=="Unprotected" and item.locked then return end
   local kind=category=="part" and (item.kind or "") or "creature brainrot"
   local mutation=category=="part" and (item.mutation or "Standard") or ""
-  local haystack=string.lower(item.name.." "..kind.." "..mutation)
+  local haystack=item.name.." "..kind.." "..mutation
+  if category=="creature" then
+   for _,component in pairs(item.components or {}) do
+    if type(component)=="table" then haystack..=" "..(component.name or "").." "..(component.kind or "").." "..(component.mutation or "Standard") end
+   end
+  end
+  haystack=string.lower(haystack)
   if text~="" and not string.find(haystack,text,1,true) then return end
   local rarity=category=="part" and item.rarity or InventoryView.creatureRarity(item)
   local income=category=="part" and item.income*(item.mutationMultiplier or 1) or incomeFn(item)
