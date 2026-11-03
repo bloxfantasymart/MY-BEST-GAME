@@ -82,7 +82,9 @@ local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={st
 local loaded=false; local offlineShown=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
-local bulkRarity=1; local confirmBulk=nil; local bagBatch=nil; local bagBatchPage=1
+local bulkRarity=1; local confirmBulk=nil; local bulkWaiting=nil; local bulkSequence=0; local bulkReviewPage=1; local bulkStandardOnly=true
+local function clearBulk() confirmBulk=nil; bulkWaiting=nil end
+local bagBatch=nil; local bagBatchPage=1
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
 local bagRarity=0; local bagMutation=0; local bagPlacement="All"
 local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local craftConfirm=false
@@ -677,7 +679,7 @@ render=function()
   title.Text="BACKPACK — "..bagTab
   row("TAB: "..bagTab.." (tap to change)",function()
    if bagTab=="All" then bagTab="Body Parts" elseif bagTab=="Body Parts" then bagTab="Brainrots" elseif bagTab=="Brainrots" then bagTab="Boosts" else bagTab="All" end
-   selectedSell=nil; confirmBulk=nil; bagBatch=nil; bagPlacement="All"; bagPage=1; render()
+   selectedSell=nil; clearBulk(); bagBatch=nil; bagPlacement="All"; bagPage=1; render()
   end,Color3.fromRGB(70,75,105))
   if bagTab=="Boosts" then
    local extras=state.extras or {}
@@ -691,31 +693,31 @@ render=function()
    search.Parent=list; rowOrder+=1; search.LayoutOrder=rowOrder; round(search)
    search:GetPropertyChangedSignal("Text"):Connect(function() bagDraft=string.sub(search.Text,1,80) end)
    row("APPLY SEARCH"..(bagQuery~="" and (": "..bagQuery) or ""),function()
-    bagQuery=bagDraft; bagPage=1; selectedSell=nil; confirmBulk=nil; bagBatch=nil; render()
+    bagQuery=bagDraft; bagPage=1; selectedSell=nil; clearBulk(); bagBatch=nil; render()
    end,Color3.fromRGB(60,120,180))
    row("PROTECTION: "..bagProtection.." (tap to change)",function()
     if bagProtection=="All" then bagProtection="Protected" elseif bagProtection=="Protected" then bagProtection="Unprotected" else bagProtection="All" end
-    bagPage=1; selectedSell=nil; confirmBulk=nil; bagBatch=nil; render()
+    bagPage=1; selectedSell=nil; clearBulk(); bagBatch=nil; render()
    end,Color3.fromRGB(70,75,105))
    row("SORT: "..bagSort.." (tap to change)",function()
     if bagSort=="Newest" then bagSort="Rarity" elseif bagSort=="Rarity" then bagSort="Income" elseif bagSort=="Income" then bagSort="Name" else bagSort="Newest" end
-    bagPage=1; selectedSell=nil; confirmBulk=nil; bagBatch=nil; render()
+    bagPage=1; selectedSell=nil; clearBulk(); bagBatch=nil; render()
    end,Color3.fromRGB(70,75,105))
    row("RARITY FILTER: "..(bagRarity==0 and "All" or Config.Rarities[bagRarity].name).." (creatures use highest component)",function()
-    bagRarity=(bagRarity+1)%(#Config.Rarities+1); bagPage=1; selectedSell=nil; confirmBulk=nil; bagBatch=nil; render()
+    bagRarity=(bagRarity+1)%(#Config.Rarities+1); bagPage=1; selectedSell=nil; clearBulk(); bagBatch=nil; render()
    end,Color3.fromRGB(70,75,105))
    row("MUTATION FILTER: "..(bagMutation==0 and "All" or Config.Mutations[bagMutation].name).." (creatures match any component)",function()
-    bagMutation=(bagMutation+1)%(#Config.Mutations+1); bagPage=1; selectedSell=nil; confirmBulk=nil; bagBatch=nil; render()
+    bagMutation=(bagMutation+1)%(#Config.Mutations+1); bagPage=1; selectedSell=nil; clearBulk(); bagBatch=nil; render()
    end,Color3.fromRGB(70,75,105))
    if bagTab=="Brainrots" then
     row("PLACEMENT FILTER: "..bagPlacement.." (tap to change)",function()
      bagPlacement=bagPlacement=="All" and "Placed" or (bagPlacement=="Placed" and "Unplaced" or "All")
-     bagPage=1; selectedSell=nil; confirmBulk=nil; bagBatch=nil; render()
+     bagPage=1; selectedSell=nil; clearBulk(); bagBatch=nil; render()
     end,Color3.fromRGB(70,75,105))
    end
    row("CLEAR BROWSING FILTERS",function()
     bagQuery=""; bagDraft=""; bagProtection="All"; bagRarity=0; bagMutation=0; bagPlacement="All"
-    bagPage=1; selectedSell=nil; confirmBulk=nil; bagBatch=nil; render()
+    bagPage=1; selectedSell=nil; clearBulk(); bagBatch=nil; render()
    end,Color3.fromRGB(70,75,105))
    local mutationFilter=bagMutation==0 and "All" or Config.Mutations[bagMutation].name
    local entries=InventoryView.build(state.parts,state.creatures,bagTab,bagQuery,bagProtection,bagSort,Config.Income,bagRarity,mutationFilter,bagPlacement)
@@ -742,7 +744,7 @@ render=function()
       end
      end
      row((selected.locked and "UNPROTECT " or "PROTECT ")..name,function()
-      remote:FireServer("setItemLock",{category=category,id=selected.id,locked=not selected.locked}); selectedSell=nil; levelReview=nil; confirmBulk=nil
+      remote:FireServer("setItemLock",{category=category,id=selected.id,locked=not selected.locked}); selectedSell=nil; levelReview=nil; clearBulk()
      end,Color3.fromRGB(60,120,180))
      if selected.locked then row("Protected items cannot be sold, crafted, fused or sacrificed.",nil,Color3.fromRGB(70,75,105))
      elseif category=="creature" and selected.stand>0 then row("Remove this creature from its stand before selling.",nil,Color3.fromRGB(70,75,105))
@@ -797,21 +799,39 @@ render=function()
      return result
     end
     local protect=selection(true); local unprotect=selection(false)
-    if #protect.items>0 then row("REVIEW PROTECT "..#protect.items.." FILTERED ITEMS (ALL PAGES)",function() bagBatch=protect; bagBatchPage=1; selectedSell=nil; levelReview=nil; confirmBulk=nil; render() end,Color3.fromRGB(60,120,180)) end
-    if #unprotect.items>0 then row("REVIEW UNPROTECT "..#unprotect.items.." FILTERED ITEMS (ALL PAGES)",function() bagBatch=unprotect; bagBatchPage=1; selectedSell=nil; levelReview=nil; confirmBulk=nil; render() end,Color3.fromRGB(150,85,45)) end
+    if #protect.items>0 then row("REVIEW PROTECT "..#protect.items.." FILTERED ITEMS (ALL PAGES)",function() bagBatch=protect; bagBatchPage=1; selectedSell=nil; levelReview=nil; clearBulk(); render() end,Color3.fromRGB(60,120,180)) end
+    if #unprotect.items>0 then row("REVIEW UNPROTECT "..#unprotect.items.." FILTERED ITEMS (ALL PAGES)",function() bagBatch=unprotect; bagBatchPage=1; selectedSell=nil; levelReview=nil; clearBulk(); render() end,Color3.fromRGB(150,85,45)) end
    end
    if bagTab~="Brainrots" then
-    row("BULK SELL UP TO "..Config.Rarities[bulkRarity].name.." (tap to change rarity)",function() bulkRarity=bulkRarity%#Config.Rarities+1; confirmBulk=nil; render() end,Color3.fromRGB(85,85,120))
-    local ids={}; local value=0
-    for _,item in ipairs(state.parts) do if not item.locked and item.rarity<=bulkRarity then table.insert(ids,item.id); value+=Config.PartSellValue(item) end end
-    local count=confirmBulk and #confirmBulk.ids or #ids
-    local shownValue=confirmBulk and confirmBulk.value or value
-    row((confirmBulk and "CONFIRM SELL " or "SELL ")..count.." parts for $"..shownValue.." — ALL unprotected parts, any mutation; ignores filters",function()
-     if confirmBulk then
-      remote:FireServer("bulkSellParts",{rarity=confirmBulk.rarity,ids=confirmBulk.ids}); confirmBulk=nil
-     elseif #ids>0 then confirmBulk={rarity=bulkRarity,ids=ids,value=value}; selectedSell=nil; bagBatch=nil; render() end
-    end,Color3.fromRGB(185,60,85))
-    if confirmBulk then row("CANCEL BULK SALE",function() confirmBulk=nil; render() end,Color3.fromRGB(70,75,105)) end
+    row("BULK SELL UP TO "..Config.Rarities[bulkRarity].name.." (tap to change rarity)",function() bulkRarity=bulkRarity%#Config.Rarities+1; clearBulk(); render() end,Color3.fromRGB(85,85,120))
+    row("BULK MUTATIONS: "..(bulkStandardOnly and "Standard only (safer default)" or "ALL mutations, including rare").." (tap to change)",function()
+     bulkStandardOnly=not bulkStandardOnly; clearBulk(); render()
+    end,Color3.fromRGB(85,85,120))
+    row("Bulk sale ignores backpack browsing filters. Protected parts are always excluded.",nil,Color3.fromRGB(150,85,45))
+    if confirmBulk then
+     local review=confirmBulk
+     row("REVIEW "..#review.items.." PARTS FOR $"..review.total.." — "..(review.standardOnly and "STANDARD ONLY" or "ALL MUTATIONS").." — expires after 5 minutes",nil,Color3.fromRGB(150,85,45))
+     local reviewItems,currentReview,reviewPages=InventoryView.page(review.items,bulkReviewPage,10); bulkReviewPage=currentReview
+     row("SALE REVIEW PAGE "..currentReview.." / "..reviewPages,nil,Color3.fromRGB(70,75,105))
+     if currentReview>1 then row("PREVIOUS SALE REVIEW PAGE",function() bulkReviewPage-=1; render() end,Color3.fromRGB(60,120,180)) end
+     if currentReview<reviewPages then row("NEXT SALE REVIEW PAGE",function() bulkReviewPage+=1; render() end,Color3.fromRGB(60,120,180)) end
+     for _,item in ipairs(reviewItems) do
+      row(item.mutation.." x"..item.multiplier.." "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] #"..string.sub(item.id,-6).." — $"..item.value,nil,Color3.fromRGB(70,75,105))
+     end
+     row("CONFIRM PERMANENT SALE: "..#review.items.." PARTS FOR $"..review.total,function()
+      if confirmBulk~=review then return end
+      clearBulk(); remote:FireServer("bulkSaleConfirm",review.token); notice.Text="Requesting reviewed bulk sale..."; render()
+     end,Color3.fromRGB(185,60,85))
+     row("CANCEL BULK SALE",function() clearBulk(); remote:FireServer("cancelBulkSaleReview"); render() end,Color3.fromRGB(70,75,105))
+    elseif bulkWaiting then
+     row("WAITING FOR SERVER SALE REVIEW...",nil,Color3.fromRGB(70,75,105))
+     row("CANCEL SALE REVIEW REQUEST",function() clearBulk(); remote:FireServer("cancelBulkSaleReview"); render() end,Color3.fromRGB(70,75,105))
+    else
+     row("REQUEST SERVER REVIEW OF ELIGIBLE PARTS",function()
+      bulkSequence=bulkSequence%2147483647+1; bulkWaiting=bulkSequence; selectedSell=nil; levelReview=nil; bagBatch=nil
+      remote:FireServer("bulkSaleReview",{requestId=bulkWaiting,rarity=bulkRarity,standardOnly=bulkStandardOnly}); render()
+     end,Color3.fromRGB(185,60,85))
+    end
    end
    local page,current,pages=InventoryView.page(entries,bagPage,20); bagPage=current
    row("PAGE "..current.." / "..pages.." | "..#entries.." matching items",nil,Color3.fromRGB(70,75,105))
@@ -821,11 +841,11 @@ render=function()
     local item=entry.item; local protected=item.locked and "[PROTECTED] " or ""
     if entry.category=="part" then
      row(protected..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] | sell $"..Config.PartSellValue(item),function()
-      selectedSell={id=item.id,category="part"}; levelReview=nil; confirmBulk=nil; bagBatch=nil; list.CanvasPosition=Vector2.zero; render()
+      selectedSell={id=item.id,category="part"}; levelReview=nil; clearBulk(); bagBatch=nil; list.CanvasPosition=Vector2.zero; render()
      end,Config.Rarities[item.rarity].color)
     else
      row(protected..(item.ascended and "ASCENDED " or "")..(item.blueprintApplied and "[BLUEPRINT] " or "")..item.name.." Lv."..item.level.." | $"..math.floor(entry.income).."/s | "..(item.stand==0 and "Unplaced" or "Stand "..item.stand),function()
-      selectedSell={id=item.id,category="creature"}; levelReview=nil; confirmBulk=nil; bagBatch=nil; list.CanvasPosition=Vector2.zero; render()
+      selectedSell={id=item.id,category="creature"}; levelReview=nil; clearBulk(); bagBatch=nil; list.CanvasPosition=Vector2.zero; render()
      end,Config.Rarities[entry.rarity].color)
     end
    end
@@ -854,7 +874,7 @@ rewards.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="rew
 slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgrades"; panel.Visible=true; render() end)
 travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
 rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; rebirthSelected=nil; rebirthQuote=nil; mode="rebirth"; panel.Visible=true; render() end)
-bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; confirmBulk=nil; bagBatch=nil; mode="bag"; panel.Visible=true; render() end)
+bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; clearBulk(); bulkStandardOnly=true; bagBatch=nil; mode="bag"; panel.Visible=true; render() end)
 local function updateTutorial()
  local step=state.tutorial and state.tutorial.step or 7
  guidance.Visible=step<7
@@ -888,6 +908,14 @@ updateEvent=function(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.bulkSaleReview then
+  if bulkWaiting==data.requestId and mode=="bag" and panel.Visible and bagTab~="Brainrots" and bagTab~="Boosts" then
+   bulkWaiting=nil; confirmBulk=data.quote; bulkReviewPage=1
+   if data.reason then notice.Text=data.reason end
+   requestRender()
+  end
+  return
+ end
  if data.rebirthQuote then
   if mode=="rebirth" and panel.Visible and rebirthSelected==data.rebirthQuote.id then rebirthQuote=data.rebirthQuote; render() end
   return

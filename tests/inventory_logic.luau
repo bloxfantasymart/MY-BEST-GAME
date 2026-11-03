@@ -63,3 +63,59 @@ assert(Inventory.bulkSetLocked(massiveParts,massiveCreatures,batch,true)==365)
 assert(massiveParts[265].locked and massiveCreatures[100].locked)
 assert(Inventory.bulkSetLocked(massiveParts,massiveCreatures,batch,false)==365)
 print("Atomic batch protection, stale selections and full inventory limits passed")
+local function part(id,rarity,mutation,price,locked)
+ return {id=id,name="Dirt Boy",kind="Head",rarity=rarity,mutation=mutation,mutationMultiplier=mutation=="Golden" and 2.5 or 1,income=2,price=price,locked=locked}
+end
+local inventory={parts={part("s",1,"Standard",20),part("legacy",1,nil,40),part("g",1,"Golden",60),part("r",2,"Standard",80),part("locked",1,"Standard",100,true)}}
+local quote=Inventory.reviewBulkSale(inventory.parts,1,true,100,"one",value)
+assert(quote and #quote.items==2 and quote.total==30 and quote.expires==400)
+assert(quote.items[2].mutation=="Standard" and quote.items[1].value==10)
+inventory.bulkSaleQuote=quote
+-- New eligible parts are never added to an already displayed quote.
+table.insert(inventory.parts,part("new",1,"Standard",200))
+local qty,paid=Inventory.confirmBulkSale(inventory,"one",101,value)
+assert(qty==2 and paid==30 and #inventory.parts==4 and inventory.parts[4].id=="new")
+assert(Inventory.confirmBulkSale(inventory,"one",102,value)==nil)
+quote=Inventory.reviewBulkSale(inventory.parts,1,false,200,"two",value)
+assert(quote and #quote.items==2 and quote.total==130)
+inventory.bulkSaleQuote=quote
+inventory.parts[1].locked=true
+assert(not Inventory.confirmBulkSale(inventory,"two",201,value) and #inventory.parts==4 and not inventory.bulkSaleQuote)
+inventory.parts[1].locked=false
+inventory.bulkSaleQuote=quote
+assert(not Inventory.confirmBulkSale(inventory,"bad",201,value) and not inventory.bulkSaleQuote)
+inventory.bulkSaleQuote=quote
+assert(not Inventory.confirmBulkSale(inventory,"two",500,value) and #inventory.parts==4)
+local keys={"name","kind","rarity","mutation","mutationMultiplier","income","price"}
+local replacements={"Changed","Legs",2,"Void",4,5,61}
+for i,key in ipairs(keys) do
+ local fresh={parts={part("x",1,"Golden",60),part("y",1,"Standard",20)}}
+ fresh.bulkSaleQuote=Inventory.reviewBulkSale(fresh.parts,1,false,200,"t",value)
+ fresh.parts[1][key]=replacements[i]
+ assert(not Inventory.confirmBulkSale(fresh,"t",201,value) and #fresh.parts==2 and not fresh.bulkSaleQuote,key.." change must cancel entire sale")
+end
+local missing={parts={part("x",1,"Standard",20),part("y",1,"Standard",20)}}
+missing.bulkSaleQuote=Inventory.reviewBulkSale(missing.parts,1,true,0,"t",value)
+table.remove(missing.parts,1)
+assert(not Inventory.confirmBulkSale(missing,"t",1,value) and #missing.parts==1)
+assert(not Inventory.reviewBulkSale(inventory.parts,1,"true",0,"t",value))
+assert(not Inventory.reviewBulkSale(inventory.parts,0,true,0,"t",value))
+assert(not Inventory.reviewBulkSale(inventory.parts,9,true,0,"t",value))
+assert(not Inventory.reviewBulkSale({},1,true,0,"t",value))
+local cap={parts={}}
+for i=1,265 do table.insert(cap.parts,part("s"..i,1,"Standard",20)) end
+cap.bulkSaleQuote=Inventory.reviewBulkSale(cap.parts,1,true,0,"cap",value)
+assert(#cap.bulkSaleQuote.items==265 and cap.bulkSaleQuote.total==2650)
+assert(Inventory.confirmBulkSale(cap,"cap",299,value)==265 and #cap.parts==0)
+print("Server bulk sale reviews, mutation defaults, stale state, expiration and replay passed")
+local unusual=part("odd",1,"Standard",20); unusual.mutationMultiplier=6
+assert(not Inventory.reviewBulkSale({unusual},1,true,0,"t",value), "Inconsistent Standard multiplier must not be included by the safer default")
+assert(Inventory.reviewBulkSale({unusual},1,false,0,"t",value))
+local corrupt={parts={part("v",1,"Standard",20)}}
+corrupt.bulkSaleQuote=Inventory.reviewBulkSale(corrupt.parts,1,true,0,"t",value)
+corrupt.bulkSaleQuote.total=999
+assert(not Inventory.confirmBulkSale(corrupt,"t",1,value) and #corrupt.parts==1, "Mismatch must be detected before removal")
+local includeMutations={parts={part("shiny",1,"Golden",60),part("protected",1,"Standard",20,true),part("high",2,"Standard",20)}}
+includeMutations.bulkSaleQuote=Inventory.reviewBulkSale(includeMutations.parts,1,false,0,"all",value)
+local soldAll,cashAll=Inventory.confirmBulkSale(includeMutations,"all",1,value)
+assert(soldAll==1 and cashAll==30 and #includeMutations.parts==2 and includeMutations.parts[1].id=="protected")

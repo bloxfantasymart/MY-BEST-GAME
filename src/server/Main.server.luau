@@ -581,10 +581,22 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local count=Inventory.bulkSetLocked(s.parts,s.creatures,value.items,value.locked)
   if not count then send(player,"Batch protection cancelled: selection changed or was invalid.")
   else send(player,(value.locked and "Protected " or "Unprotected ")..count.." selected items.") end
- elseif action=="bulkSellParts" and type(value)=="table" then
-  local count,total=Inventory.bulkSell(s.parts,value.rarity,value.ids,Config.PartSellValue)
-  if not count then send(player,"Bulk sale cancelled: the selected items changed or were invalid.")
-  else s.cash+=total; Tutorial.reconcile(s.tutorial,s.parts); send(player,"Sold "..count.." parts for $"..total..".") end
+ elseif action=="bulkSaleReview" and type(value)=="table" then
+  local requestId=value.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  s.bulkSaleQuote=nil
+  local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+  local quote,reason
+  if ok then quote,reason=Inventory.reviewBulkSale(s.parts,value.rarity,value.standardOnly,os.clock(),token,Config.PartSellValue)
+  else reason="Could not create a bulk sale review. Try again." end
+  s.bulkSaleQuote=quote
+  remote:FireClient(player,{bulkSaleReview=true,requestId=requestId,quote=quote,reason=reason})
+ elseif action=="cancelBulkSaleReview" then
+  s.bulkSaleQuote=nil
+ elseif action=="bulkSaleConfirm" then
+  local count,total=Inventory.confirmBulkSale(s,value,os.clock(),Config.PartSellValue)
+  if not count then send(player,total); return end
+  s.cash+=total; Tutorial.reconcile(s.tutorial,s.parts); send(player,"Sold "..count.." parts for $"..total..".")
  elseif action=="sellPart" then
   local index,item=findById(s.parts,value)
   if index and Inventory.canConsume(item) then table.remove(s.parts,index); Tutorial.reconcile(s.tutorial,s.parts); local amount=Config.PartSellValue(item); s.cash+=amount; send(player,"Part sold for $"..amount..".")

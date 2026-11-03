@@ -57,4 +57,48 @@ function Inventory.bulkSell(parts,rarity,ids,valueFn)
  for i=#parts,1,-1 do if selected[parts[i].id] then table.remove(parts,i) end end
  return count,total
 end
+-- A quote freezes the exact part identities, displayed attributes and proceeds.
+-- It is session-only, expires, and is consumed even on a failed confirmation.
+Inventory.BulkQuoteLifetime=300
+function Inventory.reviewBulkSale(parts,rarity,standardOnly,now,token,valueFn)
+ if type(rarity)~="number" or rarity~=rarity or rarity%1~=0 or rarity<1 or rarity>8
+  or type(standardOnly)~="boolean" or type(token)~="string" or #token<1 or #token>64 then
+  return nil,"Invalid bulk sale review request."
+ end
+ local quote={token=token,expires=now+Inventory.BulkQuoteLifetime,rarity=rarity,standardOnly=standardOnly,items={},total=0}
+ for _,item in ipairs(parts) do
+  local mutation=item.mutation or "Standard"
+  if item.locked~=true and item.rarity<=rarity and (not standardOnly or (mutation=="Standard" and (item.mutationMultiplier or 1)==1)) then
+   local value=valueFn(item)
+   table.insert(quote.items,{id=item.id,name=item.name,kind=item.kind,rarity=item.rarity,mutation=mutation,
+    multiplier=item.mutationMultiplier or 1,income=item.income,price=item.price or 10,value=value})
+   quote.total+=value
+  end
+ end
+ if #quote.items==0 then return nil,"No eligible parts match this bulk sale." end
+ return quote
+end
+function Inventory.confirmBulkSale(state,token,now,valueFn)
+ local quote=state.bulkSaleQuote; state.bulkSaleQuote=nil
+ if type(quote)~="table" or type(token)~="string" or token~=quote.token then return nil,"Review the bulk sale again." end
+ if now>=quote.expires then return nil,"Bulk sale review expired. Review again." end
+ local owned={}; for _,item in ipairs(state.parts) do owned[item.id]=item end
+ local selected={}; local count=0; local total=0
+ if #quote.items<1 or #quote.items>265 then return nil,"Bulk sale validation failed." end
+ for _,snapshot in ipairs(quote.items) do
+  local item=owned[snapshot.id]
+  if selected[snapshot.id] or not item or item.locked==true or item.name~=snapshot.name or item.kind~=snapshot.kind
+   or item.rarity~=snapshot.rarity or item.rarity>quote.rarity or (item.mutation or "Standard")~=snapshot.mutation
+   or (quote.standardOnly and ((item.mutation or "Standard")~="Standard" or (item.mutationMultiplier or 1)~=1))
+   or (item.mutationMultiplier or 1)~=snapshot.multiplier or item.income~=snapshot.income
+   or (item.price or 10)~=snapshot.price or valueFn(item)~=snapshot.value then
+   return nil,"Selected parts changed. Review the bulk sale again."
+  end
+  selected[snapshot.id]=true; count+=1; total+=snapshot.value
+ end
+ if total~=quote.total then return nil,"Bulk sale validation failed." end
+ -- No yields after validation; new parts not in the quote remain untouched.
+ for i=#state.parts,1,-1 do if selected[state.parts[i].id] then table.remove(state.parts,i) end end
+ return count,total
+end
 return Inventory
