@@ -50,7 +50,7 @@ local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.
 local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,backpackUpgrades=0,rareBlueprints=0,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
-local bagTab="All"; local selectedSell=nil; local confirmRebirth=false
+local bagTab="All"; local selectedSell=nil; local rebirthSelected=nil; local rebirthQuote=nil
 local bulkRarity=1; local confirmBulk=nil
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
 local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local craftConfirm=false
@@ -276,11 +276,40 @@ local function render()
  elseif mode=="rebirth" then
   title.Text="REBIRTH "..(state.rebirth or 0).." / 100"
   if state.rebirth>=100 then row("Maximum rebirth reached",nil) else
-   row("Cost: $"..state.rebirthCost.." | Sacrifice (unprotected, non-ascended): "..state.target.." Abomination",nil,Color3.fromRGB(70,75,105))
-   row("Rebirth resets cash; roll slots reset unless Keep Slots applies. Other items remain. Luck x"..string.format("%.2f",1.15^(state.rebirth+1)),nil,Color3.fromRGB(70,75,105))
-   row(confirmRebirth and "CONFIRM: RESET CASH AND SACRIFICE" or "REBIRTH (tap to review)",function()
-   if confirmRebirth then remote:FireServer("rebirth"); confirmRebirth=false else confirmRebirth=true; render() end
-  end,Color3.fromRGB(220,75,130))
+   local target=state.target.." Abomination"
+   row("REQUIRED: $"..state.rebirthCost.." AND "..target,nil,Color3.fromRGB(70,75,105))
+   row("Rebirth resets ALL wallet cash and normally resets roll slots. Pending bank cash, other inventory and stands remain.",nil,Color3.fromRGB(70,75,105))
+   row("Rebirth increases tier weights differently by rarity; see the catalog for exact current odds.",nil,Color3.fromRGB(70,75,105))
+   local candidates=0; local selected=nil
+   for _,creature in ipairs(state.creatures) do
+    if creature.name==target then
+     candidates+=1
+     local reason=creature.locked and "PROTECTED — unlock in backpack" or (creature.ascended and "ASCENDED — cannot sacrifice" or "SELECT")
+     if creature.id==rebirthSelected and not creature.locked and not creature.ascended then selected=creature end
+     row((creature.id==rebirthSelected and "✓ " or "")..(creature.blueprintApplied and "[BLUEPRINT] " or "")..creature.name.." Lv."..creature.level.." | "..(creature.stand==0 and "Unplaced" or "Stand "..creature.stand).." | "..reason,function()
+      if not creature.locked and not creature.ascended then rebirthSelected=creature.id; rebirthQuote=nil; render() end
+     end,creature.id==rebirthSelected and Color3.fromRGB(45,150,110) or Color3.fromRGB(70,75,105))
+    end
+   end
+   if candidates==0 then row("No matching creature owned. Assemble the required target first.",nil,Color3.fromRGB(150,65,65)) end
+   if selected then
+    row("SELECTED: Lv."..selected.level.." | base $"..string.format("%.4g",selected.income).."/s | "..(selected.blueprintApplied and "Blueprint boosted" or "No blueprint"),nil,Color3.fromRGB(70,75,105))
+    row("REVIEW SELECTED REBIRTH",function() rebirthQuote=nil; remote:FireServer("rebirthReview",selected.id); notice.Text="Requesting server review..." end,Color3.fromRGB(210,120,45))
+   end
+   if rebirthQuote and selected and rebirthQuote.id==selected.id then
+    local q=rebirthQuote
+    row("SERVER REVIEW — valid for 30 seconds; changes require another review.",nil,Color3.fromRGB(150,85,45))
+    row("SACRIFICE: "..q.name.." Lv."..q.level.." | "..(q.stand==0 and "Unplaced" or "Stand "..q.stand).." | "..(q.blueprint and "Blueprint boosted" or "No blueprint"),nil,Color3.fromRGB(150,65,65))
+    for _,kind in ipairs(Config.Types) do
+     local component=q.components[kind]
+     row(kind..": "..component.name.." ["..Config.Rarities[component.rarity].name.."] "..component.mutation.." x"..component.multiplier,nil,Color3.fromRGB(70,75,105))
+    end
+    row("RESET: ALL $"..math.floor(q.cash).." wallet cash | slots "..(q.keepSlots and "retained" or (q.slots.." → 1")).." | "..#q.offers.." unpurchased offers discarded",nil,Color3.fromRGB(150,65,65))
+    row("CONFIRM: SACRIFICE THIS CREATURE AND REBIRTH",function()
+     remote:FireServer("rebirthConfirm",q.token); rebirthQuote=nil; rebirthSelected=nil
+    end,Color3.fromRGB(200,65,85))
+    row("CANCEL REVIEW",function() rebirthQuote=nil; remote:FireServer("cancelRebirthReview"); render() end,Color3.fromRGB(70,75,105))
+   end
   end
  elseif mode=="upgrades" then
   title.Text="PLOT UPGRADES"
@@ -517,7 +546,7 @@ end
 rewards.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="rewards"; panel.Visible=true; render() end)
 slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgrades"; panel.Visible=true; render() end)
 travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
-rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; confirmRebirth=false; mode="rebirth"; panel.Visible=true; render() end)
+rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; rebirthSelected=nil; rebirthQuote=nil; mode="rebirth"; panel.Visible=true; render() end)
 bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; confirmBulk=nil; mode="bag"; panel.Visible=true; render() end)
 local function updateTutorial()
  local step=state.tutorial and state.tutorial.step or 7
@@ -551,6 +580,10 @@ local function updateEvent(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.rebirthQuote then
+  if mode=="rebirth" and panel.Visible and rebirthSelected==data.rebirthQuote.id then rebirthQuote=data.rebirthQuote; render() end
+  return
+ end
  if data.oddsSnapshot then
   catalogOdds=data.odds; if mode=="catalog" and panel.Visible then render() end
   return

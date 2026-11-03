@@ -27,6 +27,7 @@ local Blueprints = require(script.Parent.Services.Blueprints)
 local Crafting = require(script.Parent.Services.Crafting)
 local ShutdownGate = require(script.Parent.Services.ShutdownGate)
 local RollOdds = require(script.Parent.Services.RollOdds)
+local Rebirth = require(script.Parent.Services.Rebirth)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
@@ -575,16 +576,21 @@ remote.OnServerEvent:Connect(function(player, action, value)
    if s.cash>=cost then s.cash-=cost; creature.level+=1; if creature.stand>0 then refreshStands(s) end; send(player,"Level upgraded!")
    else send(player,"Not enough cash to level up.") end
   end
- elseif action=="rebirth" then
-  if s.rebirth>=100 then send(player,"Maximum rebirth reached!"); return end
-  if not PassService.canRebirth(s.passes,s.keepSlotsEntitled) then send(player,"Keep Slots ownership could not be verified; try refreshing the shop before rebirthing."); return end
-  local target=Config.RebirthTarget(s.rebirth).." Abomination"
-  local index=nil
-  for i,c in ipairs(s.creatures) do if c.name==target and not c.ascended and Inventory.canConsume(c) then index=i; break end end
-  if s.cash<Config.RebirthCost(s.rebirth) or not index then send(player,"Rebirth requires the displayed cash and an unlocked, non-ascended target creature."); return end
+ elseif action=="rebirthReview" then
+  s.rebirthQuote=nil
+  local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+  if not ok then send(player,"Could not create a rebirth review. Try again."); return end
+  local quote,reason=Rebirth.review(s,value,PassService.canRebirth(s.passes,s.keepSlotsEntitled),PassService.keepSlots(s.passes,s.keepSlotsEntitled),os.clock(),token,Config.RebirthTarget,Config.RebirthCost)
+  if not quote then send(player,reason); return end
+  s.rebirthQuote=quote; remote:FireClient(player,{rebirthQuote=quote})
+ elseif action=="cancelRebirthReview" then
+  s.rebirthQuote=nil; send(player,"Rebirth review cancelled.")
+ elseif action=="rebirthConfirm" then
+  local index,quote=Rebirth.consume(s,value,PassService.canRebirth(s.passes,s.keepSlotsEntitled),PassService.keepSlots(s.passes,s.keepSlotsEntitled),os.clock(),Config.RebirthTarget,Config.RebirthCost)
+  if not index then send(player,quote); return end
   local sacrificed=table.remove(s.creatures,index)
   if sacrificed.stand>0 then refreshStands(s) end
-  s.cash=0; if not PassService.keepSlots(s.passes,s.keepSlotsEntitled) then s.slots=1 end; s.rolls={}; s.offerExpires=0; s.autoRolling=false; s.rebirth+=1; Season.addXP(s.season,100); Titles.apply(player.Character,s.rebirth,s.extras); Visuals.showRolls(s.plot,s.rolls,s.slots)
+  s.cash=0; if not quote.keepSlots then s.slots=1 end; s.rolls={}; s.offerExpires=0; s.autoRolling=false; s.rebirth+=1; Season.addXP(s.season,100); Titles.apply(player.Character,s.rebirth,s.extras); Visuals.showRolls(s.plot,s.rolls,s.slots)
   send(player,"Rebirth complete! New archetypes unlocked.")
  elseif action=="collect" then
   collect(player,s)
