@@ -7,10 +7,14 @@ local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Conf
 local AutoFill=require(ReplicatedStorage.Shared:WaitForChild("AutoFill"))
 local CraftMath=require(ReplicatedStorage.Shared:WaitForChild("CraftMath"))
 local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView"))
+local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
 local sounds={}
+local localSettings={mute=false,hideTint=false}
+local updateEvent
 local function playEffect(name)
+ if localSettings.mute then return end
  local id=Config.AudioIds[name]
  if type(id)~="number" or id<=0 then return end
  if not sounds[name] then
@@ -18,35 +22,58 @@ local function playEffect(name)
  end
  sounds[name]:Play()
 end
-local gui=Instance.new("ScreenGui"); gui.Name="BrainrotUI"; gui.ResetOnSpawn=false; gui.Parent=player:WaitForChild("PlayerGui")
+local gui=Instance.new("ScreenGui"); gui.Name="BrainrotUI"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=false; gui.Parent=player:WaitForChild("PlayerGui")
+local root=Instance.new("Frame"); root.Name="SafeArea"; root.Size=UDim2.fromScale(1,1); root.BackgroundTransparency=1; root.BorderSizePixel=0; root.Parent=gui
 local function round(frame)
  local corner=Instance.new("UICorner"); corner.CornerRadius=UDim.new(0,12); corner.Parent=frame
  local stroke=Instance.new("UIStroke"); stroke.Thickness=2; stroke.Color=Color3.fromRGB(28,25,53); stroke.Parent=frame
 end
 local function button(parent,text,size,pos,color)
  local b=Instance.new("TextButton"); b.Size=size; b.Position=pos; b.BackgroundColor3=color or Color3.fromRGB(105,70,220)
- b.Text=text; b.TextColor3=(b.BackgroundColor3.R*0.299+b.BackgroundColor3.G*0.587+b.BackgroundColor3.B*0.114)>0.68 and Color3.fromRGB(22,24,45) or Color3.new(1,1,1); b.Font=Enum.Font.GothamBold; b.TextSize=16; b.TextWrapped=true; b.Parent=parent; round(b); return b
+ b.Text=text; b.TextScaled=true; local limit=Instance.new("UITextSizeConstraint"); limit.MinTextSize=10; limit.MaxTextSize=16; limit.Parent=b; b.TextColor3=(b.BackgroundColor3.R*0.299+b.BackgroundColor3.G*0.587+b.BackgroundColor3.B*0.114)>0.68 and Color3.fromRGB(22,24,45) or Color3.new(1,1,1); b.Font=Enum.Font.GothamBold; b.TextSize=16; b.TextWrapped=true; b.Parent=parent; round(b); return b
 end
-local hud=button(gui,"Loading...",UDim2.new(0.4,0,0,55),UDim2.new(0.02,0,0,8),Color3.fromRGB(38,42,72))
+local hud=button(root,"Loading...",UDim2.new(0.4,0,0,55),UDim2.new(0.02,0,0,8),Color3.fromRGB(38,42,72))
 hud.Activated:Connect(function() remote:FireServer("collect") end)
-local bag=button(gui,"BACKPACK",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,8))
-local slots=button(gui,"UPGRADES",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,62),Color3.fromRGB(230,135,40))
+local bag=button(root,"BACKPACK",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,8))
+local slots=button(root,"UPGRADES",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,62),Color3.fromRGB(230,135,40))
 
-local travel=button(gui,"TRAVEL",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,170),Color3.fromRGB(39,145,180))
-local rewards=button(gui,"REWARDS",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,224),Color3.fromRGB(66,155,115))
-local rebirth=button(gui,"REBIRTH",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,116),Color3.fromRGB(218,65,135))
-local eventLabel=Instance.new("TextLabel"); eventLabel.BackgroundTransparency=1; eventLabel.Size=UDim2.new(1,-155,0,28); eventLabel.Position=UDim2.new(0.02,0,0,98); eventLabel.TextColor3=Color3.fromRGB(255,225,80); eventLabel.TextStrokeTransparency=0; eventLabel.Font=Enum.Font.GothamBold; eventLabel.TextScaled=true; eventLabel.Parent=gui
-local notice=Instance.new("TextLabel"); notice.BackgroundTransparency=1; notice.Size=UDim2.new(1,-155,0,30); notice.Position=UDim2.new(0.02,0,0,67); notice.TextColor3=Color3.new(1,1,1); notice.TextStrokeTransparency=0; notice.Font=Enum.Font.GothamBold; notice.TextScaled=true; notice.Parent=gui
+local travel=button(root,"TRAVEL",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,170),Color3.fromRGB(39,145,180))
+local rewards=button(root,"REWARDS",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,224),Color3.fromRGB(66,155,115))
+local rebirth=button(root,"REBIRTH",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,116),Color3.fromRGB(218,65,135))
+local eventLabel=Instance.new("TextLabel"); eventLabel.BackgroundTransparency=1; eventLabel.Size=UDim2.new(1,-155,0,28); eventLabel.Position=UDim2.new(0.02,0,0,98); eventLabel.TextColor3=Color3.fromRGB(255,225,80); eventLabel.TextStrokeTransparency=0; eventLabel.Font=Enum.Font.GothamBold; eventLabel.TextScaled=true; eventLabel.Parent=root
+local notice=Instance.new("TextLabel"); notice.BackgroundTransparency=1; notice.Size=UDim2.new(1,-155,0,30); notice.Position=UDim2.new(0.02,0,0,67); notice.TextColor3=Color3.new(1,1,1); notice.TextStrokeTransparency=0; notice.Font=Enum.Font.GothamBold; notice.TextScaled=true; notice.Parent=root
 local guidance=Instance.new("TextLabel"); guidance.Size=UDim2.new(1,-155,0,42); guidance.Position=UDim2.new(0.02,0,0,130)
 guidance.BackgroundColor3=Color3.fromRGB(105,75,30); guidance.TextColor3=Color3.new(1,1,1); guidance.TextWrapped=true
-guidance.Font=Enum.Font.GothamBold; guidance.TextSize=14; guidance.Visible=false; guidance.Parent=gui; round(guidance)
+guidance.Font=Enum.Font.GothamBold; guidance.TextSize=14; guidance.TextScaled=true; guidance.Visible=false; guidance.Parent=root; local guideLimit=Instance.new("UITextSizeConstraint"); guideLimit.MinTextSize=10; guideLimit.MaxTextSize=14; guideLimit.Parent=guidance; round(guidance)
 local guideHighlight=Instance.new("Highlight"); guideHighlight.Name="TutorialTarget"; guideHighlight.FillColor=Color3.fromRGB(255,220,60)
 guideHighlight.OutlineColor=Color3.new(1,1,1); guideHighlight.FillTransparency=0.65; guideHighlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; guideHighlight.Enabled=false; guideHighlight.Parent=workspace
-local panel=Instance.new("Frame"); panel.Size=UDim2.new(0.85,0,0.68,0); panel.Position=UDim2.new(0.075,0,0.2,0); panel.BackgroundColor3=Color3.fromRGB(37,39,70); panel.Visible=false; panel.Parent=gui; round(panel)
-local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.BackgroundTransparency=1; title.TextColor3=Color3.new(1,1,1); title.Font=Enum.Font.GothamBold; title.TextSize=20; title.Parent=panel
+local panel=Instance.new("Frame"); panel.Size=UDim2.new(0.85,0,0.68,0); panel.Position=UDim2.new(0.075,0,0.2,0); panel.BackgroundColor3=Color3.fromRGB(37,39,70); panel.Visible=false; panel.Parent=root; round(panel)
+local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.BackgroundTransparency=1; title.TextColor3=Color3.new(1,1,1); title.Font=Enum.Font.GothamBold; title.TextSize=20; title.TextScaled=true; title.TextWrapped=true; title.Parent=panel
+local titleLimit=Instance.new("UITextSizeConstraint"); titleLimit.MinTextSize=10; titleLimit.MaxTextSize=20; titleLimit.Parent=title
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
+local render
+local function applyLayout()
+ local size=root.AbsoluteSize
+ if size.X<1 or size.Y<1 then return end
+ local metrics=UILayout.main(size.X,size.Y)
+ local nav={bag,slots,rebirth,travel,rewards}
+ for i,control in ipairs(nav) do
+  control.Size=UDim2.fromOffset(metrics.navWidth,metrics.navHeight)
+  control.Position=UDim2.fromOffset(metrics.navX,metrics.margin+(i-1)*(metrics.navHeight+metrics.gap))
+ end
+ hud.Size=UDim2.fromOffset(metrics.contentWidth,metrics.hudHeight); hud.Position=UDim2.fromOffset(metrics.margin,metrics.margin)
+ local noticeY=metrics.margin+metrics.hudHeight+metrics.gap
+ notice.Size=UDim2.fromOffset(metrics.contentWidth,metrics.lineHeight); notice.Position=UDim2.fromOffset(metrics.margin,noticeY)
+ eventLabel.Size=UDim2.fromOffset(metrics.contentWidth,metrics.lineHeight); eventLabel.Position=UDim2.fromOffset(metrics.margin,noticeY+metrics.lineHeight+metrics.gap)
+ guidance.Size=UDim2.fromOffset(metrics.contentWidth,math.min(42,math.max(1,size.Y-noticeY-2*metrics.lineHeight-2*metrics.gap)))
+ guidance.Position=UDim2.fromOffset(metrics.margin,noticeY+2*metrics.lineHeight+2*metrics.gap)
+ panel.ZIndex=5; panel.AnchorPoint=Vector2.new(0.5,0.5); panel.Position=UDim2.fromScale(0.5,0.5); panel.Size=UDim2.fromOffset(metrics.panelWidth,metrics.panelHeight)
+ if panel.Visible and render then task.defer(function() if panel.Visible then render() end end) end
+end
+root:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyLayout)
+applyLayout()
 local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,backpackUpgrades=0,rareBlueprints=0,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
@@ -62,7 +89,7 @@ local catalogOdds=nil; local catalogRarity=0; local catalogUnlockedOnly=false
 local catalogQuery=""; local catalogDraft=""; local catalogPage=1
 local adminData=nil; local adminTarget=nil; local adminAmount="1000"; local adminCatalog=1; local adminKind=1; local pendingAdmin=nil
 local function row(text, callback, color)
- local b=button(list,text,UDim2.new(1,-10,0,50),UDim2.new(),color)
+ local b=button(list,text,UDim2.new(1,-10,0,UILayout.rowHeight(text,math.max(200,panel.AbsoluteSize.X))),UDim2.new(),color)
  rowOrder+=1; b.LayoutOrder=rowOrder
  if callback then b.Activated:Connect(callback) end
  return b
@@ -91,7 +118,7 @@ local function refreshTimedLabels()
  if panel.Visible and mode=="income" then updateIncomeLabels() end
  if panel.Visible and mode=="roll" then title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s" end
 end
-local function render()
+render=function()
  hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0)
  if not panel.Visible then return end
  local previousScroll=list.CanvasPosition
@@ -381,6 +408,7 @@ local function render()
   local odds={}; for i=4,#Config.Rarities do table.insert(odds,Config.Rarities[i].name.." "..string.format("%.2f%%",100*Config.Rarities[i].weight/total)) end
   row("60m Epic+ gift tier odds: "..table.concat(odds,", ")..". Standard mutation; any rebirth.",nil,Color3.fromRGB(70,75,105))
   if state.isAdmin then row("DEVELOPER ADMIN",function() pendingAdmin=nil; mode="admin"; list.CanvasPosition=Vector2.zero; remote:FireServer("adminOpen",adminTarget); render() end,Color3.fromRGB(155,65,65)) end
+  row("ACCESSIBILITY SETTINGS",function() mode="settings"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
   row("HOW TO PLAY",function() mode="help"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
  elseif mode=="season" then
   title.Text="FREE SEASON TRACK"
@@ -450,6 +478,24 @@ local function render()
     end
    else row("Loading player list...",nil,Color3.fromRGB(70,75,105)) end
   end
+ elseif mode=="settings" then
+  title.Text="ACCESSIBILITY — THIS SESSION"
+  local reduced=player:GetAttribute("ReduceDisplayMotion")==true
+  row("REDUCE DISPLAY MOTION: "..(reduced and "ON" or "OFF").." (idle movement, rainbow cycling and display particles)",function()
+   player:SetAttribute("ReduceDisplayMotion",not reduced); render()
+  end,Color3.fromRGB(60,120,180))
+  row("MUTE GAME SOUND EFFECTS: "..(localSettings.mute and "ON" or "OFF"),function()
+   localSettings.mute=not localSettings.mute
+   if localSettings.mute then for _,sound in pairs(sounds) do sound:Stop() end end
+   render()
+  end,Color3.fromRGB(60,120,180))
+  row("HIDE EVENT COLOR TINT: "..(localSettings.hideTint and "ON" or "OFF"),function()
+   localSettings.hideTint=not localSettings.hideTint
+   if updateEvent then updateEvent(state.eventFlags) end
+   render()
+  end,Color3.fromRGB(60,120,180))
+  row("These settings are local to this play session and do not affect gameplay or other players. They reset when changing places or rejoining.",nil,Color3.fromRGB(70,75,105))
+  row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="help" then
   title.Text="HOW TO PLAY"
   row("1. At your red roll station, pull the lever and buy one Head, Chest, Arms and Legs.",nil,Color3.fromRGB(70,75,105))
@@ -571,7 +617,8 @@ task.spawn(function()
  while true do task.wait(2); if loaded then updateTutorial() end end
 end)
 local tint=Instance.new("ColorCorrectionEffect"); tint.Name="BrainrotEventTint"; tint.Enabled=false; tint.Parent=Lighting
-local function updateEvent(flags)
+updateEvent=function(flags)
+ if localSettings.hideTint then tint.Enabled=false; return end
  if not flags then return end
  if flags.eclipse then tint.TintColor=Color3.fromRGB(255,170,175); tint.Enabled=true
  elseif flags.storm then tint.TintColor=Color3.fromRGB(255,235,155); tint.Enabled=true
