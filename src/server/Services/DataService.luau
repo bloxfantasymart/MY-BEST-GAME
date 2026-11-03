@@ -77,6 +77,9 @@ local function validProfile(data)
  if data.luckUntil~=nil and (not finite(data.luckUntil,0,1e12) or data.luckUntil%1~=0) then return false end
  if data.lastLogout~=nil and (not finite(data.lastLogout,0,1e12) or data.lastLogout%1~=0) then return false end
  if data.lastOfflineAward~=nil and not finite(data.lastOfflineAward,0,1e300) then return false end
+ if data.lastOfflineSeconds~=nil and (not finite(data.lastOfflineSeconds,0,86400) or data.lastOfflineSeconds%1~=0) then return false end
+ if data.lastOfflineRate~=nil and not finite(data.lastOfflineRate,0,1e300) then return false end
+ if data.lastOfflineCapped~=nil and type(data.lastOfflineCapped)~="boolean" then return false end
  if data.progress~=nil then
   local p=data.progress
   if type(p)~="table" or not finite(p.dailyLastDay,-1,1e9) or p.dailyLastDay%1~=0

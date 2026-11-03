@@ -8,8 +8,10 @@ end
 local database = {}
 local store = {}
 local pauseNextStore=false
+local retryNextTransform=false
 function store:UpdateAsync(key, callback)
  if pauseNextStore then pauseNextStore=false; coroutine.yield("store") end
+ if retryNextTransform then retryNextTransform=false; callback(clone(database[key])) end
  local newValue = callback(clone(database[key]))
  if newValue ~= nil then database[key] = clone(newValue) end
  return clone(newValue)
@@ -243,3 +245,24 @@ assert(a.save(515,seasonFull,true)); seasonFull=b.load(515); assert(seasonFull a
 database.player_515.extras.standardBoxes=101; assert(a.load(515)==nil)
 database.player_515.extras.standardBoxes=1; database.player_515.parts[266]=item("overflow","Head"); assert(a.load(515)==nil)
 print("Season crate and 265-part persistence limits passed")
+
+-- The offline receipt and credit come from the successfully committed acquisition,
+-- even if Roblox invokes the transform more than once against the same old record.
+database.player_516={version=1,cash=0,pending=5,slots=1,rebirth=0,parts={},creatures={{id="offline",name="Dirt Boy Abomination",income=10,level=1,stand=1,components=clone(complete)}},lastLogout=100}
+local calls=0
+local function offlineAcquire(data)
+ calls+=1
+ return Progression.applyOffline(data,200,function(c) return c.income end)
+end
+retryNextTransform=true
+local receipt=a.load(516,offlineAcquire)
+assert(calls==2 and receipt.pending==255 and receipt.lastOfflineAward==250 and receipt.lastOfflineSeconds==100 and receipt.lastOfflineRate==2.5 and not receipt.lastOfflineCapped)
+assert(database.player_516.pending==255 and database.player_516.lastLogout==0)
+assert(a.save(516,receipt,true))
+local noReplay=b.load(516,offlineAcquire)
+assert(noReplay and noReplay.pending==255 and noReplay.lastOfflineAward==0 and noReplay.lastOfflineSeconds==0)
+assert(b.save(516,noReplay,true))
+database.player_516.lastOfflineSeconds=86401; assert(a.load(516)==nil)
+database.player_516.lastOfflineSeconds=1; database.player_516.lastOfflineRate=-1; assert(a.load(516)==nil)
+database.player_516.lastOfflineRate=1; database.player_516.lastOfflineCapped="true"; assert(a.load(516)==nil)
+print("Atomic offline receipt, transform retry and metadata validation tests passed")

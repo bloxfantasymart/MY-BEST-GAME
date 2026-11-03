@@ -79,7 +79,7 @@ end
 root:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyLayout)
 applyLayout()
 local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,backpackUpgrades=0,rareBlueprints=0,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
-local loaded=false
+local loaded=false; local offlineShown=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
 local bulkRarity=1; local confirmBulk=nil
@@ -473,6 +473,17 @@ render=function()
   row("FUSION FORGE (REBIRTH 15+)",function() remote:FireServer("teleport","forge"); panel.Visible=false end,Color3.fromRGB(175,120,45))
   row("PLOT THEMES",function() mode="themes"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,130,160))
   row("OPEN GAMEPASS SHOP",function() mode="shop"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(180,65,160))
+ elseif mode=="offline" then
+  title.Text="WELCOME BACK — OFFLINE EARNINGS"
+  local report=state.offlineReport
+  if report then
+   row("$"..report.amount.." WAS ALREADY ADDED TO YOUR PENDING BANK",nil,Color3.fromRGB(52,170,105))
+   row("Counted away time: "..formatDuration(report.seconds or 0)..(report.capped and " (24-hour cap applied)" or " (maximum 24 hours)"),nil,Color3.fromRGB(70,75,105))
+   row("Offline rate at departure: $"..string.format("%.4g",report.rate or 0).."/s (25% of eligible normal stand income).",nil,Color3.fromRGB(70,75,105))
+   row("Includes placed creature levels, adjacent ascension bonuses and Sigma Statue. Excludes events, VIP and offline EXP; earnings round down to whole dollars.",nil,Color3.fromRGB(70,75,105))
+   row("This is a receipt, not another claim. Your pending bank may have changed since you returned. A failed departure save or crash can prevent offline earnings.",nil,Color3.fromRGB(70,75,105))
+  else row("No offline earnings were recorded on this arrival.",nil,Color3.fromRGB(70,75,105)) end
+  row("GOT IT",function() panel.Visible=false end,Color3.fromRGB(60,120,180))
  elseif mode=="income" then
   title.Text="PLOT INCOME"
   incomeLabels.online=row("",nil,Color3.fromRGB(52,170,105))
@@ -481,6 +492,7 @@ render=function()
   incomeLabels.bonuses=row("",nil,Color3.fromRGB(70,75,105))
   row("Normal rate includes level, neighboring ascension boosts and the Sigma Statue. Online rate includes active events and VIP.",nil,Color3.fromRGB(70,75,105))
   row("Offline earnings require a successful departure save and exclude events, VIP and EXP. Rates are estimates; server delays may reduce actual online income.",nil,Color3.fromRGB(70,75,105))
+  if state.offlineReport then row("VIEW THIS SESSION'S OFFLINE RECEIPT",function() mode="offline"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180)) end
   row("COLLECT PENDING CASH",function() remote:FireServer("collect") end,Color3.fromRGB(52,170,105))
   row("BACK TO UPGRADES",function() mode="upgrades"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
   updateIncomeLabels()
@@ -849,6 +861,11 @@ remote.OnClientEvent:Connect(function(data)
  if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false; craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; forgeConfirm=false; forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft="" end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
+ if data.offlineReport and not offlineShown then
+  offlineShown=true
+  if not panel.Visible then mode="offline"; list.CanvasPosition=Vector2.zero; panel.Visible=true
+  else notice.Text="Welcome back! Offline earnings were added to your bank. View the receipt in Plot Income." end
+ end
  requestRender()
 end)
 

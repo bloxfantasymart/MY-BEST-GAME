@@ -20,11 +20,12 @@ local profile={pending=5,lastLogout=100,creatures={{stand=1,income=10},{stand=0,
 local income=function(c) return c.income end
 Progression.applyOffline(profile,100+100,income)
 assert(profile.pending==255 and profile.lastLogout==0 and profile.lastOfflineAward==250)
+assert(profile.lastOfflineSeconds==100 and profile.lastOfflineRate==2.5 and not profile.lastOfflineCapped)
 Progression.applyOffline(profile,100+200,income)
-assert(profile.pending==255 and profile.lastOfflineAward==0, "Offline interval cannot pay twice")
+assert(profile.pending==255 and profile.lastOfflineAward==0 and profile.lastOfflineSeconds==0 and profile.lastOfflineRate==0 and not profile.lastOfflineCapped, "Offline interval cannot pay twice")
 profile.lastLogout=100
 Progression.applyOffline(profile,100+200000,income)
-assert(profile.lastOfflineAward==216000, "Offline time is capped at 24 hours")
+assert(profile.lastOfflineAward==216000 and profile.lastOfflineSeconds==86400 and profile.lastOfflineCapped, "Offline time is capped at 24 hours")
 local fridayBefore=LiveEvents.at(86400+16*3600+59*60)
 local fridayAfter=LiveEvents.at(86400+17*3600)
 local sundayLate=LiveEvents.at(3*86400+23*3600+59*60)
@@ -39,3 +40,11 @@ LiveEvents.applyOverride(forced,"Storm"); assert(forced.storm)
 local unaffected=LiveEvents.at(1200)
 LiveEvents.applyOverride(unaffected,"BadEvent"); assert(not unaffected.storm)
 print("Daily progression, offline earnings, and UTC event tests passed")
+
+local exact={pending=0,lastLogout=10,creatures={}}
+Progression.applyOffline(exact,86410,income,function() return 12 end)
+assert(exact.lastOfflineSeconds==86400 and not exact.lastOfflineCapped and exact.lastOfflineRate==3 and exact.lastOfflineAward==259200)
+local rollback={pending=5,lastLogout=100,creatures={}}
+Progression.applyOffline(rollback,99,income)
+assert(rollback.pending==5 and rollback.lastOfflineAward==0 and rollback.lastOfflineSeconds==0 and rollback.lastLogout==0)
+print("Offline receipt, cap boundary and clock rollback tests passed")

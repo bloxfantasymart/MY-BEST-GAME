@@ -55,9 +55,10 @@ function Progression.claimQuest(progress,key,now)
 end
 function Progression.applyOffline(profile,now,incomeFn,totalFn)
  local last=profile.lastLogout or 0
- profile.lastOfflineAward=0
+ profile.lastOfflineAward=0; profile.lastOfflineSeconds=0; profile.lastOfflineRate=0; profile.lastOfflineCapped=false
  if last>0 and now>last then
-  local seconds=math.min(now-last,86400)
+  local away=now-last
+  local seconds=math.min(away,86400)
   local total=0
   if totalFn then total=totalFn(profile.creatures,incomeFn)
   else
@@ -65,9 +66,11 @@ function Progression.applyOffline(profile,now,incomeFn,totalFn)
     if creature.stand>0 then total+=incomeFn(creature) end
    end
   end
+  local rate=total*0.25
   local reward=math.floor(total*seconds*0.25)
   profile.pending+=reward
-  profile.lastOfflineAward=reward
+  profile.lastOfflineAward=reward; profile.lastOfflineSeconds=seconds
+  profile.lastOfflineRate=rate; profile.lastOfflineCapped=away>86400
  end
  -- This is saved in the same UpdateAsync that acquires the profile lease, so a
  -- retry/rejoin cannot award the same offline interval a second time.
