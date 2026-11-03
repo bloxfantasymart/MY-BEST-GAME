@@ -12,6 +12,12 @@ These steps are for a **private test experience**, not your public game. The aut
 6. Open **UPGRADES → PLOT THEMES** and select an unlocked theme; locked themes must not apply. Check the title above your avatar after respawning. Test inventory filtering, selling confirmation, paid leveling, travel and upgrades. Selling is permanent. Auto-roll requires rebirth 5 or the configured pass. Test it only after reading its warning: it spends cash. Move away from the station and check it stops.
 7. Open **REWARDS → HOW TO PLAY**, check the two plaza leaderboards and the event countdown. The leaderboards cover the current server only. Use Studio's device emulator and a real mobile device to check that buttons and text remain usable.
 
+### Creature visual identity and level changes
+
+In a private test place, assemble several creatures with different Head, Chest, Arms and Legs archetypes and mutations. Place them on stands and verify their procedural headwear, face, chest detail, hands and feet reflect the corresponding components. Check the rarity-colored label, level and stand income. Level a placed creature through levels 4→5 and 9→10: eyes should become neon at level 5 and a rarity-colored halo should appear at level 10, without duplication or loss of income. Check ascended crown, mutation effects, save/rejoin, changing stands, plot cleanup and the showcase hub. Cosmetic changes must not affect income or inventory.
+
+Repeat with streaming enabled, move across the 100-stud animation/effect threshold, and test multiple players on mobile and PC. Fill as many stands and hub booths as practical while monitoring memory, frame rate and network usage; extra geometric detail increases part count and distant geometry is not culled by this LOD. The bundled structural test uses Roblox API stubs and cannot check rendering, collision, streaming or live performance.
+
 ### Explicit rebirth review
 
 In a private test profile, prepare several matching target creatures with different levels, mutations, blueprint status and stand placement. Open **REBIRTH**, select one and request review. Verify the server review shows the exact chosen creature, components, total wallet cash to be reset, Keep Slots result and unpurchased offers. Cancel once and verify nothing changes; then confirm and check only the chosen creature is sacrificed, all wallet cash resets, pending bank and other creatures remain, and a sacrificed placed creature is removed from its stand. Check both confirmed Keep Slots and disabled/not-owned pass scenarios in a suitable private environment.

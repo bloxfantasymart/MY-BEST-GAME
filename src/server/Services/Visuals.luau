@@ -3,7 +3,10 @@
 local TweenService=game:GetService("TweenService")
 local Debris=game:GetService("Debris")
 local Config=require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
+local VisualStyle=require(script.Parent.VisualStyle)
 local Visuals={}
+Visuals.levelTier=VisualStyle.levelTier
+Visuals.compositeRarity=VisualStyle.compositeRarity
 local function block(parent,name,size,position,color,material)
  local p=Instance.new("Part")
  p.Name=name; p.Size=size; p.Position=position; p.Color=color; p.Material=material or Enum.Material.SmoothPlastic
@@ -127,14 +130,19 @@ function Visuals.collect(plot)
   Debris:AddItem(coin,0.8)
  end
 end
+local accents={
+ Color3.fromRGB(255,181,65),Color3.fromRGB(95,215,255),Color3.fromRGB(255,100,160),Color3.fromRGB(145,255,155),
+ Color3.fromRGB(195,145,255),Color3.fromRGB(255,225,110),Color3.fromRGB(100,245,220),Color3.fromRGB(235,150,105),
+}
+local function detail(model,name,size,base,offset,color,material)
+ return block(model,name,size,base+offset,color,material)
+end
 function Visuals.makeCreature(model,base,creature)
- if creature.ascended then
-  local crown=block(model,"Ascension crown",Vector3.new(3.4,0.25,3.4),base+Vector3.new(0,6.1,0),Color3.fromRGB(255,220,50),Enum.Material.Neon)
-  crown.Transparency=0.15
-  for _,x in ipairs({-1,0,1}) do
-   block(model,"Crown spike",Vector3.new(0.25,0.7,0.25),base+Vector3.new(x,6.45,-1.35),Color3.fromRGB(255,235,100),Enum.Material.Neon)
-  end
- end
+ local headStyle=VisualStyle.resolve(creature.components.Head.name)
+ local chestStyle=VisualStyle.resolve(creature.components.Chest.name)
+ local armsStyle=VisualStyle.resolve(creature.components.Arms.name)
+ local legsStyle=VisualStyle.resolve(creature.components.Legs.name)
+ local tier=VisualStyle.levelTier(creature.level)
  local shapes={
   {"Chest",Vector3.new(2.5,3,1.5),Vector3.new(0,2,0)},
   {"Head",Vector3.new(2,2,2),Vector3.new(0,4.5,0)},
@@ -150,12 +158,52 @@ function Visuals.makeCreature(model,base,creature)
   elseif item.mutation=="Void" then
    local fire=Instance.new("Fire"); fire.Color=Color3.fromRGB(135,65,255); fire.SecondaryColor=Color3.fromRGB(30,0,50); fire.Heat=0; fire.Size=3; fire.Parent=piece
   end
-  if shape[1]=="Head" then
-   -- Two neon eyes give the placeholder a readable face without external assets.
-   for _,x in ipairs({-0.45,0.45}) do
-    local eye=block(model,"Eye",Vector3.new(0.25,0.35,0.1),piece.Position+Vector3.new(x,0.1,-1.03),Color3.fromRGB(255,255,255),Enum.Material.Neon)
-    eye.Shape=Enum.PartType.Ball
-   end
+ end
+ -- Front-facing eyes, pupils and mouth are separate primitives, with a stable expression.
+ local eyeColor=tier>=2 and accents[headStyle.palette] or Color3.fromRGB(245,245,245)
+ local eyeMaterial=tier>=2 and Enum.Material.Neon or Enum.Material.SmoothPlastic
+ for _,x in ipairs({-0.45,0.45}) do
+  detail(model,"Eye",Vector3.new(0.4,headStyle.face==2 and 0.18 or 0.38,0.12),base,Vector3.new(x,4.62,-1.06),eyeColor,eyeMaterial)
+  detail(model,"Pupil",Vector3.new(0.12,0.15,0.07),base,Vector3.new(x,4.62,-1.14),Color3.fromRGB(25,25,35))
+ end
+ detail(model,"Mouth",Vector3.new(headStyle.face==3 and 0.8 or 0.5,headStyle.face==4 and 0.25 or 0.12,0.1),base,Vector3.new(0,4.05,-1.06),Color3.fromRGB(40,30,45))
+ local headColor=accents[headStyle.palette]
+ if headStyle.headwear==1 then
+  for _,x in ipairs({-0.95,0.95}) do detail(model,"Head ring",Vector3.new(0.18,0.2,2.2),base,Vector3.new(x,5.55,0),headColor,Enum.Material.Metal) end
+  for _,z in ipairs({-1,1}) do detail(model,"Head ring",Vector3.new(2.1,0.2,0.18),base,Vector3.new(0,5.55,z),headColor,Enum.Material.Metal) end
+ elseif headStyle.headwear==2 then
+  detail(model,"Antenna",Vector3.new(0.15,0.9,0.15),base,Vector3.new(0,5.95,0),headColor,Enum.Material.Metal)
+  local tip=detail(model,"Antenna tip",Vector3.new(0.35,0.35,0.35),base,Vector3.new(0,6.45,0),headColor,Enum.Material.Neon); tip.Shape=Enum.PartType.Ball
+ elseif headStyle.headwear==3 then
+  detail(model,"Visor",Vector3.new(1.7,0.35,0.18),base,Vector3.new(0,5.12,-1.12),headColor,Enum.Material.Neon)
+  detail(model,"Headband",Vector3.new(2.1,0.2,2.1),base,Vector3.new(0,5.45,0),headColor,Enum.Material.Metal)
+ elseif headStyle.headwear==4 then
+  for _,x in ipairs({-0.75,0.75}) do detail(model,"Horn",Vector3.new(0.28,0.75,0.28),base,Vector3.new(x,5.85,0),headColor,Enum.Material.Metal) end
+ elseif headStyle.headwear==5 then
+  detail(model,"Crown band",Vector3.new(2.1,0.22,2.1),base,Vector3.new(0,5.55,0),headColor,Enum.Material.Metal)
+  for _,x in ipairs({-0.7,0,0.7}) do detail(model,"Crown point",Vector3.new(0.2,0.5,0.2),base,Vector3.new(x,5.9,-0.85),headColor,Enum.Material.Neon) end
+ else
+  detail(model,"Cap brim",Vector3.new(2.2,0.18,2.4),base,Vector3.new(0,5.5,-0.15),headColor,Enum.Material.Metal)
+  detail(model,"Cap top",Vector3.new(1.6,0.45,1.6),base,Vector3.new(0,5.8,0),headColor,Enum.Material.Metal)
+ end
+ local chestColor=accents[chestStyle.palette]
+ detail(model,"Chest plate",Vector3.new(1.7,1.25,0.12),base,Vector3.new(0,2.15,-0.82),chestColor,Enum.Material.Metal)
+ local badgeWidth=chestStyle.chest%2==0 and 0.9 or 0.45
+ detail(model,"Chest insignia",Vector3.new(badgeWidth,0.25,0.1),base,Vector3.new(0,2.2,-0.91),Color3.fromRGB(245,245,255),Enum.Material.Neon)
+ for _,x in ipairs({-2.05,2.05}) do
+  detail(model,"Hand",Vector3.new(0.55,0.75,0.9),base,Vector3.new(x,2.5,0),accents[armsStyle.palette],armsStyle.limbs%2==0 and Enum.Material.Metal or Enum.Material.SmoothPlastic)
+ end
+ for _,x in ipairs({-0.5,0.5}) do
+  detail(model,"Foot",Vector3.new(0.8,0.35,1.3),base,Vector3.new(x,0.15,-0.1),accents[legsStyle.palette],legsStyle.limbs%2==0 and Enum.Material.Metal or Enum.Material.SmoothPlastic)
+ end
+ if tier>=3 then
+  detail(model,"Prestige halo",Vector3.new(2.8,0.12,2.8),base,Vector3.new(0,6.65,0),Config.Rarities[VisualStyle.compositeRarity(creature)].color,Enum.Material.Neon).Transparency=0.4
+ end
+ if creature.ascended then
+  local crown=detail(model,"Ascension crown",Vector3.new(3.4,0.25,3.4),base,Vector3.new(0,7.05,0),Color3.fromRGB(255,220,50),Enum.Material.Neon)
+  crown.Transparency=0.15
+  for _,x in ipairs({-1,0,1}) do
+   detail(model,"Ascension point",Vector3.new(0.25,0.55,0.25),base,Vector3.new(x,7.4,-1.35),Color3.fromRGB(255,235,100),Enum.Material.Neon)
   end
  end
 end

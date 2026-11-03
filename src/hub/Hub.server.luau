@@ -79,8 +79,10 @@ local function refreshBooth(booth)
    local base=booth.counter.Position+Vector3.new((i-2.5)*4,1.8,0)
    local model=Instance.new("Model"); model.Name="Showcase"; model.Parent=booth.displays
    Visuals.makeCreature(model,base,creature)
-   local anchor=block(model,"CaptionAnchor",Vector3.new(0.1,0.1,0.1),base+Vector3.new(0,5,0),Color3.new(1,1,1)); anchor.Transparency=1; anchor.CanCollide=false
-   caption(anchor,(creature.ascended and "ASCENDED " or "")..creature.name.."\nLv."..creature.level.." | $"..math.floor(Config.Income(creature)).."/s",1)
+   local anchor=block(model,"CaptionAnchor",Vector3.new(0.1,0.1,0.1),base+Vector3.new(0,7.5,0),Color3.new(1,1,1)); anchor.Transparency=1; anchor.CanCollide=false
+   local rarity=Config.Rarities[Visuals.compositeRarity(creature)]
+   local title=caption(anchor,(creature.ascended and "ASCENDED " or "")..creature.name.." ["..rarity.name.."]\nLv."..creature.level.." | $"..math.floor(Config.Income(creature)).."/s",1)
+   title.TextColor3=rarity.color; title.TextStrokeTransparency=0
    CollectionService:AddTag(model,"BrainrotDisplay")
   end
  end

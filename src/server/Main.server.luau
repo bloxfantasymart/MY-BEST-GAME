@@ -212,16 +212,18 @@ local function updateStand(s, n, rates)
  if rim then rim.Color=n<=s.standsUnlocked and Color3.fromRGB(255,238,135) or Color3.fromRGB(70,75,90) end
  local selected=nil
  for _,creature in ipairs(s.creatures) do if creature.stand==n then selected=creature; break end end
- if old and selected and old:GetAttribute("CreatureId")==selected.id then
+ if old and selected and old:GetAttribute("CreatureId")==selected.id and old:GetAttribute("VisualTier")==Visuals.levelTier(selected.level) then
   local caption=old:FindFirstChild("TextLabel",true)
-  if caption then caption.Text=(selected.ascended and "ASCENDED " or "")..selected.name.." Lv."..selected.level.."\n$"..math.floor(rates[n] or 0).."/s" end
+  if caption then caption.Text=(selected.ascended and "ASCENDED " or "")..selected.name.." ["..Config.Rarities[Visuals.compositeRarity(selected)].name.."] Lv."..selected.level.."\n$"..math.floor(rates[n] or 0).."/s" end
   return
  end
  if old then old:Destroy() end
  if not selected then return end
- local model=Instance.new("Model"); model.Name="Display"; model:SetAttribute("CreatureId",selected.id); model.Parent=stand
+ local model=Instance.new("Model"); model.Name="Display"; model:SetAttribute("CreatureId",selected.id); model:SetAttribute("VisualTier",Visuals.levelTier(selected.level)); model.Parent=stand
  Visuals.makeCreature(model,stand.Position+Vector3.new(0,1,0),selected)
- local caption=label(stand,(selected.ascended and "ASCENDED " or "")..selected.name.." Lv."..selected.level.."\n$"..math.floor(rates[n] or 0).."/s",7)
+ local rarity=Config.Rarities[Visuals.compositeRarity(selected)]
+ local caption=label(stand,(selected.ascended and "ASCENDED " or "")..selected.name.." ["..rarity.name.."] Lv."..selected.level.."\n$"..math.floor(rates[n] or 0).."/s",9)
+ caption.TextColor3=rarity.color; caption.TextStrokeTransparency=0
  caption.Parent.Adornee=stand; caption.Parent.Parent=model
  CollectionService:AddTag(model,"BrainrotDisplay")
 end
