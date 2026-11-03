@@ -11,7 +11,10 @@ source = module('src/shared/FusionRecipe.luau', 'FusionRecipe')
 fusion = (root / 'src/server/Services/Fusion.luau').read_text()
 fusion = fusion.replace('local ReplicatedStorage=game:GetService("ReplicatedStorage")\nlocal FusionRecipe=require(ReplicatedStorage.Shared:WaitForChild("FusionRecipe"))\n', '')
 source += 'local Fusion = (function()\n' + fusion + '\nend)()\n'
-source += module('src/server/Services/PlotEconomy.luau', 'PlotEconomy')
+source += module('src/shared/StandLayout.luau', 'StandLayout')
+economy = (root / 'src/server/Services/PlotEconomy.luau').read_text()
+economy = economy.replace('local ReplicatedStorage=game:GetService("ReplicatedStorage")\nlocal StandLayout=require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))\n', '')
+source += 'local PlotEconomy = (function()\n' + economy + '\nend)()\n'
 source += module('src/server/Services/Progression.luau', 'Progression')
 source += (root / 'tests/fusion_economy.luau').read_text()
 with tempfile.NamedTemporaryFile(mode='w', suffix='.luau', encoding='utf8') as file:

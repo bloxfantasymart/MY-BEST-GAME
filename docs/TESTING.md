@@ -12,6 +12,14 @@ These steps are for a **private test experience**, not your public game. The aut
 6. Open **UPGRADES → PLOT THEMES** and select an unlocked theme; locked themes must not apply. Check the title above your avatar after respawning. Test inventory filtering, selling confirmation, paid leveling, travel and upgrades. Selling is permanent. Auto-roll requires rebirth 5 or the configured pass. Test it only after reading its warning: it spends cash. Move away from the station and check it stops.
 7. Open **REWARDS → HOW TO PLAY**, check the two plaza leaderboards and the event countdown. The leaderboards cover the current server only. Use Studio's device emulator and a real mobile device to check that buttons and text remain usable.
 
+### Stand income review and explicit intent
+
+In a private server, place normal and ascended creatures next to one another, including row boundaries (stands 6 and 7 are not adjacent), corners, and a stand surrounded by four ascended neighbors. Review a placement or removal and compare the displayed normal total, selected-stand delta and other-stand deltas against the resulting plot income. Repeat with the Sigma Statue and with an active event or VIP: the estimate includes the statue but excludes event/VIP, and should not change the inventory before confirmation. Check protected creatures can still be placed. Test multiple pages, search, cancel and device layouts.
+
+Capture a place request and replay it after it succeeds: it must not remove the creature. Replay a remove request and it must not place it. Try invalid actions/IDs/stands, an occupied stand, a creature already on another stand, altered plot state, leaving the stand's proximity and rapid double taps; the server must reject invalid actions and settle income before real changes. Estimates are based on a snapshot and may change as levels rise; they are not a price quote. Automated math/intent tests do not simulate Roblox UI, physics, networking or concurrent players.
+
+Both places should be published from the same revision and old servers shut down; older clients do not send the new explicit stand action.
+
 ### Tutorial guidance and recovery
 
 In a private test profile, complete each server-verified step and confirm the one-time bonus, save/rejoin behavior and no repeat reward. During the four-part step, protect the only usable part of a required kind: the text should identify it and suggest unprotecting or replacing it, and the assembly stage should not be offered until all four types are usable. Protect and unprotect parts after reaching assembly, test batch protection, sale, gift parts and reload of older tutorial saves. If a successful assembly happens while the four-part step is active, both steps should advance correctly.

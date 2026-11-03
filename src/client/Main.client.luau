@@ -11,6 +11,7 @@ local CraftPicker=require(ReplicatedStorage.Shared:WaitForChild("CraftPicker"))
 local FusionRecipe=require(ReplicatedStorage.Shared:WaitForChild("FusionRecipe"))
 local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView"))
 local TutorialGuide=require(ReplicatedStorage.Shared:WaitForChild("TutorialGuide"))
+local StandLayout=require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
 local SeasonRewards=require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
@@ -97,7 +98,7 @@ local bagRarity=0; local bagMutation=0; local bagPlacement="All"
 local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local craftConfirm=false
 local craftKind="Head"; local craftPage=1; local craftQuery=""; local craftDraft=""; local craftSort="Newest"
 local forgePage=1; local forgeQuery=""; local forgeDraft=""
-local standPage=1; local standQuery=""; local standDraft=""; local standSort="Income"
+local standPage=1; local standQuery=""; local standDraft=""; local standSort="Income"; local standSelection=nil
 local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
 local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false
 local giftButtons={}
@@ -408,9 +409,33 @@ render=function()
    if c.stand==stand then occupant=c elseif c.stand==0 then table.insert(available,c) end
   end
   if occupant then
-   row("REMOVE FROM THIS STAND: "..(occupant.ascended and "ASCENDED " or "")..occupant.name.." Lv."..occupant.level.." #"..string.sub(occupant.id,-6),function() remote:FireServer("stand",{stand=stand,id=occupant.id}) end,Color3.fromRGB(185,100,35))
+   row("REVIEW REMOVAL: "..(occupant.ascended and "ASCENDED " or "")..occupant.name.." Lv."..occupant.level.." #"..string.sub(occupant.id,-6),function()
+    standSelection={id=occupant.id,action="remove"}; list.CanvasPosition=Vector2.zero; render()
+   end,Color3.fromRGB(185,100,35))
    row("Remove the current creature before placing another.",nil,Color3.fromRGB(70,75,105))
   else row("This stand is empty. Choose an unplaced creature below.",nil,Color3.fromRGB(70,75,105)) end
+  if standSelection then
+   local review=standSelection
+   local selected=InventoryView.find({},state.creatures,"creature",review.id)
+   local estimate,reason=StandLayout.preview(state.creatures,stand,review.id,review.action,Config.Income,state.extras and state.extras.sigmaStatue)
+   if not selected or not estimate then
+    standSelection=nil; row(reason or "Selected creature is no longer available.",nil,Color3.fromRGB(150,65,65))
+   else
+    local name=(selected.ascended and "ASCENDED " or "")..selected.name.." Lv."..selected.level.." #"..string.sub(selected.id,-6)
+    row("REVIEW "..string.upper(review.action)..": "..name,nil,Color3.fromRGB(60,120,180))
+    row("Estimated normal plot income: $"..string.format("%.4g",estimate.before).."/s → $"..string.format("%.4g",estimate.after).."/s ("..string.format("%+.4g",estimate.delta).."/s)",nil,Color3.fromRGB(70,75,105))
+    row("This stand: "..string.format("%+.4g",estimate.targetDelta).."/s | Other stands: "..string.format("%+.4g",estimate.neighborDelta).."/s. Includes ascension adjacency and Sigma Statue; excludes event/VIP bonuses.",nil,Color3.fromRGB(70,75,105))
+    for _,change in ipairs(estimate.changes) do
+     row("Stand "..change.stand..": $"..string.format("%.4g",change.before).."/s → $"..string.format("%.4g",change.after).."/s",nil,Color3.fromRGB(70,75,105))
+    end
+    row("Estimates use the latest received snapshot and may change with levels or the plot. The server validates the action.",nil,Color3.fromRGB(70,75,105))
+    row("CONFIRM "..string.upper(review.action).." ON STAND "..stand,function()
+     if standSelection~=review then return end
+     standSelection=nil; remote:FireServer("stand",{stand=stand,id=review.id,action=review.action}); notice.Text="Requesting stand change..."; render()
+    end,Color3.fromRGB(52,170,105))
+    row("CANCEL STAND REVIEW",function() standSelection=nil; render() end,Color3.fromRGB(70,75,105))
+   end
+  end
   searchField(standDraft,"Search creature names",function(v) standDraft=v end)
   row("APPLY CREATURE SEARCH"..(standQuery~="" and (": "..standQuery) or ""),function() standQuery=standDraft; standPage=1; render() end,Color3.fromRGB(60,120,180))
   row("SORT: "..standSort.." (tap to change)",function()
@@ -426,7 +451,7 @@ render=function()
    local c=entry.item
    row((c.locked and "[PROTECTED] " or "")..(c.ascended and "ASCENDED " or "")..c.name.." Lv."..c.level.." | $"..string.format("%.4g",entry.income).."/s #"..string.sub(c.id,-6),function()
     if occupant then notice.Text="Remove the current creature first."; return end
-    remote:FireServer("stand",{stand=stand,id=c.id})
+    standSelection={id=c.id,action="place"}; list.CanvasPosition=Vector2.zero; render()
    end,Config.Rarities[entry.rarity].color)
   end
   if #entries==0 then row("No unplaced creatures match. Creatures on other stands must be removed there first.",nil,Color3.fromRGB(70,75,105)) end
@@ -945,7 +970,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false; craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; forgeConfirm=false; forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft="" end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false; craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; forgeConfirm=false; forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  if data.offlineReport and not offlineShown then

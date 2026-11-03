@@ -33,6 +33,7 @@ local Rebirth = require(script.Parent.Services.Rebirth)
 local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
+local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
 remote.Parent = ReplicatedStorage
@@ -630,14 +631,10 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="stand" and type(value)=="table" then
   local n=value.stand
   if type(n)~="number" or n~=n or n%1~=0 or n<1 or n>s.standsUnlocked or not nearby(player,s.plot.stands[n]) then return end
-  local _,creature=findById(s.creatures,value.id)
-  if not creature then return end
-  if creature.stand==n then creature.stand=0
-  elseif creature.stand==0 then
-   for _, c in ipairs(s.creatures) do if c.stand==n then send(player,"This stand is occupied."); return end end
-   creature.stand=n; Tutorial.advance(s.tutorial,"place",s.parts)
-  else send(player,"Remove this creature from its current stand first."); return end
-  refreshStands(s); send(player,"Stand updated.")
+  local creature,reason=StandLayout.apply(s.creatures,n,value.id,value.action)
+  if not creature then send(player,reason); return end
+  if value.action=="place" then Tutorial.advance(s.tutorial,"place",s.parts) end
+  refreshStands(s); send(player,value.action=="place" and "Creature placed." or "Creature removed from stand.")
  elseif action=="level" then
   local creature,costOrReason=LevelUpgrade.execute(s,value,Config.LevelCost)
   if not creature then send(player,costOrReason); return end
