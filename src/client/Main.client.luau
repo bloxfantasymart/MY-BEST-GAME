@@ -10,6 +10,7 @@ local CraftMath=require(ReplicatedStorage.Shared:WaitForChild("CraftMath"))
 local CraftPicker=require(ReplicatedStorage.Shared:WaitForChild("CraftPicker"))
 local FusionRecipe=require(ReplicatedStorage.Shared:WaitForChild("FusionRecipe"))
 local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView"))
+local SeasonRewards=require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
@@ -93,6 +94,7 @@ local giftButtons={}
 local incomeLabels={}
 local catalogOdds=nil; local catalogRarity=0; local catalogUnlockedOnly=false
 local catalogQuery=""; local catalogDraft=""; local catalogPage=1
+local seasonPage=1
 local adminData=nil; local adminTarget=nil; local adminAmount="1000"; local adminCatalog=1; local adminKind=1; local pendingAdmin=nil
 local function row(text, callback, color)
  local b=button(list,text,UDim2.new(1,-10,0,UILayout.rowHeight(text,math.max(200,panel.AbsoluteSize.X))),UDim2.new(),color)
@@ -109,6 +111,8 @@ end
 local function questRewardTools(extras)
  row("USE 2x LUCK POTION (10 min) — "..(extras.doubleLuckPotions or 0).." owned",function() remote:FireServer("useDoubleLuckPotion") end,Color3.fromRGB(125,75,175))
  row("OPEN UNCOMMON MYSTERY BOX — "..(extras.uncommonBoxes or 0).." owned",function() remote:FireServer("openUncommonBox") end,Color3.fromRGB(60,145,150))
+ row("OPEN STANDARD ROLL CRATE — "..(extras.standardBoxes or 0).." owned",function() remote:FireServer("openStandardBox") end,Color3.fromRGB(60,145,150))
+ row("Free Standard Roll Crate: 80% Common, 20% Uncommon; uniform archetype within its tier and 25% per part type. Standard mutation; luck/rebirth do not affect odds.",nil,Color3.fromRGB(70,75,105))
  local count=0; for _,entry in ipairs(Config.Catalog) do if entry.rarity==2 then count+=1 end end
  row("Each free box gives one Standard Uncommon part. "..count.." archetypes and 4 part types are uniform (1 in "..(count*4).." per combination), regardless of luck or rebirth. Requires space.",nil,Color3.fromRGB(70,75,105))
 end
@@ -476,7 +480,7 @@ render=function()
    row(quest.label.."  "..value.."/"..quest.goal.." | "..quest.rewardLabel.." + "..quest.xp.." season XP — "..status,function() remote:FireServer("claimQuest",quest.key) end,Color3.fromRGB(90,80,150))
   end
   row("CATALOG & ROLL ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
-  row("OPEN FREE SEASON TRACK",function() mode="season"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(120,75,180))
+  row("OPEN FREE SEASON TRACK",function() seasonPage=1; mode="season"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(120,75,180))
   row("SESSION GIFTS — timers reset when you leave",nil,Color3.fromRGB(70,75,105))
   for _,gift in ipairs(Config.SessionGifts) do
    local b=row(giftText(gift),function() remote:FireServer("claimGift",gift.id) end,Color3.fromRGB(155,105,45))
@@ -495,11 +499,22 @@ render=function()
   local unlocked=math.floor(season.xp/100)
   row("Season XP: "..season.xp.." / 5000 | tiers unlocked: "..unlocked.." / 50",nil,Color3.fromRGB(70,75,105))
   row("Earn XP: +1 per part rolled, +20 per assembly, +100 per rebirth; daily quests award 50/75/100.",nil,Color3.fromRGB(70,75,105))
+  row("Permanent season part slots: +"..SeasonRewards.bonusSlots(season.claimed).." | +5 at claimed tiers 10, 30 and 50.",nil,Color3.fromRGB(70,75,105))
   local nextTier=season.claimed+1
   if nextTier<=50 then
-   local desc=nextTier%3==1 and ("$"..(nextTier*1000).." cash") or (nextTier%3==2 and "one 3x luck potion" or "two free-part vouchers")
-   row("TIER "..nextTier.." — "..desc.." — "..(nextTier<=unlocked and "CLAIM" or "LOCKED"),function() remote:FireServer("claimSeason") end,Color3.fromRGB(120,75,180))
+   local reward=SeasonRewards.reward(nextTier)
+   row("TIER "..nextTier.." — "..reward.label.." — "..(nextTier<=unlocked and "CLAIM" or "LOCKED"),function() remote:FireServer("claimSeason") end,Color3.fromRGB(120,75,180))
   else row("All 50 free tiers claimed!",nil,Color3.fromRGB(52,170,105)) end
+  local tiers={}; for i=1,50 do table.insert(tiers,i) end
+  local shown,current,pages=InventoryView.page(tiers,seasonPage,10); seasonPage=current
+  row("REWARD PREVIEW PAGE "..current.." / "..pages,nil,Color3.fromRGB(70,75,105))
+  if current>1 then row("PREVIOUS SEASON PAGE",function() seasonPage-=1; render() end,Color3.fromRGB(60,120,180)) end
+  if current<pages then row("NEXT SEASON PAGE",function() seasonPage+=1; render() end,Color3.fromRGB(60,120,180)) end
+  for _,tier in ipairs(shown) do
+   local reward=SeasonRewards.reward(tier)
+   local status=tier<=season.claimed and "CLAIMED" or (tier<=unlocked and "UNLOCKED (claim in order)" or "LOCKED")
+   row("TIER "..tier.." — "..reward.label.." — "..status,nil,Color3.fromRGB(70,75,105))
+  end
   row("Repeatable: roll 250 parts for one free-part voucher. Progress: "..season.rollProgress.." (claims: "..math.floor(season.rollProgress/250)..")",function() remote:FireServer("claimRepeatRolls") end,Color3.fromRGB(60,145,150))
   row("Permanent prototype track; no season reset or premium purchase. Free tiers are claimed in order.",nil,Color3.fromRGB(70,75,105))
   row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))

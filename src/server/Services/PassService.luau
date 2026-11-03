@@ -23,8 +23,8 @@ end
 function PassService.owned(states,key)
  return states[key]=="owned"
 end
-function PassService.capacity(states,upgrades)
- return 100+(upgrades or 0)*5+(PassService.owned(states,"Backpack") and 100 or 0)
+function PassService.capacity(states,upgrades,seasonBonus)
+ return 100+(upgrades or 0)*5+(seasonBonus or 0)+(PassService.owned(states,"Backpack") and 100 or 0)
 end
 function PassService.canAuto(states,rebirth)
  return rebirth>=5 or PassService.owned(states,"AutoRoll")

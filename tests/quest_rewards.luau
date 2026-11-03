@@ -26,3 +26,12 @@ assert(MysteryBoxes.open(extras,parts,creatures,offers,10,function() return {id=
 local reward=MysteryBoxes.open(extras,parts,creatures,offers,10,factory("fresh")); assert(reward and reward.id=="fresh" and extras.uncommonBoxes==99 and #parts==2)
 extras.uncommonBoxes=0; assert(MysteryBoxes.open(extras,parts,creatures,offers,10,factory("next"))==nil and #parts==2)
 print("Quest item rewards, caps and atomic mystery box opening tests passed")
+
+assert(MysteryBoxes.standardRarity(1)==1 and MysteryBoxes.standardRarity(80)==1 and MysteryBoxes.standardRarity(81)==2 and MysteryBoxes.standardRarity(100)==2)
+assert(MysteryBoxes.standardRarity(0)==nil and MysteryBoxes.standardRarity(101)==nil and MysteryBoxes.standardRarity(0/0)==nil)
+extras.standardBoxes=1
+assert(MysteryBoxes.openStandard(extras,parts,creatures,offers,2,factory("standard"))==nil and extras.standardBoxes==1)
+assert(MysteryBoxes.openStandard(extras,parts,creatures,offers,10,function() return {id="standard",rarity=3} end)==nil and extras.standardBoxes==1)
+assert(MysteryBoxes.openStandard(extras,parts,creatures,offers,10,function() return {id="new-common",rarity=1} end) and extras.standardBoxes==0 and #parts==3)
+assert(not MysteryBoxes.openStandard(extras,parts,creatures,offers,10,factory("next")))
+print("Standard crate odds boundaries, capacity and atomic consumption tests passed")

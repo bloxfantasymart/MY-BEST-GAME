@@ -43,7 +43,7 @@ local function validProfile(data)
  if not finite(data.cash,0,1e300) or not finite(data.pending,0,1e300)
   or not finite(data.slots,1,9) or data.slots%1~=0
   or not finite(data.rebirth,0,100) or data.rebirth%1~=0
-  or not denseArray(data.parts,250)
+  or not denseArray(data.parts,265)
   or not denseArray(data.creatures,100) then return false end
  if data.lock~=nil and (type(data.lock)~="table" or type(data.lock.token)~="string" or #data.lock.token<1 or #data.lock.token>64
   or not finite(data.lock.expires,0,1e12) or data.lock.expires%1~=0) then return false end
@@ -62,6 +62,7 @@ local function validProfile(data)
    or not finite(e.rollVouchers,0,1000) or e.rollVouchers%1~=0
    or (e.doubleLuckPotions~=nil and (not finite(e.doubleLuckPotions,0,100) or e.doubleLuckPotions%1~=0))
    or (e.uncommonBoxes~=nil and (not finite(e.uncommonBoxes,0,100) or e.uncommonBoxes%1~=0))
+   or (e.standardBoxes~=nil and (not finite(e.standardBoxes,0,100) or e.standardBoxes%1~=0))
    or type(e.goldenLever)~="boolean" or type(e.sigmaStatue)~="boolean" or type(e.ohioCrown)~="boolean" then return false end
  end
  if data.tripleLuckUntil~=nil and (not finite(data.tripleLuckUntil,0,1e12) or data.tripleLuckUntil%1~=0) then return false end

@@ -31,6 +31,7 @@ local ShutdownGate = require(script.Parent.Services.ShutdownGate)
 local RollOdds = require(script.Parent.Services.RollOdds)
 local Rebirth = require(script.Parent.Services.Rebirth)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
 remote.Parent = ReplicatedStorage
@@ -107,6 +108,9 @@ local rebirthBoard=part(world,"Server rebirth leaderboard",Vector3.new(13,9,1),V
 local cashCaption=label(cashBoard,"SERVER CASH",6); cashCaption.Parent.Size=UDim2.fromOffset(250,180)
 local rebirthCaption=label(rebirthBoard,"SERVER REBIRTHS",6); rebirthCaption.Parent.Size=UDim2.fromOffset(250,180)
 
+local function partCapacity(s)
+ return PassService.capacity(s.passes,s.backpackUpgrades,SeasonRewards.bonusSlots(s.season.claimed))
+end
 local settleIncome
 local function incomeSummary(s,rates,event)
  return PlotEconomy.summary(rates or PlotEconomy.rates(s.creatures,Config.Income),event or currentEvent(),PassService.owned(s.passes,"VIP"),s.extras.sigmaStatue)
@@ -117,7 +121,7 @@ local function send(player, message, effect)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=PassService.capacity(s.passes,s.backpackUpgrades), backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.Quests, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.Quests, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -394,7 +398,7 @@ local function runAdmin(admin,payload)
   end
   Titles.apply(target.Character,ts.rebirth,ts.extras); Visuals.showRolls(ts.plot,ts.rolls,ts.slots)
  elseif plan.command=="grantPart" then
-  if #ts.parts>=PassService.capacity(ts.passes,ts.backpackUpgrades) then send(admin,"Target's part inventory is full."); return end
+  if #ts.parts>=partCapacity(ts) then send(admin,"Target's part inventory is full."); return end
   local entry=Config.Catalog[plan.index]
   table.insert(ts.parts,{id=HttpService:GenerateGUID(false),name=entry.name,kind=plan.kind,rarity=entry.rarity,income=entry.income,price=math.max(10,math.floor(entry.income*5)),mutation="Standard",mutationMultiplier=1})
  elseif plan.command~="kick" then send(admin,"Unsupported admin action."); return end
@@ -435,7 +439,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if s.autoRolling then send(player,"Stop auto-roll before buying manually."); return end
   local i,item=findById(s.rolls,value)
   local voucher=action=="buyWithVoucher"
-  if i and #s.parts<PassService.capacity(s.passes,s.backpackUpgrades) and ((voucher and s.extras.rollVouchers>0) or (not voucher and s.cash>=item.price)) then
+  if i and #s.parts<partCapacity(s) and ((voucher and s.extras.rollVouchers>0) or (not voucher and s.cash>=item.price)) then
    if voucher then s.extras.rollVouchers-=1 else s.cash-=item.price end
    table.insert(s.parts,item); Tutorial.advance(s.tutorial,"buy",s.parts); table.remove(s.rolls,i)
    if #s.rolls==0 then s.offerExpires=0 end
@@ -468,7 +472,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   elseif gift.kind=="crown" then
    if s.extras.ohioCrown then s.cash+=100000 else s.extras.ohioCrown=true; Titles.apply(player.Character,s.rebirth,s.extras) end
   elseif gift.kind=="part" or gift.kind=="partPlus" then
-   if #s.parts>=PassService.capacity(s.passes,s.backpackUpgrades) then send(player,"Free inventory space before claiming this gift."); return end
+   if #s.parts>=partCapacity(s) then send(player,"Free inventory space before claiming this gift."); return end
    local rarity=gift.kind=="part" and gift.rarity or chooseGiftRarity(gift.minRarity)
    local item=rarity and makeGiftPart(rarity)
    if not item then send(player,"This gift is unavailable. Please try again later."); return end
@@ -493,17 +497,24 @@ remote.OnServerEvent:Connect(function(player, action, value)
   s.extras.doubleLuckPotions-=1; s.luckUntil=math.max(s.luckUntil,os.time())+600
   send(player,"2x luck potion activated for 10 minutes.")
  elseif action=="openUncommonBox" then
-  local item,reason=MysteryBoxes.open(s.extras,s.parts,s.creatures,s.rolls,PassService.capacity(s.passes,s.backpackUpgrades),function() return makeGiftPart(2) end)
+  local item,reason=MysteryBoxes.open(s.extras,s.parts,s.creatures,s.rolls,partCapacity(s),function() return makeGiftPart(2) end)
   if not item then send(player,reason); return end
   Tutorial.advance(s.tutorial,"sync",s.parts)
   send(player,"Uncommon Mystery Box: "..item.name.." "..item.kind.."!")
+ elseif action=="openStandardBox" then
+  local item,reason=MysteryBoxes.openStandard(s.extras,s.parts,s.creatures,s.rolls,partCapacity(s),function()
+   return makeGiftPart(MysteryBoxes.standardRarity(rng:NextInteger(1,100)))
+  end)
+  if not item then send(player,reason); return end
+  Tutorial.advance(s.tutorial,"sync",s.parts)
+  send(player,"Standard Roll Crate: "..item.name.." "..item.kind.."!")
  elseif action=="claimQuest" then
   local quest,reason=QuestRewards.claim(s.progress,s.extras,value,os.time())
   if not quest then send(player,reason); return end
   s.cash+=quest.reward; Season.addXP(s.season,quest.xp)
   send(player,"Quest completed: "..quest.rewardLabel.." and "..quest.xp.." season XP!")
  elseif action=="claimSeason" then
-  local reward,reason=Season.claim(s.season,s.extras,RewardExtras.MaxPotions,RewardExtras.MaxVouchers)
+  local reward,reason=Season.claim(s.season,s.extras,RewardExtras.MaxPotions,RewardExtras.MaxVouchers,RewardExtras.MaxBoxes)
   if not reward then send(player,reason); return end
   if reward.kind=="cash" then s.cash+=reward.amount end
   send(player,"Free season tier "..s.season.claimed..": "..reward.label.."!")
@@ -755,13 +766,13 @@ task.spawn(function()
      s.autoRolling=false; send(player,"Auto-roll stopped: stay near your roll station.")
     elseif not PassService.canAuto(s.passes,s.rebirth) then
      s.autoRolling=false; send(player,"Auto-roll is no longer available.")
-    elseif #s.parts>=PassService.capacity(s.passes,s.backpackUpgrades) then
+    elseif #s.parts>=partCapacity(s) then
      s.autoRolling=false; send(player,"Auto-roll stopped: inventory full.")
     else
      s.nextAuto=os.clock()+2
      rollBatch(s)
      local run=s.autoRun
-     local result=AutoRoll.process(s.rolls,s.parts,run.config,s.cash,run.remaining,PassService.capacity(s.passes,s.backpackUpgrades))
+     local result=AutoRoll.process(s.rolls,s.parts,run.config,s.cash,run.remaining,partCapacity(s))
      s.cash=result.cash; run.remaining=result.remaining; run.batches+=1
      run.bought+=result.bought; run.skipped+=result.skipped; run.spent+=result.spent
      if result.bought>0 then Tutorial.advance(s.tutorial,"buy",s.parts) end

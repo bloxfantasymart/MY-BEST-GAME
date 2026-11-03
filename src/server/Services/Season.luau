@@ -1,5 +1,7 @@
 --!strict
 -- Prototype free track. All state is server-owned; no premium purchases are implemented.
+local ReplicatedStorage=game:GetService("ReplicatedStorage")
+local SeasonRewards=require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local Season={}
 Season.MaxXP=5000
 Season.RollGoal=250
@@ -20,17 +22,16 @@ function Season.unlocked(season)
  return math.floor(season.xp/100)
 end
 function Season.reward(tier)
- if type(tier)~="number" or tier%1~=0 or tier<1 or tier>50 then return nil end
- if tier%3==1 then return {kind="cash",amount=tier*1000,label="$"..(tier*1000).." cash"} end
- if tier%3==2 then return {kind="potion",amount=1,label="one 15-minute 3x luck potion"} end
- return {kind="voucher",amount=2,label="two free-part vouchers"}
+ return SeasonRewards.reward(tier)
 end
-function Season.claim(season,extras,maxPotions,maxVouchers)
+function Season.claim(season,extras,maxPotions,maxVouchers,maxBoxes)
  local tier=season.claimed+1
  if tier>Season.unlocked(season) or tier>50 then return nil,"Next tier is not unlocked." end
  local reward=Season.reward(tier)
  if reward.kind=="potion" and extras.luckPotions+reward.amount>maxPotions then return nil,"Use a potion before claiming." end
  if reward.kind=="voucher" and extras.rollVouchers+reward.amount>maxVouchers then return nil,"Use some vouchers before claiming." end
+ if reward.kind=="crate" and extras.standardBoxes+reward.amount>(maxBoxes or 100) then return nil,"Open a Standard Roll Crate before claiming." end
+ if reward.kind=="crate" then extras.standardBoxes+=reward.amount end
  if reward.kind=="potion" then extras.luckPotions+=reward.amount end
  if reward.kind=="voucher" then extras.rollVouchers+=reward.amount end
  season.claimed=tier

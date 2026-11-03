@@ -13,12 +13,12 @@ function Inventory.canConsume(item)
 end
 function Inventory.bulkSell(parts,rarity,ids,valueFn)
  if type(rarity)~="number" or rarity~=rarity or rarity%1~=0 or rarity<1 or rarity>8 then return nil end
- if type(ids)~="table" or #ids<1 or #ids>250 then return nil end
+ if type(ids)~="table" or #ids<1 or #ids>265 then return nil end
  -- Reject sparse or dictionary-shaped payloads instead of silently ignoring entries.
  local length=#ids; local entries=0
  for key in pairs(ids) do
   entries+=1
-  if entries>250 or type(key)~="number" or key%1~=0 or key<1 or key>length then return nil end
+  if entries>265 or type(key)~="number" or key%1~=0 or key<1 or key>length then return nil end
  end
  if entries~=length then return nil end
  local owned={}

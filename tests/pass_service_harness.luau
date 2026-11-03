@@ -46,3 +46,7 @@ assert(state.Luck=="invalid" and state.Backpack=="invalid")
 ids.KeepSlots=-1; state=PassService.initial(ids,order)
 assert(state.KeepSlots=="invalid" and not PassService.canRebirth(state))
 print("Gamepass policy, service failure, and ID validation tests passed")
+
+state.Backpack="owned"; assert(PassService.capacity(state,10,15)==265)
+state.Backpack="notOwned"; assert(PassService.capacity(state,10,15)==165)
+print("Season slots stack with cash upgrades and verified pass")
