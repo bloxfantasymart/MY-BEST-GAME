@@ -16,3 +16,19 @@ assert(not Inventory.setLocked(locked,"missing",false) and not Inventory.setLock
 assert(Inventory.setLocked(locked,"p",false) and Inventory.canConsume(locked[1]))
 assert(Inventory.bulkSell(locked,1,{"q","p"},value)==2 and #locked==0)
 print("Item protection and atomic bulk-sale tests passed")
+
+-- Maximum upgraded plus pass capacity; the whole selection must be sellable atomically.
+local full={}; local ids={}
+for i=1,250 do full[i]={id=tostring(i),rarity=1,price=20}; ids[i]=tostring(i) end
+local oversized=table.clone(ids); oversized[251]="extra"
+assert(Inventory.bulkSell(full,1,oversized,value)==nil and #full==250)
+local keyed=table.clone(ids); keyed.extra="1"
+assert(Inventory.bulkSell(full,1,keyed,value)==nil and #full==250)
+local sparse={[1]="1",[3]="3"}
+assert(Inventory.bulkSell(full,1,sparse,value)==nil and #full==250)
+full[250].locked=true
+assert(Inventory.bulkSell(full,1,ids,value)==nil and #full==250)
+full[250].locked=false
+local sold,earned=Inventory.bulkSell(full,1,ids,value)
+assert(sold==250 and earned==2500 and #full==0)
+print("Full-capacity and malformed bulk-sale tests passed")

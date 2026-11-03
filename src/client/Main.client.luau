@@ -3,6 +3,7 @@ local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local SoundService=game:GetService("SoundService")
 local Lighting=game:GetService("Lighting")
+local UserInputService=game:GetService("UserInputService")
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local AutoFill=require(ReplicatedStorage.Shared:WaitForChild("AutoFill"))
 local CraftMath=require(ReplicatedStorage.Shared:WaitForChild("CraftMath"))
@@ -53,7 +54,7 @@ local titleLimit=Instance.new("UITextSizeConstraint"); titleLimit.MinTextSize=10
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local render
+local render; local requestRender
 local function applyLayout()
  local size=root.AbsoluteSize
  if size.X<1 or size.Y<1 then return end
@@ -70,7 +71,7 @@ local function applyLayout()
  guidance.Size=UDim2.fromOffset(metrics.contentWidth,math.min(42,math.max(1,size.Y-noticeY-2*metrics.lineHeight-2*metrics.gap)))
  guidance.Position=UDim2.fromOffset(metrics.margin,noticeY+2*metrics.lineHeight+2*metrics.gap)
  panel.ZIndex=5; panel.AnchorPoint=Vector2.new(0.5,0.5); panel.Position=UDim2.fromScale(0.5,0.5); panel.Size=UDim2.fromOffset(metrics.panelWidth,metrics.panelHeight)
- if panel.Visible and render then task.defer(function() if panel.Visible then render() end end) end
+ if panel.Visible and requestRender then task.defer(function() if panel.Visible then requestRender() end end) end
 end
 root:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyLayout)
 applyLayout()
@@ -409,6 +410,7 @@ render=function()
   row("60m Epic+ gift tier odds: "..table.concat(odds,", ")..". Standard mutation; any rebirth.",nil,Color3.fromRGB(70,75,105))
   if state.isAdmin then row("DEVELOPER ADMIN",function() pendingAdmin=nil; mode="admin"; list.CanvasPosition=Vector2.zero; remote:FireServer("adminOpen",adminTarget); render() end,Color3.fromRGB(155,65,65)) end
   row("ACCESSIBILITY SETTINGS",function() mode="settings"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
+  row("REFRESH GAME STATE FROM SERVER",function() remote:FireServer("sync"); notice.Text="Requesting current game state..." end,Color3.fromRGB(60,120,180))
   row("HOW TO PLAY",function() mode="help"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
  elseif mode=="season" then
   title.Text="FREE SEASON TRACK"
@@ -589,6 +591,21 @@ render=function()
   if panel.Visible then list.CanvasPosition=previousScroll end
  end)
 end
+-- Server updates can arrive while a player is typing. Preserve the focused
+-- field and apply the latest state after focus is released instead of destroying it.
+local pendingRender=false
+requestRender=function()
+ local focused=UserInputService:GetFocusedTextBox()
+ if panel.Visible and focused and focused:IsDescendantOf(list) then
+  pendingRender=true
+  hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0)
+  return
+ end
+ pendingRender=false; render()
+end
+UserInputService.TextBoxFocusReleased:Connect(function(box)
+ if pendingRender and box:IsDescendantOf(list) then task.defer(function() if pendingRender then requestRender() end end) end
+end)
 rewards.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="rewards"; panel.Visible=true; render() end)
 slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgrades"; panel.Visible=true; render() end)
 travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
@@ -632,12 +649,12 @@ remote.OnClientEvent:Connect(function(data)
   return
  end
  if data.oddsSnapshot then
-  catalogOdds=data.odds; if mode=="catalog" and panel.Visible then render() end
+  catalogOdds=data.odds; if mode=="catalog" and panel.Visible then requestRender() end
   return
  end
  if data.adminSnapshot then
   adminData=data; pendingAdmin=nil; if data.inspected then adminTarget=data.inspected.id end
-  if mode=="admin" then render() end
+  if mode=="admin" then requestRender() end
   return
  end
  if data.announcement then notice.Text=data.announcement; playEffect("rare"); return end
@@ -647,9 +664,14 @@ remote.OnClientEvent:Connect(function(data)
  if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false end; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; if data.open=="roll" then discardConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
- render()
+ requestRender()
 end)
 
 task.spawn(function()
- while not loaded do remote:FireServer("sync"); task.wait(2) end
+ -- The reliable RemoteEvent snapshot is server-authoritative. Retry initial
+ -- load, then periodically reconcile missed/stale UI state without mutations.
+ while true do
+  remote:FireServer("sync")
+  task.wait(loaded and 30 or 2)
+ end
 end)

@@ -41,7 +41,7 @@ caption(portal,"RETURN TO GAME",7)
 local function text(player,message) remote:FireClient(player,{message=message}) end
 local function travel(player)
  local s=profiles[player]
- if not s or not DataService.isHealthy(player.UserId) or not nearby(player,portal) then return end
+ if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not nearby(player,portal) then return end
  local id=Config.PlaceIds.Main
  if type(id)~="number" or id<=0 or id%1~=0 then text(player,"Return portal is not configured. See the setup guide."); return end
  if os.clock()-(s.lastPortal or -20)<10 then return end
@@ -120,7 +120,7 @@ for i=1,15 do
  booths[i]=booth
  prompt(counter,"Claim / inspect").Triggered:Connect(function(player)
   local s=profiles[player]
-  if not s or not DataService.isHealthy(player.UserId) or not nearby(player,counter) then return end
+  if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not nearby(player,counter) then return end
   if not booth.owner then
    local ok,reason=BoothLogic.claim(booth,player,s)
    if not ok then text(player,reason); return end
@@ -131,7 +131,7 @@ for i=1,15 do
 end
 remote.OnServerEvent:Connect(function(player,action,payload)
  local s=profiles[player]
- if not s or not DataService.isHealthy(player.UserId) or type(action)~="string" or #action>30 then return end
+ if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or type(action)~="string" or #action>30 then return end
  local now=os.clock()
  if now<(s.blockUntil or 0) then return end
  if now-(s.windowStart or 0)>=1 then s.windowStart=now; s.count=0 end
@@ -197,14 +197,21 @@ local function join(player)
 end
 Players.PlayerAdded:Connect(join)
 Players.PlayerRemoving:Connect(function(player)
- local s=profiles[player]; if not s then return end
- profiles[player]=nil; releaseBooth(s)
- if not DataService.save(player.UserId,s.profile,true) then warn("Failed to release hub profile for "..player.UserId) end
+ local s=profiles[player]; if not s or not ShutdownGate.beginDeparture(joinGate,player.UserId) then return end
+ profiles[player]=nil
+ local ok,err=pcall(function()
+  local released,releaseErr=pcall(releaseBooth,s)
+  if not released then warn("Failed to clear hub booth for "..player.UserId..": "..tostring(releaseErr)) end
+  if not DataService.save(player.UserId,s.profile,true) then warn("Failed to release hub profile for "..player.UserId) end
+ end)
+ ShutdownGate.finishDeparture(joinGate,player.UserId)
+ if not ok then warn("Hub departure failed for "..player.UserId..": "..tostring(err)) end
 end)
 for _,player in ipairs(Players:GetPlayers()) do task.spawn(join,player) end
 task.spawn(function()
  while true do
   task.wait(45)
+  if joinGate.closed then break end
   for player,s in pairs(profiles) do
    task.spawn(function()
     if profiles[player]==s and not DataService.save(player.UserId,s.profile,false) then warn("Hub lease renewal failed for "..player.UserId) end
@@ -220,9 +227,13 @@ game:BindToClose(function()
  local remaining=0
  for player,s in pairs(profiles) do
   profiles[player]=nil; remaining+=1
-  task.spawn(function() if not DataService.save(player.UserId,s.profile,true) then warn("Hub shutdown save failed: "..player.UserId) end; remaining-=1 end)
+  task.spawn(function()
+   local ok,saved=pcall(DataService.save,player.UserId,s.profile,true)
+   if not ok or not saved then warn("Hub shutdown save failed: "..player.UserId) end
+   remaining-=1
+  end)
  end
  local deadline=os.clock()+25
- while (remaining>0 or joinGate.pending>0) and os.clock()<deadline do task.wait(0.1) end
- if remaining>0 or joinGate.pending>0 then warn("Hub shutdown deadline reached with saves or joins still pending.") end
+ while not ShutdownGate.drained(joinGate,remaining) and os.clock()<deadline do task.wait(0.1) end
+ if not ShutdownGate.drained(joinGate,remaining) then warn("Hub shutdown deadline reached with saves, departures or joins still pending.") end
 end)

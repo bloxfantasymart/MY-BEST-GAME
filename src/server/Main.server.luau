@@ -117,7 +117,7 @@ local function send(player, message, effect)
  remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=PassService.capacity(s.passes,s.backpackUpgrades), backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.Quests, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
- return plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
+ return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
 end
 local function nearby(player, p)
  local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -125,7 +125,7 @@ local function nearby(player, p)
 end
 prompt(forge,"Open fusion forge").Triggered:Connect(function(player)
  local s=states[player]
- if s and DataService.isHealthy(player.UserId) and nearby(player,forge) then remote:FireClient(player,{open="forge"}) end
+ if s and not joinGate.closed and DataService.isHealthy(player.UserId) and nearby(player,forge) then remote:FireClient(player,{open="forge"}) end
 end)
 local function collect(player,s)
  local amount=math.floor(s.pending)
@@ -139,7 +139,7 @@ local function collect(player,s)
 end
 local function goToHub(player)
  local s=states[player]
- if not s or not DataService.isHealthy(player.UserId) or not nearby(player,hubPortal) then return end
+ if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not nearby(player,hubPortal) then return end
  local id=Config.PlaceIds.TradingHub
  if type(id)~="number" or id<=0 or id%1~=0 then send(player,"Trading hub is not configured yet. See the setup guide."); return end
  if os.clock()-(s.lastPortal or -20)<10 then return end
@@ -307,7 +307,7 @@ local function refreshPass(player,s,key)
  local version=s.passVersion[key]
  task.spawn(function()
   local result=PassService.lookup(player.UserId,Config.GamePasses[key])
-  if states[player]~=s or s.passVersion[key]~=version then return end
+  if joinGate.closed or states[player]~=s or s.passVersion[key]~=version then return end
   -- A failed service lookup must never erase an ownership already confirmed this session.
   if s.passes[key]~="owned" then s.passes[key]=result end
   if key=="KeepSlots" and result=="owned" then s.keepSlotsEntitled=true end
@@ -317,7 +317,7 @@ local function refreshPass(player,s,key)
 end
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player,passId,purchased)
  local s=states[player]
- if not s or not purchased then return end
+ if not s or joinGate.closed or not purchased then return end
  for _,key in ipairs(Config.PassOrder) do
   if Config.GamePasses[key]==passId and s.passes[key]~="disabled" and s.passes[key]~="invalid" then
    -- Roblox's server-side purchase-finished event is authoritative; invalidate stale queries.
@@ -382,7 +382,7 @@ local function runAdmin(admin,payload)
 end
 remote.OnServerEvent:Connect(function(player, action, value)
  local s=states[player]
- if not s or type(action)~="string" or #action>40 then return end
+ if not s or joinGate.closed or type(action)~="string" or #action>40 then return end
  if not DataService.isHealthy(player.UserId) then player:Kick("Your data session could not be renewed. Please rejoin."); return end
  local now=os.clock()
  if expireOffers(s,now) then
@@ -676,16 +676,22 @@ local function join(player)
 end
 Players.PlayerAdded:Connect(join)
 Players.PlayerRemoving:Connect(function(player)
- local s=states[player]; if not s then return end
+ local s=states[player]; if not s or not ShutdownGate.beginDeparture(joinGate,player.UserId) then return end
  states[player]=nil
- local snapshot=profile(s,true)
- clearPlot(s)
- if not DataService.save(player.UserId,snapshot,true) then warn("Failed to save profile for "..player.UserId) end
+ local ok,err=pcall(function()
+  local snapshot=profile(s,true)
+  local cleared,clearErr=pcall(clearPlot,s)
+  if not cleared then warn("Failed to clear plot for "..player.UserId..": "..tostring(clearErr)) end
+  if not DataService.save(player.UserId,snapshot,true) then warn("Failed to save profile for "..player.UserId) end
+ end)
+ ShutdownGate.finishDeparture(joinGate,player.UserId)
+ if not ok then warn("Departure failed for "..player.UserId..": "..tostring(err)) end
 end)
 for _,player in ipairs(Players:GetPlayers()) do task.spawn(join,player) end
 task.spawn(function()
  while true do
   task.wait(1)
+  if joinGate.closed then break end
   local incomeEvent=currentEvent()
   for player,s in pairs(states) do
    if not DataService.isHealthy(player.UserId) then player:Kick("Data connection lost; please rejoin.")
@@ -718,6 +724,7 @@ end)
 task.spawn(function()
  while true do
   task.wait(0.5)
+  if joinGate.closed then break end
   for player,s in pairs(states) do
    if s.autoRolling and os.clock()>=(s.nextAuto or 0) then
     if not DataService.isHealthy(player.UserId) or not nearby(player,s.plot.lever) then
@@ -764,6 +771,7 @@ end)
 task.spawn(function()
  while true do
   task.wait(10)
+  if joinGate.closed then break end
   local _,_,_,storm=activeEvents()
   if storm then
    for owner,s in pairs(states) do
@@ -774,7 +782,7 @@ task.spawn(function()
      pcall(function() drop:SetNetworkOwner(nil) end)
      local claimed=false
      drop.Touched:Connect(function(hit)
-      if claimed or states[owner]~=s or not DataService.isHealthy(owner.UserId) then return end
+      if claimed or joinGate.closed or states[owner]~=s or not DataService.isHealthy(owner.UserId) then return end
       local character=owner.Character
       if character and hit:IsDescendantOf(character) then
        claimed=true; s.cash+=50*(1+s.rebirth); drop:Destroy(); send(owner,"Ohio Storm bonus collected!")
@@ -789,6 +797,7 @@ end)
 task.spawn(function()
  while true do
   task.wait(45)
+  if joinGate.closed then break end
   for player,s in pairs(states) do
    task.spawn(function()
     if states[player]==s and not DataService.save(player.UserId,profile(s),false) then warn("Autosave failed for "..player.UserId) end
@@ -802,11 +811,12 @@ game:BindToClose(function()
  for player,s in pairs(states) do
   states[player]=nil; remaining+=1
   task.spawn(function()
-   if not DataService.save(player.UserId,profile(s,true),true) then warn("Shutdown save failed for "..player.UserId) end
+   local ok,saved=pcall(function() return DataService.save(player.UserId,profile(s,true),true) end)
+   if not ok or not saved then warn("Shutdown save failed for "..player.UserId) end
    remaining-=1
   end)
  end
  local deadline=os.clock()+25
- while (remaining>0 or joinGate.pending>0) and os.clock()<deadline do task.wait(0.1) end
- if remaining>0 or joinGate.pending>0 then warn("Shutdown deadline reached with saves or joins still pending.") end
+ while not ShutdownGate.drained(joinGate,remaining) and os.clock()<deadline do task.wait(0.1) end
+ if not ShutdownGate.drained(joinGate,remaining) then warn("Shutdown deadline reached with saves, departures or joins still pending.") end
 end)
