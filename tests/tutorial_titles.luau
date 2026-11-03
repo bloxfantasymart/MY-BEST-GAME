@@ -19,3 +19,32 @@ assert(Titles.forRebirth(25)=="Mewing Champion")
 assert(Titles.forRebirth(50)=="Ohio Conqueror")
 assert(Titles.forRebirth(100)=="Brainrot Overlord")
 print("Tutorial action ordering, reward, and rebirth title tests passed")
+-- Protected components cannot be consumed: the tutorial tracks usable parts.
+local all={{kind="Head"},{kind="Chest"},{kind="Arms"},{kind="Legs",locked=true}}
+local protection={step=3}
+Tutorial.advance(protection,"sync",all); assert(protection.step==3)
+all[4].locked=false; Tutorial.reconcile(protection,all,{}); assert(protection.step==4)
+all[2].locked=true; Tutorial.reconcile(protection,all,{}); assert(protection.step==3)
+table.insert(all,{kind="Chest"}); Tutorial.reconcile(protection,all,{}); assert(protection.step==4)
+-- A successful craft can complete the part-collection and craft stages together.
+protection.step=3; Tutorial.advance(protection,"craft",all); assert(protection.step==5)
+Tutorial.reconcile(protection,{},{}); assert(protection.step==3, "Selling the last creature requires recovery")
+protection.step=5; Tutorial.reconcile(protection,all,{}); assert(protection.step==4)
+protection.step=6; Tutorial.reconcile(protection,{},{{stand=0}},0.5); assert(protection.step==5)
+protection.step=6; Tutorial.reconcile(protection,all,{},0); assert(protection.step==4)
+protection.step=6; Tutorial.reconcile(protection,{},{{stand=0}},1); assert(protection.step==6, "Pending whole cash remains collectable")
+protection.step=6; Tutorial.reconcile(protection,{},{{stand=2}},0); assert(protection.step==6)
+protection.step=7; Tutorial.reconcile(protection,{}, {},0); assert(protection.step==7, "Completion never resets")
+local text={"Roll","Buy","Collect","Craft","Place","Collect"}
+local instruction,target,caption=Guide.describe(3,{{kind="Head"},{kind="Chest",locked=true},{kind="Arms"},{kind="Legs"}},{},12,text)
+assert(string.find(instruction,"Chest",1,true) and string.find(instruction,"Unprotect",1,true) and target=="Roll station" and caption=="ROLL STATION")
+assert(select(2,Guide.describe(4,all,{},12,text))=="Assembly pod")
+local creatures={{stand=1},{stand=3},{stand=0}}
+assert(select(2,Guide.describe(5,{},creatures,3,text))=="Stand 2")
+assert(select(2,Guide.describe(5,{},{{stand=3}},12,text))=="Stand 3")
+local msg,fullStand=Guide.describe(5,{},{{stand=1},{stand=2},{stand=0}},2,text)
+assert(fullStand=="Stand 1" and string.find(msg,"occupied",1,true))
+assert(select(2,Guide.describe(5,{}, {},12,text))=="Assembly pod")
+assert(select(2,Guide.describe(6,{},creatures,12,text))=="Cash ATM")
+assert(Guide.describe(7,{},creatures,12,text)==nil)
+print("Tutorial recovery, protected parts, and context-aware guidance tests passed")

@@ -119,6 +119,7 @@ end
 local function send(player, message, effect)
  local s = states[player]
  if not s then return end
+ Tutorial.reconcile(s.tutorial,s.parts,s.creatures,s.pending)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end

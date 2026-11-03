@@ -10,13 +10,14 @@ local CraftMath=require(ReplicatedStorage.Shared:WaitForChild("CraftMath"))
 local CraftPicker=require(ReplicatedStorage.Shared:WaitForChild("CraftPicker"))
 local FusionRecipe=require(ReplicatedStorage.Shared:WaitForChild("FusionRecipe"))
 local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView"))
+local TutorialGuide=require(ReplicatedStorage.Shared:WaitForChild("TutorialGuide"))
 local SeasonRewards=require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
 local sounds={}
-local localSettings={mute=false,hideTint=false}
-local updateEvent
+local localSettings={mute=false,hideTint=false,hideGuide=false}
+local updateEvent; local updateTutorial
 local function playEffect(name)
  if localSettings.mute then return end
  local id=Config.AudioIds[name]
@@ -51,6 +52,12 @@ guidance.BackgroundColor3=Color3.fromRGB(105,75,30); guidance.TextColor3=Color3.
 guidance.Font=Enum.Font.GothamBold; guidance.TextSize=14; guidance.TextScaled=true; guidance.Visible=false; guidance.Parent=root; local guideLimit=Instance.new("UITextSizeConstraint"); guideLimit.MinTextSize=10; guideLimit.MaxTextSize=14; guideLimit.Parent=guidance; round(guidance)
 local guideHighlight=Instance.new("Highlight"); guideHighlight.Name="TutorialTarget"; guideHighlight.FillColor=Color3.fromRGB(255,220,60)
 guideHighlight.OutlineColor=Color3.new(1,1,1); guideHighlight.FillTransparency=0.65; guideHighlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; guideHighlight.Enabled=false; guideHighlight.Parent=workspace
+local guideMarker=Instance.new("BillboardGui"); guideMarker.Name="TutorialMarker"; guideMarker.Size=UDim2.fromOffset(160,58)
+guideMarker.StudsOffsetWorldSpace=Vector3.new(0,7,0); guideMarker.AlwaysOnTop=true; guideMarker.MaxDistance=250; guideMarker.Enabled=false; guideMarker.Parent=gui
+local guideMarkerText=Instance.new("TextLabel"); guideMarkerText.Size=UDim2.fromScale(1,1); guideMarkerText.BackgroundColor3=Color3.fromRGB(75,55,20)
+guideMarkerText.BackgroundTransparency=0.15; guideMarkerText.TextColor3=Color3.new(1,1,1); guideMarkerText.TextStrokeTransparency=0.25
+guideMarkerText.Font=Enum.Font.GothamBold; guideMarkerText.TextScaled=true; guideMarkerText.TextWrapped=true; guideMarkerText.Parent=guideMarker
+local markerLimit=Instance.new("UITextSizeConstraint"); markerLimit.MinTextSize=10; markerLimit.MaxTextSize=17; markerLimit.Parent=guideMarkerText; round(guideMarkerText)
 local panel=Instance.new("Frame"); panel.Size=UDim2.new(0.85,0,0.68,0); panel.Position=UDim2.new(0.075,0,0.2,0); panel.BackgroundColor3=Color3.fromRGB(37,39,70); panel.Visible=false; panel.Parent=root; round(panel)
 local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-70,0,45); title.BackgroundTransparency=1; title.TextColor3=Color3.new(1,1,1); title.Font=Enum.Font.GothamBold; title.TextSize=20; title.TextScaled=true; title.TextWrapped=true; title.Parent=panel
 local titleLimit=Instance.new("UITextSizeConstraint"); titleLimit.MinTextSize=10; titleLimit.MaxTextSize=20; titleLimit.Parent=title
@@ -653,6 +660,11 @@ render=function()
    if localSettings.mute then for _,sound in pairs(sounds) do sound:Stop() end end
    render()
   end,Color3.fromRGB(60,120,180))
+  row("HIDE TUTORIAL WORLD MARKERS: "..(localSettings.hideGuide and "ON" or "OFF").." (the written goal stays visible)",function()
+   localSettings.hideGuide=not localSettings.hideGuide
+   if updateTutorial then updateTutorial() end
+   render()
+  end,Color3.fromRGB(60,120,180))
   row("HIDE EVENT COLOR TINT: "..(localSettings.hideTint and "ON" or "OFF"),function()
    localSettings.hideTint=not localSettings.hideTint
    if updateEvent then updateEvent(state.eventFlags) end
@@ -875,24 +887,19 @@ slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgra
 travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
 rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; rebirthSelected=nil; rebirthQuote=nil; mode="rebirth"; panel.Visible=true; render() end)
 bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; clearBulk(); bulkStandardOnly=true; bagBatch=nil; mode="bag"; panel.Visible=true; render() end)
-local function updateTutorial()
+updateTutorial=function()
  local step=state.tutorial and state.tutorial.step or 7
- guidance.Visible=step<7
- if step<7 then
-  local instruction=Config.TutorialText[step] or ""
-  if step==3 then
-   local found={}; for _,item in ipairs(state.parts) do found[item.kind]=true end
-   local missing={}; for _,kind in ipairs(Config.Types) do if not found[kind] then table.insert(missing,kind) end end
-   if #missing>0 then instruction="Still need: "..table.concat(missing,", ") end
-  end
-  guidance.Text="GOAL "..step.."/6: "..instruction.."  (+$1,000 on completion)"
- end
+ local instruction,targetName,caption=TutorialGuide.describe(step,state.parts,state.creatures,state.standsUnlocked or 12,Config.TutorialText)
+ guidance.Visible=instruction~=nil
+ if instruction then guidance.Text="GOAL "..step.."/6: "..instruction.."  (+$1,000 on completion)" end
  local world=workspace:FindFirstChild("GeneratedWorld")
  local plot=world and world:FindFirstChild("Plot"..tostring(state.plotIndex))
- local targetName=(step<=3 and "Roll station") or (step==4 and "Assembly pod") or (step==5 and "Stand 1") or (step==6 and "Cash ATM") or nil
  local target=plot and targetName and plot:FindFirstChild(targetName)
- guideHighlight.Adornee=target
- guideHighlight.Enabled=step<7 and target~=nil
+ if target and not target:IsA("BasePart") then target=nil end
+ local show=target~=nil and not localSettings.hideGuide
+ guideHighlight.Adornee=target; guideHighlight.Enabled=show
+ guideMarker.Adornee=target; guideMarker.Enabled=show
+ if caption then guideMarkerText.Text=caption.."\n▼" end
 end
 task.spawn(function()
  while true do task.wait(2); if loaded then updateTutorial() end end
