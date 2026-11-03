@@ -106,6 +106,12 @@ local function searchField(draft,placeholder,onChange)
  field.Parent=list; rowOrder+=1; field.LayoutOrder=rowOrder; round(field)
  field:GetPropertyChangedSignal("Text"):Connect(function() onChange(string.sub(field.Text,1,80)) end)
 end
+local function questRewardTools(extras)
+ row("USE 2x LUCK POTION (10 min) — "..(extras.doubleLuckPotions or 0).." owned",function() remote:FireServer("useDoubleLuckPotion") end,Color3.fromRGB(125,75,175))
+ row("OPEN UNCOMMON MYSTERY BOX — "..(extras.uncommonBoxes or 0).." owned",function() remote:FireServer("openUncommonBox") end,Color3.fromRGB(60,145,150))
+ local count=0; for _,entry in ipairs(Config.Catalog) do if entry.rarity==2 then count+=1 end end
+ row("Each free box gives one Standard Uncommon part. "..count.." archetypes and 4 part types are uniform (1 in "..(count*4).." per combination), regardless of luck or rebirth. Requires space.",nil,Color3.fromRGB(70,75,105))
+end
 local function giftText(gift)
  local left=math.max(0,gift.seconds-(state.giftElapsed or 0))
  local status=(state.giftClaims and state.giftClaims[gift.id]) and "CLAIMED" or (left==0 and "CLAIM" or (math.floor(left/60).."m "..(left%60).."s"))
@@ -461,12 +467,13 @@ render=function()
   row("Consecutive UTC days build a 7-day streak; missing a day resets it.",nil,Color3.fromRGB(70,75,105))
   local extras=state.extras or {}
   row("USE 3x LUCK POTION (15 min) — "..(extras.luckPotions or 0).." owned",function() remote:FireServer("useLuckPotion") end,Color3.fromRGB(125,75,175))
+  questRewardTools(extras)
   row("Free-part vouchers: "..(extras.rollVouchers or 0).." — use at roll station; rolls are already free.",nil,Color3.fromRGB(70,75,105))
   row("Golden Lever: "..(extras.goldenLever and "unlocked (+5% non-common weight)" or "locked").." | Sigma Statue: "..(extras.sigmaStatue and "unlocked (+50% income)" or "locked"),nil,Color3.fromRGB(70,75,105))
   for _,quest in ipairs(state.quests) do
    local value=p[quest.key] or 0
    local status=p.claimed[quest.key] and "CLAIMED" or (value>=quest.goal and "CLAIM" or "IN PROGRESS")
-   row(quest.label.."  "..value.."/"..quest.goal.." | $"..quest.reward.." — "..status,function() remote:FireServer("claimQuest",quest.key) end,Color3.fromRGB(90,80,150))
+   row(quest.label.."  "..value.."/"..quest.goal.." | "..quest.rewardLabel.." + "..quest.xp.." season XP — "..status,function() remote:FireServer("claimQuest",quest.key) end,Color3.fromRGB(90,80,150))
   end
   row("CATALOG & ROLL ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
   row("OPEN FREE SEASON TRACK",function() mode="season"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(120,75,180))
@@ -592,6 +599,7 @@ render=function()
   if bagTab=="Boosts" then
    local extras=state.extras or {}
    row("USE 3x LUCK POTION (15 min) — "..(extras.luckPotions or 0).." owned",function() remote:FireServer("useLuckPotion") end,Color3.fromRGB(125,75,175))
+  questRewardTools(extras)
    row("Free-part vouchers: "..(extras.rollVouchers or 0).." | Rare blueprints: "..(state.rareBlueprints or 0).." — use at assembly.",nil,Color3.fromRGB(70,75,105))
   else
    row("Parts "..#state.parts.."/"..state.partCapacity.." | Creatures "..#state.creatures.."/100",nil,Color3.fromRGB(70,75,105))

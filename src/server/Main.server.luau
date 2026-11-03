@@ -20,6 +20,8 @@ local PlotEconomy = require(script.Parent.Services.PlotEconomy)
 local SessionGifts = require(script.Parent.Services.SessionGifts)
 local AdminService = require(script.Parent.Services.AdminService)
 local RewardExtras = require(script.Parent.Services.RewardExtras)
+local QuestRewards = require(script.Parent.Services.QuestRewards)
+local MysteryBoxes = require(script.Parent.Services.MysteryBoxes)
 local Season = require(script.Parent.Services.Season)
 local AutoCollector = require(script.Parent.Services.AutoCollector)
 local AutoRoll = require(script.Parent.Services.AutoRoll)
@@ -464,12 +466,20 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if s.extras.luckPotions<1 then send(player,"No 3x luck potions available."); return end
   s.extras.luckPotions-=1; s.tripleLuckUntil=math.max(s.tripleLuckUntil,os.time())+900
   send(player,"3x luck potion activated for 15 minutes.")
+ elseif action=="useDoubleLuckPotion" then
+  if s.extras.doubleLuckPotions<1 then send(player,"No 2x luck potions available."); return end
+  s.extras.doubleLuckPotions-=1; s.luckUntil=math.max(s.luckUntil,os.time())+600
+  send(player,"2x luck potion activated for 10 minutes.")
+ elseif action=="openUncommonBox" then
+  local item,reason=MysteryBoxes.open(s.extras,s.parts,s.creatures,s.rolls,PassService.capacity(s.passes,s.backpackUpgrades),function() return makeGiftPart(2) end)
+  if not item then send(player,reason); return end
+  Tutorial.advance(s.tutorial,"sync",s.parts)
+  send(player,"Uncommon Mystery Box: "..item.name.." "..item.kind.."!")
  elseif action=="claimQuest" then
-  local reward=Progression.claimQuest(s.progress,value,os.time())
-  if reward then
-   s.cash+=reward; local xp=({rolls=50,rareCrafts=75,collected=100})[value] or 0; Season.addXP(s.season,xp)
-   send(player,"Quest completed: $"..reward.." and "..xp.." season XP!")
-  else send(player,"Quest is not ready or has already been claimed.") end
+  local quest,reason=QuestRewards.claim(s.progress,s.extras,value,os.time())
+  if not quest then send(player,reason); return end
+  s.cash+=quest.reward; Season.addXP(s.season,quest.xp)
+  send(player,"Quest completed: "..quest.rewardLabel.." and "..quest.xp.." season XP!")
  elseif action=="claimSeason" then
   local reward,reason=Season.claim(s.season,s.extras,RewardExtras.MaxPotions,RewardExtras.MaxVouchers)
   if not reward then send(player,reason); return end
@@ -631,7 +641,7 @@ local function joinImpl(player,context)
   context.data=nil
   plot.owner=nil; plot.sign.Text="Unclaimed plot"; return
  end
- local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=data.extras or RewardExtras.new(),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
+ local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
  states[player]=s; context.data=nil; plot.sign.Text=player.DisplayName.."'s plot"
  for _,key in ipairs(Config.PassOrder) do refreshPass(player,s,key) end
  local stats=Instance.new("Folder"); stats.Name="leaderstats"; stats.Parent=player

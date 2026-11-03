@@ -45,6 +45,8 @@ local function validProfile(data)
   local e=data.extras
   if type(e)~="table" or not finite(e.luckPotions,0,100) or e.luckPotions%1~=0
    or not finite(e.rollVouchers,0,1000) or e.rollVouchers%1~=0
+   or (e.doubleLuckPotions~=nil and (not finite(e.doubleLuckPotions,0,100) or e.doubleLuckPotions%1~=0))
+   or (e.uncommonBoxes~=nil and (not finite(e.uncommonBoxes,0,100) or e.uncommonBoxes%1~=0))
    or type(e.goldenLever)~="boolean" or type(e.sigmaStatue)~="boolean" or type(e.ohioCrown)~="boolean" then return false end
  end
  if data.tripleLuckUntil~=nil and (not finite(data.tripleLuckUntil,0,1e12) or data.tripleLuckUntil%1~=0) then return false end

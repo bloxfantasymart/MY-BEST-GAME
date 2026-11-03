@@ -161,3 +161,14 @@ assert(a.load(508)==nil, "Mutation metadata must be bounded")
 database.player_508.parts[1].mutation=nil
 local legacyMutation=a.load(508); assert(legacyMutation and a.save(508,legacyMutation,true), "Legacy Standard parts without mutation metadata remain valid")
 print("Mutation metadata and legacy profile validation tests passed")
+-- New daily quest item balances are optional on legacy profiles and validated when present.
+database.player_510={version=1,cash=200,pending=0,slots=1,rebirth=0,parts={},creatures={},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false}}
+local questLegacy=a.load(510); assert(questLegacy and questLegacy.extras.doubleLuckPotions==nil and questLegacy.extras.uncommonBoxes==nil)
+questLegacy.extras.doubleLuckPotions=4; questLegacy.extras.uncommonBoxes=2
+assert(a.save(510,questLegacy,true))
+local questRoundtrip=b.load(510); assert(questRoundtrip and questRoundtrip.extras.doubleLuckPotions==4 and questRoundtrip.extras.uncommonBoxes==2)
+assert(b.save(510,questRoundtrip,true))
+database.player_510.extras.doubleLuckPotions=101; assert(a.load(510)==nil)
+database.player_510.extras.doubleLuckPotions=1; database.player_510.extras.uncommonBoxes=0.5; assert(a.load(510)==nil)
+database.player_510.extras.uncommonBoxes=-1; assert(a.load(510)==nil)
+print("Quest consumable compatibility, round-trip and validation tests passed")
