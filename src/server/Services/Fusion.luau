@@ -1,17 +1,8 @@
 --!strict
 -- Validate all inputs before consuming anything. Caller supplies server-owned data and GUIDs.
 local Fusion={}
-local kinds={"Head","Chest","Arms","Legs"}
-local function samePart(a,b)
- return a and b and a.kind==b.kind and a.name==b.name and a.rarity==b.rarity
-  and a.income==b.income and (a.mutation or "Standard")== (b.mutation or "Standard")
-  and (a.mutationMultiplier or 1)==(b.mutationMultiplier or 1)
-end
-local function identical(a,b)
- if a.name~=b.name or a.income~=b.income or (a.blueprintApplied==true)~=(b.blueprintApplied==true) then return false end
- for _,kind in ipairs(kinds) do if not samePart(a.components[kind],b.components[kind]) then return false end end
- return true
-end
+local ReplicatedStorage=game:GetService("ReplicatedStorage")
+local FusionRecipe=require(ReplicatedStorage.Shared:WaitForChild("FusionRecipe"))
 function Fusion.execute(creatures,ids,rebirth,cash,costFn,newId)
  if rebirth<15 then return nil,"Fusion requires rebirth 15." end
  if type(ids)~="table" or #ids~=3 then return nil,"Select exactly three creatures." end
@@ -27,7 +18,7 @@ function Fusion.execute(creatures,ids,rebirth,cash,costFn,newId)
   if creature.level<10 or creature.ascended==true then return nil,"Use three non-ascended creatures at level 10 or above." end
   seen[id]=true; chosen[i]=creature
  end
- if not identical(chosen[1],chosen[2]) or not identical(chosen[1],chosen[3]) then
+ if not FusionRecipe.matches(chosen[1],chosen[2]) or not FusionRecipe.matches(chosen[1],chosen[3]) then
   return nil,"All four components and mutations must match exactly."
  end
  if chosen[1].income*5>1e18 then return nil,"This creature is too powerful to fuse safely." end

@@ -7,6 +7,8 @@ local UserInputService=game:GetService("UserInputService")
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local AutoFill=require(ReplicatedStorage.Shared:WaitForChild("AutoFill"))
 local CraftMath=require(ReplicatedStorage.Shared:WaitForChild("CraftMath"))
+local CraftPicker=require(ReplicatedStorage.Shared:WaitForChild("CraftPicker"))
+local FusionRecipe=require(ReplicatedStorage.Shared:WaitForChild("FusionRecipe"))
 local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView"))
 local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
@@ -82,6 +84,9 @@ local bagTab="All"; local selectedSell=nil; local rebirthSelected=nil; local reb
 local bulkRarity=1; local confirmBulk=nil
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
 local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local craftConfirm=false
+local craftKind="Head"; local craftPage=1; local craftQuery=""; local craftDraft=""; local craftSort="Newest"
+local forgePage=1; local forgeQuery=""; local forgeDraft=""
+local standPage=1; local standQuery=""; local standDraft=""; local standSort="Income"
 local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
 local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false
 local giftButtons={}
@@ -94,6 +99,12 @@ local function row(text, callback, color)
  rowOrder+=1; b.LayoutOrder=rowOrder
  if callback then b.Activated:Connect(callback) end
  return b
+end
+local function searchField(draft,placeholder,onChange)
+ local field=Instance.new("TextBox"); field.Size=UDim2.new(1,-10,0,50); field.BackgroundColor3=Color3.fromRGB(60,65,95); field.TextColor3=Color3.new(1,1,1)
+ field.Text=draft; field.PlaceholderText=placeholder; field.ClearTextOnFocus=false; field.Font=Enum.Font.GothamBold; field.TextSize=16
+ field.Parent=list; rowOrder+=1; field.LayoutOrder=rowOrder; round(field)
+ field:GetPropertyChangedSignal("Text"):Connect(function() onChange(string.sub(field.Text,1,80)) end)
 end
 local function giftText(gift)
  local left=math.max(0,gift.seconds-(state.giftElapsed or 0))
@@ -256,13 +267,32 @@ render=function()
    chosen.useBlueprint=useBlueprint; remote:FireServer("assemble",chosen); chosen={}; craftConfirm=false
   end,Color3.fromRGB(52,170,105))
   if craftConfirm then row("CANCEL ASSEMBLY",function() craftConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
+  row("CHOOSE A SOCKET",nil,Color3.fromRGB(70,75,105))
   for _,kind in ipairs(Config.Types) do
    local picked=components[kind]
-   row(kind..": "..(picked and ((picked.mutation or "Standard").." "..picked.name.." ["..Config.Rarities[picked.rarity].name.."]") or "choose below"),nil,Color3.fromRGB(70,75,105))
-   for _,item in ipairs(state.parts) do
-    if item.kind==kind and not item.locked and (not useBlueprint or item.rarity>=3) then row((item.mutation or "Standard").." "..item.name.." "..kind..(chosen[kind]==item.id and " ✓" or ""),function() chosen[kind]=item.id; craftConfirm=false; render() end,Config.Rarities[item.rarity].color) end
-   end
+   row((craftKind==kind and "▶ " or "")..kind..": "..(picked and ((picked.mutation or "Standard").." "..picked.name.." ["..Config.Rarities[picked.rarity].name.."] #"..string.sub(picked.id,-6)) or "empty"),function()
+    craftKind=kind; craftPage=1; craftConfirm=false; render()
+   end,craftKind==kind and Color3.fromRGB(60,120,180) or Color3.fromRGB(70,75,105))
   end
+  if chosen[craftKind] then row("CLEAR "..craftKind.." SOCKET",function() chosen[craftKind]=nil; craftConfirm=false; render() end,Color3.fromRGB(150,65,65)) end
+  searchField(craftDraft,"Search part names or mutations",function(v) craftDraft=v end)
+  row("APPLY PART SEARCH"..(craftQuery~="" and (": "..craftQuery) or ""),function() craftQuery=craftDraft; craftPage=1; render() end,Color3.fromRGB(60,120,180))
+  row("SORT PARTS: "..craftSort.." (tap to change)",function()
+   if craftSort=="Newest" then craftSort="Rarity" elseif craftSort=="Rarity" then craftSort="Contribution" elseif craftSort=="Contribution" then craftSort="Name" else craftSort="Newest" end
+   craftPage=1; render()
+  end,Color3.fromRGB(70,75,105))
+  local entries=CraftPicker.parts(state.parts,craftKind,craftQuery,useBlueprint,craftSort)
+  local page,current,pages=InventoryView.page(entries,craftPage,12); craftPage=current
+  row(craftKind.." | PAGE "..current.." / "..pages.." | "..#entries.." eligible parts",nil,Color3.fromRGB(70,75,105))
+  if current>1 then row("PREVIOUS PART PAGE",function() craftPage-=1; render() end,Color3.fromRGB(60,120,180)) end
+  if current<pages then row("NEXT PART PAGE",function() craftPage+=1; render() end,Color3.fromRGB(60,120,180)) end
+  for _,entry in ipairs(page) do
+   local item=entry.item
+   row((chosen[craftKind]==item.id and "✓ " or "")..(item.mutation or "Standard").." "..item.name.." ["..Config.Rarities[item.rarity].name.."] | contribution "..string.format("%.4g",item.income*(item.mutationMultiplier or 1)).." #"..string.sub(item.id,-6),function()
+    chosen[item.kind]=item.id; craftConfirm=false; render()
+   end,Config.Rarities[item.rarity].color)
+  end
+  if #entries==0 then row("No eligible parts match. Protected parts and blueprint-ineligible parts are hidden.",nil,Color3.fromRGB(70,75,105)) end
  elseif mode=="forge" then
   title.Text="FUSION FORGE — REBIRTH 15+"
   row("Fuse 3 unplaced matching creatures, level 10 or above. All parts and mutations must match.",nil,Color3.fromRGB(70,75,105))
@@ -280,27 +310,67 @@ render=function()
    row("OUTPUT if valid: level 1, $"..string.format("%.4g",first.income*5).."/s base; adjacent stands gain 20%.",nil,Color3.fromRGB(60,120,180))
    row("CLEAR FUSION SELECTION",function() forgeIds={}; forgeConfirm=false; render() end,Color3.fromRGB(70,75,105))
   end
-  row(forgeConfirm and "CONFIRM: CONSUME 3 CREATURES AND CASH" or "FUSE SELECTED (review first)",function()
-   if #forgeIds~=3 or not first then return end
+  local valid=state.rebirth>=15 and #forgeIds==3 and first and first.income*5<=CraftMath.MaxIncome and state.cash>=fee
+  for _,id in ipairs(forgeIds) do
+   local selected=nil; for _,c in ipairs(state.creatures) do if c.id==id then selected=c; break end end
+   if not FusionRecipe.eligible(selected) or not FusionRecipe.matches(first,selected) then valid=false end
+   row("REMOVE SELECTED: "..(selected and (selected.name.." Lv."..selected.level) or "no longer available").." #"..string.sub(id,-6),function()
+    for i,chosenId in ipairs(forgeIds) do if chosenId==id then table.remove(forgeIds,i); break end end
+    forgePage=1; forgeConfirm=false; render()
+   end,Color3.fromRGB(150,65,65))
+  end
+  row(forgeConfirm and "CONFIRM: CONSUME 3 CREATURES AND CASH" or "REVIEW FUSION",function()
+   if not valid then notice.Text="Choose three matching eligible creatures and check rebirth and cash."; return end
    if forgeConfirm then remote:FireServer("fusion",forgeIds); forgeIds={}; forgeConfirm=false
    else forgeConfirm=true; render() end
   end,Color3.fromRGB(185,100,35))
-  for _,creature in ipairs(state.creatures) do
-   if not creature.ascended and not creature.locked then
-    local selected=false; for _,id in ipairs(forgeIds) do if id==creature.id then selected=true end end
-    local text=(selected and "✓ " or "")..(creature.blueprintApplied and "[BLUEPRINT] " or "")..creature.name.." Lv."..creature.level.." | "..(creature.stand==0 and "Unplaced" or "Stand "..creature.stand).." | base $"..math.floor(creature.income).."/s"
-    row(text,function()
-     if selected then for i,id in ipairs(forgeIds) do if id==creature.id then table.remove(forgeIds,i); break end end
-     elseif #forgeIds<3 then table.insert(forgeIds,creature.id) end
-     forgeConfirm=false; render()
-    end,selected and Color3.fromRGB(45,150,110) or nil)
-   end
+  if forgeConfirm then row("CANCEL FUSION REVIEW",function() forgeConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
+  searchField(forgeDraft,"Search creature names",function(v) forgeDraft=v end)
+  row("APPLY CREATURE SEARCH"..(forgeQuery~="" and (": "..forgeQuery) or ""),function() forgeQuery=forgeDraft; forgePage=1; render() end,Color3.fromRGB(60,120,180))
+  local entries=CraftPicker.fusion(state.creatures,forgeQuery,first)
+  local page,current,pages=InventoryView.page(entries,forgePage,12); forgePage=current
+  row("PAGE "..current.." / "..pages.." | "..#entries.." eligible "..(first and "matching " or "").."creatures",nil,Color3.fromRGB(70,75,105))
+  if current>1 then row("PREVIOUS CREATURE PAGE",function() forgePage-=1; render() end,Color3.fromRGB(60,120,180)) end
+  if current<pages then row("NEXT CREATURE PAGE",function() forgePage+=1; render() end,Color3.fromRGB(60,120,180)) end
+  for _,creature in ipairs(page) do
+   local selected=false; for _,id in ipairs(forgeIds) do if id==creature.id then selected=true end end
+   local text=(selected and "✓ " or "")..(creature.blueprintApplied and "[BLUEPRINT] " or "")..creature.name.." Lv."..creature.level.." | base $"..string.format("%.4g",creature.income).."/s #"..string.sub(creature.id,-6)
+   row(text,function()
+    if selected then for i,id in ipairs(forgeIds) do if id==creature.id then table.remove(forgeIds,i); break end end
+    elseif #forgeIds<3 then table.insert(forgeIds,creature.id) end
+    forgePage=1; forgeConfirm=false; render()
+   end,selected and Color3.fromRGB(45,150,110) or nil)
   end
+  if #entries==0 then row("No matching eligible creatures. Use unplaced, unprotected, non-ascended level 10+ creatures.",nil,Color3.fromRGB(70,75,105)) end
  elseif mode=="stand" then
   title.Text="STAND "..stand..": choose a creature"
+  local occupant=nil; local available={}
   for _,c in ipairs(state.creatures) do
-   row((c.ascended and "ASCENDED " or "")..c.name.." | $"..math.floor(Config.Income(c)).."/s | "..(c.stand==0 and "Unplaced" or "Stand "..c.stand),function() remote:FireServer("stand",{stand=stand,id=c.id}) end)
+   if c.stand==stand then occupant=c elseif c.stand==0 then table.insert(available,c) end
   end
+  if occupant then
+   row("REMOVE FROM THIS STAND: "..(occupant.ascended and "ASCENDED " or "")..occupant.name.." Lv."..occupant.level.." #"..string.sub(occupant.id,-6),function() remote:FireServer("stand",{stand=stand,id=occupant.id}) end,Color3.fromRGB(185,100,35))
+   row("Remove the current creature before placing another.",nil,Color3.fromRGB(70,75,105))
+  else row("This stand is empty. Choose an unplaced creature below.",nil,Color3.fromRGB(70,75,105)) end
+  searchField(standDraft,"Search creature names",function(v) standDraft=v end)
+  row("APPLY CREATURE SEARCH"..(standQuery~="" and (": "..standQuery) or ""),function() standQuery=standDraft; standPage=1; render() end,Color3.fromRGB(60,120,180))
+  row("SORT: "..standSort.." (tap to change)",function()
+   if standSort=="Income" then standSort="Rarity" elseif standSort=="Rarity" then standSort="Name" elseif standSort=="Name" then standSort="Newest" else standSort="Income" end
+   standPage=1; render()
+  end,Color3.fromRGB(70,75,105))
+  local entries=InventoryView.build({},available,"Brainrots",standQuery,"All",standSort,Config.Income)
+  local page,current,pages=InventoryView.page(entries,standPage,12); standPage=current
+  row("PAGE "..current.." / "..pages.." | "..#entries.." unplaced creatures",nil,Color3.fromRGB(70,75,105))
+  if current>1 then row("PREVIOUS CREATURE PAGE",function() standPage-=1; render() end,Color3.fromRGB(60,120,180)) end
+  if current<pages then row("NEXT CREATURE PAGE",function() standPage+=1; render() end,Color3.fromRGB(60,120,180)) end
+  for _,entry in ipairs(page) do
+   local c=entry.item
+   row((c.locked and "[PROTECTED] " or "")..(c.ascended and "ASCENDED " or "")..c.name.." Lv."..c.level.." | $"..string.format("%.4g",entry.income).."/s #"..string.sub(c.id,-6),function()
+    if occupant then notice.Text="Remove the current creature first."; return end
+    remote:FireServer("stand",{stand=stand,id=c.id})
+   end,Config.Rarities[entry.rarity].color)
+  end
+  if #entries==0 then row("No unplaced creatures match. Creatures on other stands must be removed there first.",nil,Color3.fromRGB(70,75,105)) end
  elseif mode=="rebirth" then
   title.Text="REBIRTH "..(state.rebirth or 0).." / 100"
   if state.rebirth>=100 then row("Maximum rebirth reached",nil) else
@@ -661,7 +731,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false end; if data.open=="forge" then forgeIds={}; forgeConfirm=false end; if data.open=="roll" then discardConfirm=false end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false; craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; forgeConfirm=false; forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft="" end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  requestRender()
