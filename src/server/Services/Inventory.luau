@@ -11,6 +11,29 @@ end
 function Inventory.canConsume(item)
  return item~=nil and item.locked~=true
 end
+-- Snapshot-based batch protection. Validate every item before changing any.
+function Inventory.bulkSetLocked(parts,creatures,items,locked)
+ if type(locked)~="boolean" or type(items)~="table" or #items<1 or #items>365 then return nil end
+ local length=#items; local count=0
+ for key in pairs(items) do
+  count+=1
+  if count>365 or type(key)~="number" or key%1~=0 or key<1 or key>length then return nil end
+ end
+ if count~=length then return nil end
+ local owned={part={},creature={}}
+ for _,item in ipairs(parts) do owned.part[item.id]=item end
+ for _,item in ipairs(creatures) do owned.creature[item.id]=item end
+ local seen={}; local selected={}
+ for _,entry in ipairs(items) do
+  if type(entry)~="table" or (entry.category~="part" and entry.category~="creature")
+   or type(entry.id)~="string" or #entry.id<1 or #entry.id>64 or seen[entry.id] then return nil end
+  local item=owned[entry.category][entry.id]
+  if not item or (item.locked==true)==locked then return nil end
+  seen[entry.id]=true; table.insert(selected,item)
+ end
+ for _,item in ipairs(selected) do item.locked=locked end
+ return #selected
+end
 function Inventory.bulkSell(parts,rarity,ids,valueFn)
  if type(rarity)~="number" or rarity~=rarity or rarity%1~=0 or rarity<1 or rarity>8 then return nil end
  if type(ids)~="table" or #ids<1 or #ids>265 then return nil end

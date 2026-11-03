@@ -32,3 +32,16 @@ assert(InventoryView.find(parts,creatures,"part","missing")==nil)
 assert(InventoryView.find(parts,creatures,"invalid","a")==nil)
 assert(InventoryView.find(parts,creatures,"part",{})==nil)
 print("Creature component search and current-selection lookup tests passed")
+creatures[1].stand=2
+local function filtered(tab,rarity,mutation,placement)
+ return InventoryView.build(parts,creatures,tab,"","All","Newest",income,rarity,mutation,placement)
+end
+assert(#filtered("All",3,"All","All")==1 and filtered("All",3,"All","All")[1].item.id=="b")
+assert(#filtered("Brainrots",4,"Golden","Placed")==1)
+assert(#filtered("Brainrots",4,"Void","All")==0)
+assert(#filtered("Brainrots",4,"Golden","Unplaced")==0)
+assert(#filtered("All",0,"Standard","All")==1)
+assert(#filtered("All",0,"Golden","Placed")==1, "Placement filters exclude parts")
+creatures[1].stand=0
+assert(#filtered("Brainrots",4,"Golden","Unplaced")==1)
+print("Rarity, mutation and placement filter tests passed")

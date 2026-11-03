@@ -576,6 +576,10 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if items and Inventory.setLocked(items,value.id,value.locked) then
    send(player,value.locked and "Item protected from consumption and sale." or "Item protection removed.")
   else send(player,"Invalid item or protection request.") end
+ elseif action=="bulkSetItemLock" and type(value)=="table" then
+  local count=Inventory.bulkSetLocked(s.parts,s.creatures,value.items,value.locked)
+  if not count then send(player,"Batch protection cancelled: selection changed or was invalid.")
+  else send(player,(value.locked and "Protected " or "Unprotected ")..count.." selected items.") end
  elseif action=="bulkSellParts" and type(value)=="table" then
   local count,total=Inventory.bulkSell(s.parts,value.rarity,value.ids,Config.PartSellValue)
   if not count then send(player,"Bulk sale cancelled: the selected items changed or were invalid.")

@@ -12,7 +12,7 @@ function InventoryView.find(parts,creatures,category,id)
  for _,item in ipairs(source) do if item.id==id then return item end end
  return nil
 end
-function InventoryView.build(parts,creatures,tab,query,protection,sortMode,incomeFn)
+function InventoryView.build(parts,creatures,tab,query,protection,sortMode,incomeFn,rarityFilter,mutationFilter,placementFilter)
  local entries={}; local text=string.lower(query or "")
  local function add(category,item,index)
   if protection=="Protected" and not item.locked then return end
@@ -27,7 +27,22 @@ function InventoryView.build(parts,creatures,tab,query,protection,sortMode,incom
   end
   haystack=string.lower(haystack)
   if text~="" and not string.find(haystack,text,1,true) then return end
+  if placementFilter and placementFilter~="All" then
+   if category~="creature" then return end
+   if placementFilter=="Placed" and item.stand==0 then return end
+   if placementFilter=="Unplaced" and item.stand~=0 then return end
+  end
   local rarity=category=="part" and item.rarity or InventoryView.creatureRarity(item)
+  if rarityFilter and rarityFilter>0 and rarity~=rarityFilter then return end
+  if mutationFilter and mutationFilter~="All" then
+   local match=category=="part" and (item.mutation or "Standard")==mutationFilter
+   if category=="creature" then
+    for _,component in pairs(item.components or {}) do
+     if (component.mutation or "Standard")==mutationFilter then match=true; break end
+    end
+   end
+   if not match then return end
+  end
   local income=category=="part" and item.income*(item.mutationMultiplier or 1) or incomeFn(item)
   table.insert(entries,{category=category,item=item,index=index,rarity=rarity,income=income})
  end
