@@ -92,6 +92,14 @@ local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
 local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false
 local giftButtons={}
 local incomeLabels={}
+local eventSchedule=nil; local eventReceivedAt=0; local eventButtons={}; local eventOverrideLabel=nil
+local eventInfo={
+ {key="frenzy",name="LUCK FRENZY",description="2x non-Common rarity weight for 5 minutes every 30 minutes."},
+ {key="eclipse",name="ECLIPSE",description="Newly rolled offers cost 50% less during its 3-minute window."},
+ {key="sigma",name="SIGMA",description="3x online stand income for 2 minutes."},
+ {key="storm",name="OHIO STORM",description="Your plot spawns collectible drops every 10 seconds; each pays $50 x (rebirth + 1)."},
+ {key="weekend",name="WEEKEND FRENZY",description="Friday 17:00 to Monday 00:00 UTC: 1.5x non-Common weight and 2x online income."},
+}
 local catalogOdds=nil; local catalogRarity=0; local catalogUnlockedOnly=false
 local catalogQuery=""; local catalogDraft=""; local catalogPage=1
 local seasonPage=1
@@ -130,6 +138,36 @@ local function updateIncomeLabels()
   incomeLabels.bonuses.Text="ACTIVE: "..(income.statue and "Statue +50% | " or "")..(income.sigma and "Sigma x3 | " or "")..(income.weekend and "Weekend x2 | " or "")..(income.vip and "VIP x1.2" or "")
  end
 end
+local function formatDuration(seconds)
+ local n=math.max(0,math.ceil(seconds)); local days=math.floor(n/86400); n%=86400
+ local hours=math.floor(n/3600); n%=3600
+ local minutes=math.floor(n/60); local secs=n%60
+ if days>0 then return days.."d "..hours.."h "..minutes.."m" end
+ if hours>0 then return hours.."h "..minutes.."m "..secs.."s" end
+ return minutes.."m "..secs.."s"
+end
+local function updateEventSchedule()
+ if not eventSchedule then return end
+ local elapsed=math.max(0,os.clock()-eventReceivedAt)
+ local estimated=eventSchedule.at+elapsed
+ for _,info in ipairs(eventInfo) do
+  local window=eventSchedule.events[info.key]; local button=eventButtons[info.key]
+  if button and button.Parent and window then
+   local status
+   if estimated>=window.endsAt then status="WINDOW PASSED — REFRESH"
+   elseif estimated>=window.startsAt then status="SCHEDULED ACTIVE — ends in "..formatDuration(window.endsAt-estimated)
+   else status="NEXT STARTS IN "..formatDuration(window.startsAt-estimated) end
+   button.Text=info.name..": "..status.." | "..info.description
+  end
+ end
+ if eventOverrideLabel and eventOverrideLabel.Parent then
+  local override=eventSchedule.override
+  if override then
+   local remaining=override.remaining-elapsed
+   eventOverrideLabel.Text=remaining>0 and ("SERVER-ONLY ADMIN OVERRIDE: "..override.name.." (approximately "..formatDuration(remaining).." left at this server)") or "ADMIN OVERRIDE WINDOW PASSED — refresh for current status."
+  else eventOverrideLabel.Text="No server-only admin override was active when this snapshot was requested." end
+ end
+end
 local function refreshTimedLabels()
  if panel.Visible and mode=="rewards" then
   for _,gift in ipairs(Config.SessionGifts) do
@@ -138,6 +176,7 @@ local function refreshTimedLabels()
   end
  end
  if panel.Visible and mode=="income" then updateIncomeLabels() end
+ if panel.Visible and mode=="events" then updateEventSchedule() end
  if panel.Visible and mode=="roll" then title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s" end
 end
 render=function()
@@ -145,7 +184,7 @@ render=function()
  if not panel.Visible then return end
  local previousScroll=list.CanvasPosition
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
- rowOrder=0; giftButtons={}; incomeLabels={}
+ rowOrder=0; giftButtons={}; incomeLabels={}; eventButtons={}; eventOverrideLabel=nil
  if mode=="roll" then
   title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s"
   row("PULL LEVER / REROLL",function() remote:FireServer("roll") end,Color3.fromRGB(220,78,93))
@@ -480,6 +519,7 @@ render=function()
    row(quest.label.."  "..value.."/"..quest.goal.." | "..quest.rewardLabel.." + "..quest.xp.." season XP — "..status,function() remote:FireServer("claimQuest",quest.key) end,Color3.fromRGB(90,80,150))
   end
   row("CATALOG & ROLL ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
+  row("LIVE EVENT SCHEDULE",function() eventSchedule=nil; mode="events"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestEvents"); render() end,Color3.fromRGB(60,120,180))
   row("OPEN FREE SEASON TRACK",function() seasonPage=1; mode="season"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(120,75,180))
   row("SESSION GIFTS — timers reset when you leave",nil,Color3.fromRGB(70,75,105))
   for _,gift in ipairs(Config.SessionGifts) do
@@ -493,6 +533,20 @@ render=function()
   row("ACCESSIBILITY SETTINGS",function() mode="settings"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
   row("REFRESH GAME STATE FROM SERVER",function() remote:FireServer("sync"); notice.Text="Requesting current game state..." end,Color3.fromRGB(60,120,180))
   row("HOW TO PLAY",function() mode="help"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
+ elseif mode=="events" then
+  title.Text="LIVE EVENTS — UTC SCHEDULE"
+  row("REFRESH EVENT SCHEDULE",function() remote:FireServer("requestEvents"); notice.Text="Requesting event schedule..." end,Color3.fromRGB(60,120,180))
+  if not eventSchedule then
+   row("Waiting for a server schedule. If it does not arrive, tap refresh.",nil,Color3.fromRGB(70,75,105))
+  else
+   row("SERVER SNAPSHOT: "..os.date("!%Y-%m-%d %H:%M:%S UTC",eventSchedule.at)..". Timers are estimates; refresh after a window passes.",nil,Color3.fromRGB(70,75,105))
+   for _,info in ipairs(eventInfo) do eventButtons[info.key]=row(info.name..": "..info.description,nil,Color3.fromRGB(85,75,145)) end
+   eventOverrideLabel=row("Checking server-only override...",nil,Color3.fromRGB(70,75,105))
+   updateEventSchedule()
+  end
+  row("Non-Common weight multipliers stack; they do not directly multiply final odds. Sigma and weekend income multipliers stack. Offline income excludes event bonuses.",nil,Color3.fromRGB(70,75,105))
+  row("Scheduled events repeat globally. Overrides are temporary and server-only, can change after this snapshot, and are not shown in future scheduled windows.",nil,Color3.fromRGB(70,75,105))
+  row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="season" then
   title.Text="FREE SEASON TRACK"
   local season=state.season or {xp=0,claimed=0,rollProgress=0}
@@ -772,6 +826,11 @@ end
 remote.OnClientEvent:Connect(function(data)
  if data.rebirthQuote then
   if mode=="rebirth" and panel.Visible and rebirthSelected==data.rebirthQuote.id then rebirthQuote=data.rebirthQuote; render() end
+  return
+ end
+ if data.eventSchedule then
+  eventSchedule=data.schedule; eventReceivedAt=os.clock()
+  if mode=="events" and panel.Visible then requestRender() end
   return
  end
  if data.oddsSnapshot then

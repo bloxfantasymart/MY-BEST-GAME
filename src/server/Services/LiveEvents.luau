@@ -17,6 +17,29 @@ function LiveEvents.at(now)
   disasterOffset=disasterOffset,
  }
 end
+-- Scheduled current or next occurrence, in UTC epoch seconds. Admin overrides
+-- are deliberately separate from these deterministic global schedule windows.
+local function occurrence(now,period,offset,duration)
+ local cycle=math.floor(now/period)*period
+ local start=cycle+offset
+ if now>=start+duration then start+=period end
+ return {startsAt=start,endsAt=start+duration,active=now>=start and now<start+duration}
+end
+function LiveEvents.forecast(now)
+ local t=math.floor(now)
+ -- Unix epoch began on a Thursday; first Friday 17:00 UTC is at 147600.
+ local weekStart=86400+17*3600
+ local weeklyCycle=math.floor((t-weekStart)/604800)*604800+weekStart
+ local weekend={startsAt=weeklyCycle,endsAt=weeklyCycle+55*3600,active=t<weeklyCycle+55*3600}
+ if not weekend.active then weekend.startsAt+=604800; weekend.endsAt+=604800 end
+ return {at=t,events={
+  frenzy=occurrence(t,1800,0,300),
+  eclipse=occurrence(t,2700,0,180),
+  sigma=occurrence(t,2700,900,120),
+  storm=occurrence(t,2700,1800,120),
+  weekend=weekend,
+ }}
+end
 function LiveEvents.applyOverride(event,name)
  local fields={Frenzy="frenzy",Eclipse="eclipse",Sigma="sigma",Storm="storm"}
  local field=fields[name]

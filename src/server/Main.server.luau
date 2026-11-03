@@ -429,6 +429,11 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="adminAction" then
   if AdminService.authorized(Config.AdminUserIds,player.UserId) then runAdmin(player,value) end
  elseif action=="sync" then send(player)
+ elseif action=="requestEvents" then
+  local epoch=os.time(); local schedule=LiveEvents.forecast(epoch)
+  currentEvent() -- clear an expired override before reporting it
+  if adminEvent then schedule.override={name=adminEvent.name,remaining=math.max(0,math.ceil(adminEvent.expires-os.clock()))} end
+  remote:FireClient(player,{eventSchedule=true,schedule=schedule})
  elseif action=="requestOdds" then
   local tiers,total,factor,event,modifiers,now=rollContext(s)
   remote:FireClient(player,{oddsSnapshot=true,odds={tiers=RollOdds.disclose(tiers,total,#Config.Rarities),rebirth=s.rebirth,nonCommonFactor=factor,modifiers=modifiers,eclipse=event.eclipse==true,at=now}})
