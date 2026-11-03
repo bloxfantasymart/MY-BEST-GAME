@@ -87,6 +87,7 @@ local function validProfile(data)
    or not finite(p.questDay,-1,1e9) or p.questDay%1~=0
    or not finite(p.rolls,0,50) or not finite(p.rareCrafts,0,2) or not finite(p.collected,0,500000)
    or type(p.claimed)~="table" then return false end
+  if p.questVariant~=nil and (not finite(p.questVariant,1,18) or p.questVariant%1~=0) then return false end
   for key,value in pairs(p.claimed) do
    if (key~="rolls" and key~="rareCrafts" and key~="collected") or value~=true then return false end
   end

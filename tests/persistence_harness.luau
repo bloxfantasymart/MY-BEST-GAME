@@ -266,3 +266,21 @@ database.player_516.lastOfflineSeconds=86401; assert(a.load(516)==nil)
 database.player_516.lastOfflineSeconds=1; database.player_516.lastOfflineRate=-1; assert(a.load(516)==nil)
 database.player_516.lastOfflineRate=1; database.player_516.lastOfflineCapped="true"; assert(a.load(516)==nil)
 print("Atomic offline receipt, transform retry and metadata validation tests passed")
+-- Daily variants persist without changing the current legacy day.
+database.player_517={version=1,cash=0,pending=0,slots=1,rebirth=0,parts={},creatures={},progress={dailyLastDay=-1,dailyStreak=0,questDay=100,rolls=22,rareCrafts=0,collected=0,claimed={}}}
+local legacyQuest=a.load(517)
+assert(legacyQuest and legacyQuest.progress.questVariant==nil and Progression.quests(legacyQuest.progress)[1].goal==50)
+Progression.refresh(legacyQuest.progress,100*86400,function() error("legacy day redrawn") end)
+assert(legacyQuest.progress.rolls==22 and a.save(517,legacyQuest,true))
+local nextDay=b.load(517)
+Progression.refresh(nextDay.progress,101*86400,function() return 7 end)
+Progression.increment(nextDay.progress,"rolls",10,101*86400)
+assert(b.save(517,nextDay,true))
+local reopened=a.load(517)
+assert(reopened.progress.questVariant==7 and reopened.progress.rolls==10 and Progression.quests(reopened.progress)[1].goal==30)
+assert(a.save(517,reopened,true))
+for _,invalid in ipairs({0,19,1.5,"1",true}) do
+ database.player_517.progress.questVariant=invalid
+ assert(a.load(517)==nil and database.player_517.progress.questVariant==invalid)
+end
+print("Daily quest variant legacy compatibility, round trip and validation passed")

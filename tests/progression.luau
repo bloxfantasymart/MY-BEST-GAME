@@ -5,6 +5,7 @@ assert(Progression.claimDaily(p,start+200)==nil)
 assert(Progression.claimDaily(p,start+86400)==2)
 assert(Progression.claimDaily(p,start+3*86400)==1, "Missing a UTC day resets streak")
 assert(Progression.claimDaily(p,start)==nil, "Clock rollback must not enable a claim")
+p.questDay=13 -- Existing active legacy quests retain their original goals.
 Progression.increment(p,"rolls",49,start+3*86400)
 assert(Progression.claimQuest(p,"rolls",start+3*86400)==nil)
 Progression.increment(p,"rolls",20,start+3*86400)
@@ -48,3 +49,37 @@ local rollback={pending=5,lastLogout=100,creatures={}}
 Progression.applyOffline(rollback,99,income)
 assert(rollback.pending==5 and rollback.lastOfflineAward==0 and rollback.lastOfflineSeconds==0 and rollback.lastLogout==0)
 print("Offline receipt, cap boundary and clock rollback tests passed")
+
+-- All target combinations stay within the persisted bounds and match their labels/rewards.
+local combos={}
+for variant=1,18 do
+ local daily=Progression.new()
+ Progression.refresh(daily,50*86400,function(min,max) assert(min==1 and max==18); return variant end)
+ local q=Progression.quests(daily)
+ assert(#q==3 and q[1].key=="rolls" and q[2].key=="rareCrafts" and q[3].key=="collected")
+ assert(q[1].goal<=50 and q[2].goal<=2 and q[3].goal<=500000)
+ local combination=q[1].goal..":"..q[2].goal..":"..q[3].goal
+ assert(not combos[combination]); combos[combination]=true
+ for _,quest in ipairs(q) do
+  Progression.increment(daily,quest.key,quest.goal-1,50*86400)
+  assert(not Progression.readyQuest(daily,quest.key,50*86400))
+  Progression.increment(daily,quest.key,1000000,50*86400)
+  assert(daily[quest.key]==quest.goal and Progression.readyQuest(daily,quest.key,50*86400).rewardKind==quest.rewardKind)
+  assert(Progression.claimQuest(daily,quest.key,50*86400)==quest.reward)
+  assert(Progression.claimQuest(daily,quest.key,50*86400)==nil)
+ end
+ Progression.refresh(daily,50*86400+10,function() error("must not redraw same day") end)
+ assert(daily.questVariant==variant)
+ Progression.refresh(daily,49*86400,function() error("must not redraw on rollback") end)
+ assert(daily.questVariant==variant and daily.questDay==50)
+ Progression.refresh(daily,51*86400,function() return 18 end)
+ assert(daily.questVariant==18 and daily.rolls==0 and daily.rareCrafts==0 and daily.collected==0 and next(daily.claimed)==nil)
+end
+local legacy=Progression.new(); legacy.questDay=70; legacy.rolls=40
+local oldQuests=Progression.quests(legacy)
+assert(oldQuests[1].goal==50 and oldQuests[2].goal==2 and oldQuests[3].goal==500000)
+Progression.refresh(legacy,70*86400,function() error("legacy day must not be replaced") end)
+assert(legacy.questVariant==nil and legacy.rolls==40)
+Progression.refresh(legacy,71*86400,function() return 1 end)
+assert(legacy.questVariant==1 and Progression.quests(legacy)[1].goal==30 and legacy.rolls==0)
+print("Daily randomized target combinations, migration, claims and rollback tests passed")

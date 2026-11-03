@@ -1,4 +1,5 @@
-local p=Progression.new(); local extras=RewardExtras.new(); local now=123*86400
+local p=Progression.new(); p.questDay=123 -- Exercise the legacy in-progress day.
+local extras=RewardExtras.new(); local now=123*86400
 local old={luckPotions=1,rollVouchers=2,goldenLever=false,sigmaStatue=false,ohioCrown=false}
 assert(RewardExtras.normalize(old)==old and old.doubleLuckPotions==0 and old.uncommonBoxes==0)
 local result=QuestRewards.claim(p,extras,"rolls",now); assert(result==nil and not p.claimed.rolls)
@@ -35,3 +36,41 @@ assert(MysteryBoxes.openStandard(extras,parts,creatures,offers,10,function() ret
 assert(MysteryBoxes.openStandard(extras,parts,creatures,offers,10,function() return {id="new-common",rarity=1} end) and extras.standardBoxes==0 and #parts==3)
 assert(not MysteryBoxes.openStandard(extras,parts,creatures,offers,10,factory("next")))
 print("Standard crate odds boundaries, capacity and atomic consumption tests passed")
+
+for variant=1,18 do
+ local day=Progression.new(); local rewards=RewardExtras.new()
+ Progression.refresh(day,now,function() return variant end)
+ local quests=Progression.quests(day)
+ for _,quest in ipairs(quests) do
+  Progression.increment(day,quest.key,quest.goal,now)
+  if quest.rewardKind=="potion2" then
+   rewards.doubleLuckPotions=100
+   assert(not QuestRewards.claim(day,rewards,quest.key,now) and not day.claimed[quest.key])
+   rewards.doubleLuckPotions=0
+  elseif quest.rewardKind=="uncommonBox" then
+   rewards.uncommonBoxes=100
+   assert(not QuestRewards.claim(day,rewards,quest.key,now) and not day.claimed[quest.key])
+   rewards.uncommonBoxes=0
+  end
+  local result=QuestRewards.claim(day,rewards,quest.key,now)
+  assert(result and result.goal==quest.goal and result.rewardKind==quest.rewardKind and result.xp==quest.xp)
+  assert(QuestRewards.claim(day,rewards,quest.key,now)==nil)
+ end
+ assert(rewards.doubleLuckPotions==1 and rewards.uncommonBoxes==1)
+end
+print("Randomized daily quest rewards are granted once for all variants")
+local reviewed=Progression.new(); local reviewRewards=RewardExtras.new()
+Progression.refresh(reviewed,now,function() return 1 end)
+Progression.increment(reviewed,"rolls",30,now)
+assert(not QuestRewards.claimReviewed(reviewed,reviewRewards,"rolls",122,now) and not reviewed.claimed.rolls)
+assert(not QuestRewards.claimReviewed(reviewed,reviewRewards,"rolls",0/0,now))
+assert(not QuestRewards.claimReviewed(reviewed,reviewRewards,"rolls","123",now))
+assert(QuestRewards.claimReviewed(reviewed,reviewRewards,"rolls",123,now))
+assert(not QuestRewards.claimReviewed(reviewed,reviewRewards,"rolls",123,now))
+-- A stale request across midnight cannot claim a new objective.
+Progression.refresh(reviewed,now+86400,function() return 1 end)
+Progression.increment(reviewed,"rolls",30,now+86400)
+assert(not QuestRewards.claimReviewed(reviewed,reviewRewards,"rolls",123,now+86400) and not reviewed.claimed.rolls)
+assert(QuestRewards.claimReviewed(reviewed,reviewRewards,"rolls",124,now+86400))
+assert(not QuestRewards.claimReviewed(reviewed,reviewRewards,"rareCrafts",123,now), "Rollback cannot claim a future day's quest")
+print("Reviewed daily quest day rejects stale, malformed and replayed claims")

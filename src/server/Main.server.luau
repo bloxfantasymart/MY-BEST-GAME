@@ -122,7 +122,7 @@ local function send(player, message, effect)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.Quests, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -515,7 +515,8 @@ remote.OnServerEvent:Connect(function(player, action, value)
   Tutorial.advance(s.tutorial,"sync",s.parts)
   send(player,"Standard Roll Crate: "..item.name.." "..item.kind.."!")
  elseif action=="claimQuest" then
-  local quest,reason=QuestRewards.claim(s.progress,s.extras,value,os.time())
+  if type(value)~="table" then send(player,"Review the current daily objectives first."); return end
+  local quest,reason=QuestRewards.claimReviewed(s.progress,s.extras,value.key,value.day,os.time())
   if not quest then send(player,reason); return end
   s.cash+=quest.reward; Season.addXP(s.season,quest.xp)
   send(player,"Quest completed: "..quest.rewardLabel.." and "..quest.xp.." season XP!")

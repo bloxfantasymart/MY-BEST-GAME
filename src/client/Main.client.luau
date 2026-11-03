@@ -526,10 +526,11 @@ render=function()
   questRewardTools(extras)
   row("Free-part vouchers: "..(extras.rollVouchers or 0).." — use at roll station; rolls are already free.",nil,Color3.fromRGB(70,75,105))
   row("Golden Lever: "..(extras.goldenLever and "unlocked (+5% non-common weight)" or "locked").." | Sigma Statue: "..(extras.sigmaStatue and "unlocked (+50% income)" or "locked"),nil,Color3.fromRGB(70,75,105))
+  row("Daily targets vary per player and reset at UTC midnight; unclaimed rewards expire. Rolls count generated parts, even if not purchased.",nil,Color3.fromRGB(70,75,105))
   for _,quest in ipairs(state.quests) do
    local value=p[quest.key] or 0
    local status=p.claimed[quest.key] and "CLAIMED" or (value>=quest.goal and "CLAIM" or "IN PROGRESS")
-   row(quest.label.."  "..value.."/"..quest.goal.." | "..quest.rewardLabel.." + "..quest.xp.." season XP — "..status,function() remote:FireServer("claimQuest",quest.key) end,Color3.fromRGB(90,80,150))
+   row(quest.label.."  "..value.."/"..quest.goal.." | "..quest.rewardLabel.." + "..quest.xp.." season XP — "..status,function() remote:FireServer("claimQuest",{key=quest.key,day=p.questDay}) end,Color3.fromRGB(90,80,150))
   end
   row("CATALOG & ROLL ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
   row("LIVE EVENT SCHEDULE",function() eventSchedule=nil; mode="events"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestEvents"); render() end,Color3.fromRGB(60,120,180))

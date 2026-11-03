@@ -15,4 +15,13 @@ function QuestRewards.claim(progress,extras,key,now)
  if quest.rewardKind=="uncommonBox" then extras.uncommonBoxes+=1 end
  return quest
 end
+-- A displayed quest belongs to a particular UTC day. Never let a delayed
+-- confirmation from yesterday claim a different day's objective with the same key.
+function QuestRewards.claimReviewed(progress,extras,key,reviewedDay,now)
+ local day=Progression.refresh(progress,now)
+ if type(reviewedDay)~="number" or reviewedDay~=day or reviewedDay~=progress.questDay then
+  return nil,"Daily objectives changed. Review today's quests and try again."
+ end
+ return QuestRewards.claim(progress,extras,key,now)
+end
 return QuestRewards
