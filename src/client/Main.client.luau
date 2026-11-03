@@ -13,6 +13,7 @@ local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView
 local TutorialGuide=require(ReplicatedStorage.Shared:WaitForChild("TutorialGuide"))
 local StandLayout=require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
 local CollectionIndex=require(ReplicatedStorage.Shared:WaitForChild("CollectionIndex"))
+local OfferSafety=require(ReplicatedStorage.Shared:WaitForChild("OfferSafety"))
 local SeasonRewards=require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
@@ -101,7 +102,8 @@ local craftKind="Head"; local craftPage=1; local craftQuery=""; local craftDraft
 local forgePage=1; local forgeQuery=""; local forgeDraft=""
 local standPage=1; local standQuery=""; local standDraft=""; local standSort="Income"; local standSelection=nil
 local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
-local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false
+local autoMutationRules={Shiny="hold",Golden="hold",Void="hold",Glitched="hold"}; local autoProtectMutations=true
+local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false; local skipReview=nil
 local giftButtons={}
 local incomeLabels={}
 local eventSchedule=nil; local eventReceivedAt=0; local eventButtons={}; local eventOverrideLabel=nil
@@ -199,18 +201,40 @@ render=function()
  rowOrder=0; giftButtons={}; incomeLabels={}; eventButtons={}; eventOverrideLabel=nil
  if mode=="roll" then
   title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s"
-  row("PULL LEVER / REROLL",function() remote:FireServer("roll") end,Color3.fromRGB(220,78,93))
+  if state.autoRolling then row("Stop auto-roll before rolling manually.",nil,Color3.fromRGB(70,75,105))
+  elseif #state.rolls>0 then row("Buy, skip or review discarding current offers before rolling again.",nil,Color3.fromRGB(150,85,45))
+  else row("PULL LEVER",function() remote:FireServer("roll") end,Color3.fromRGB(220,78,93)) end
   if state.autoRolling then
    local run=state.autoRun
    row("STOP AUTO-ROLL"..(run and (" | spent $"..run.spent.." / $"..run.config.maxSpend.." | batches "..run.batches.."/"..run.config.maxBatches) or ""),function() remote:FireServer("autoRoll",false) end,Color3.fromRGB(200,65,85))
   elseif state.rebirth<5 and state.passes.AutoRoll~="owned" then
    row("AUTO-ROLL: unlock at rebirth 5 or with pass",nil,Color3.fromRGB(70,75,105))
   else row("CONFIGURE AUTO-ROLL",function() autoConfirm=false; mode="autoSetup"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(52,170,105)) end
+  if discardConfirm and not OfferSafety.matches(state.rolls,discardConfirm.ids) then discardConfirm=false end
+  if skipReview then
+   local found=false; for _,offer in ipairs(state.rolls) do if offer.id==skipReview then found=true; break end end
+   if not found then skipReview=nil end
+  end
   if not state.autoRolling and #state.rolls>0 then
-   row(discardConfirm and "CONFIRM: DISCARD ALL CURRENT OFFERS" or "DISCARD ALL OFFERS (review first)",function()
-    if discardConfirm then remote:FireServer("discardOffers"); discardConfirm=false else discardConfirm=true; render() end
-   end,Color3.fromRGB(160,75,70))
-   if discardConfirm then row("CANCEL DISCARD",function() discardConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
+   if discardConfirm then
+    local review=discardConfirm
+    row("REVIEW DISCARD: "..#review.ids.." UNPURCHASED OFFERS. THIS CANNOT BE UNDONE.",nil,Color3.fromRGB(160,75,70))
+    for _,description in ipairs(review.labels) do row(description,nil,Color3.fromRGB(70,75,105)) end
+    row("CONFIRM DISCARD "..#review.ids.." OFFERS",function()
+     if discardConfirm~=review then return end
+     discardConfirm=false; remote:FireServer("discardOffers",review.ids); notice.Text="Requesting reviewed discard..."; render()
+    end,Color3.fromRGB(160,75,70))
+    row("CANCEL DISCARD",function() discardConfirm=false; render() end,Color3.fromRGB(70,75,105))
+   else
+    row("REVIEW DISCARD ALL "..#state.rolls.." OFFERS",function()
+     local review={ids={},labels={}}
+     for _,item in ipairs(state.rolls) do
+      table.insert(review.ids,item.id)
+      table.insert(review.labels,(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] $"..item.price.." #"..string.sub(item.id,-6))
+     end
+     discardConfirm=review; skipReview=nil; list.CanvasPosition=Vector2.zero; render()
+    end,Color3.fromRGB(160,75,70))
+   end
   end
   row("VIEW CATALOG & CURRENT ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
   for _,item in ipairs(state.rolls) do
@@ -220,7 +244,14 @@ render=function()
    if state.extras and state.extras.rollVouchers>0 then
     row("FREE PART VOUCHER: "..item.name.." "..item.kind.." ("..state.extras.rollVouchers.." left)",function() remote:FireServer("buyWithVoucher",item.id) end,Color3.fromRGB(60,145,150))
    end
-   row("SKIP "..item.name.." "..item.kind,function() remote:FireServer("skip",item.id) end,Color3.fromRGB(70,75,105))
+   local reviewed=skipReview==item.id
+   row((reviewed and "CONFIRM SKIP " or "REVIEW SKIP ")..(item.mutation or "Standard").." "..item.name.." "..item.kind,function()
+    if reviewed then
+     if skipReview~=item.id then return end
+     skipReview=nil; remote:FireServer("skip",item.id); notice.Text="Requesting offer skip..."; render()
+    else skipReview=item.id; discardConfirm=false; render() end
+   end,Color3.fromRGB(70,75,105))
+   if reviewed then row("CANCEL SKIP",function() skipReview=nil; render() end,Color3.fromRGB(70,75,105)) end
   end
  elseif mode=="autoSetup" then
   title.Text="AUTO-ROLL SETTINGS"
@@ -230,6 +261,18 @@ render=function()
     autoRules[i]=autoRules[i]=="skip" and "hold" or (autoRules[i]=="hold" and "buy" or "skip"); autoConfirm=false; render()
    end,rarity.color)
   end
+  row("MUTATION SAFETY: HOLD overrides the rarity rule. FOLLOW RARITY may automatically buy or skip that mutation. Standard always follows rarity.",nil,Color3.fromRGB(150,85,45))
+  for _,mutation in ipairs(Config.Mutations) do
+   local name=mutation.name
+   if name~="Standard" then
+    row(name..": "..(autoMutationRules[name]=="hold" and "HOLD FOR REVIEW" or "FOLLOW RARITY").." (tap to change)",function()
+     autoMutationRules[name]=autoMutationRules[name]=="hold" and "rarity" or "hold"; autoConfirm=false; render()
+    end,Color3.fromRGB(85,85,120))
+   end
+  end
+  row("AUTO-PROTECT AUTOMATICALLY BOUGHT MUTATIONS: "..(autoProtectMutations and "ON (safer default)" or "OFF").." — does not affect manual buys",function()
+   autoProtectMutations=not autoProtectMutations; autoConfirm=false; render()
+  end,Color3.fromRGB(60,120,180))
   local function numberField(labelText,initial,callback)
    local field=Instance.new("TextBox"); field.Size=UDim2.new(1,-10,0,50); field.BackgroundColor3=Color3.fromRGB(60,65,95); field.TextColor3=Color3.new(1,1,1)
    field.Text=initial; field.PlaceholderText=labelText; field.ClearTextOnFocus=false; field.Font=Enum.Font.GothamBold; field.TextSize=16
@@ -242,7 +285,7 @@ render=function()
   row("Run uses cash, not vouchers. Limits reset on each run. Existing offers must be cleared first.",nil,Color3.fromRGB(70,75,105))
   row(autoConfirm and "CONFIRM AUTO-ROLL: CASH MAY BE SPENT" or "REVIEW AUTO-ROLL SETTINGS",function()
    if autoConfirm then
-    remote:FireServer("autoRoll",{rules=autoRules,maxSpend=tonumber(autoMaxSpend),maxPrice=tonumber(autoMaxPrice),maxBatches=tonumber(autoMaxBatches)})
+    remote:FireServer("autoRoll",{rules=autoRules,mutationRules=autoMutationRules,protectMutations=autoProtectMutations,maxSpend=tonumber(autoMaxSpend),maxPrice=tonumber(autoMaxPrice),maxBatches=tonumber(autoMaxBatches)})
     autoConfirm=false; discardConfirm=false; mode="roll"; list.CanvasPosition=Vector2.zero; render()
    else autoConfirm=true; render() end
   end,Color3.fromRGB(185,65,85))
@@ -987,7 +1030,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false; craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; forgeConfirm=false; forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false; craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; forgeConfirm=false; forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  if data.offlineReport and not offlineShown then

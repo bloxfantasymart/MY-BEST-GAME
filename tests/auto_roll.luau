@@ -42,3 +42,77 @@ for _=1,100 do
  assert(paid==output.spent)
 end
 print("Auto-roll rules, budget limits, slot order and conservation tests passed")
+local function withMutation(id,rarity,price,mutation,multiplier)
+ return {id=id,rarity=rarity,price=price,mutation=mutation,mutationMultiplier=multiplier}
+end
+-- Older clients with no mutation map fail safely to hold every non-Standard mutation.
+local defaults=AutoRoll.validate(config())
+for _,name in ipairs({"Shiny","Golden","Void","Glitched"}) do
+ assert(defaults.mutationRules[name]=="hold")
+ for _,rarity in ipairs({1,2,3}) do
+  local offered={withMutation(name,rarity,10,name),offer("tail",2,10)}
+  local owned={}; local r=AutoRoll.process(offered,owned,defaults,100,100,100)
+  assert(r.stop=="Mutation held for review." and #offered==2 and #owned==0 and r.spent==0)
+ end
+end
+local settings=config(); settings.mutationRules={Shiny="rarity",Golden="hold",Void="hold",Glitched="hold"}
+local guarded=AutoRoll.validate(settings); assert(guarded)
+settings.mutationRules.Shiny="hold"; assert(guarded.mutationRules.Shiny=="rarity")
+local mix={withMutation("skipShiny",1,10,"Shiny"),withMutation("buyShiny",2,30,"Shiny"),withMutation("holdGold",1,10,"Golden"),offer("tail",2,5)}
+local got={}; local result2=AutoRoll.process(mix,got,guarded,100,100,100)
+assert(result2.skipped==1 and result2.bought==1 and result2.spent==30 and result2.stop=="Mutation held for review.")
+assert(#mix==2 and mix[1].id=="holdGold" and mix[2].id=="tail" and got[1].id=="buyShiny")
+local unknown={withMutation("unknown",1,10,"FutureMutation"),offer("tail",2,5)}
+assert(AutoRoll.process(unknown,{},guarded,100,100,100).stop=="Mutation held for review." and #unknown==2)
+local odd={withMutation("odd",1,10,"Standard",6)}
+assert(AutoRoll.process(odd,{},guarded,100,100,100).stop=="Mutation held for review." and #odd==1)
+for _,bad in ipairs({false,"hold",{}, {Shiny="hold",Golden="hold",Void="hold"}, {Shiny=false,Golden="hold",Void="hold",Glitched="hold"}, {Shiny="skip",Golden="hold",Void="hold",Glitched="hold"}, {Shiny="hold",Golden="hold",Void="hold",Glitched="hold",Other="rarity"}}) do
+ local request=config(); request.mutationRules=bad; assert(AutoRoll.validate(request)==nil)
+end
+print("Mutation hold overrides, compatibility, malformed maps and conservation passed")
+local names={}
+for _,mutation in ipairs(Config.Mutations) do
+ if mutation.name~="Standard" then
+  assert(defaults.mutationRules[mutation.name]=="hold", "Configured mutations must have an explicit safe default")
+  names[mutation.name]=true
+ end
+end
+for name in pairs(defaults.mutationRules) do assert(names[name], "Remove obsolete mutation rules when updating Config") end
+-- When explicitly allowed to follow rarity, automatically bought mutations
+-- are protected by default before they enter inventory.
+local mutated=config(); mutated.mutationRules={Shiny="rarity",Golden="rarity",Void="rarity",Glitched="rarity"}
+local protective=AutoRoll.validate(mutated); assert(protective.protectMutations==true)
+local purchases={withMutation("mutated",2,30,"Golden",2.5),withMutation("plain",2,20,"Standard",1)}
+local backpack={}; local bought=AutoRoll.process(purchases,backpack,protective,100,100,100)
+assert(bought.bought==2 and bought.spent==50 and backpack[1].locked==true and not backpack[2].locked)
+mutated.protectMutations=false
+local optedOut=AutoRoll.validate(mutated); assert(optedOut and not optedOut.protectMutations)
+local free={withMutation("g",2,10,"Golden",2.5)}; local unprotected={}
+AutoRoll.process(free,unprotected,optedOut,100,100,100)
+assert(#unprotected==1 and not unprotected[1].locked)
+mutated.protectMutations="true"; assert(AutoRoll.validate(mutated)==nil)
+mutated.protectMutations=0; assert(AutoRoll.validate(mutated)==nil)
+print("Automatic mutation protection, opt-out and validation passed")
+-- Exhaustively exercise hold precedence and conservation for all combinations.
+for _,mutation in ipairs({"Shiny","Golden","Void","Glitched"}) do
+ for _,rarityAction in ipairs({"skip","hold","buy"}) do
+  for _,mutationAction in ipairs({"hold","rarity"}) do
+   for _,protect in ipairs({true,false}) do
+    local request=config(); request.rules={rarityAction,"hold","hold","hold","hold","hold","hold","hold"}
+    request.mutationRules={Shiny="hold",Golden="hold",Void="hold",Glitched="hold"}
+    request.mutationRules[mutation]=mutationAction; request.protectMutations=protect
+    local policy=AutoRoll.validate(request)
+    local mixed={withMutation("first",1,10,mutation,1.5),offer("tail",2,1)}; local inv={}
+    local outcome=AutoRoll.process(mixed,inv,policy,100,100,10)
+    if mutationAction=="hold" or rarityAction=="hold" then
+     assert(#mixed==2 and #inv==0 and outcome.spent==0 and outcome.stop)
+    elseif rarityAction=="skip" then
+     assert(#mixed==1 and #inv==0 and outcome.skipped==1 and outcome.stop)
+    else
+     assert(#mixed==1 and #inv==1 and outcome.bought==1 and outcome.spent==10 and (inv[1].locked==true)==protect)
+    end
+   end
+  end
+ end
+end
+print("Mutation safety precedence and accounting across every rule combination passed")

@@ -35,6 +35,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
 local CollectionIndex = require(ReplicatedStorage.Shared:WaitForChild("CollectionIndex"))
+local OfferSafety = require(ReplicatedStorage.Shared:WaitForChild("OfferSafety"))
 local collectionNames=CollectionIndex.catalogNames(Config.Catalog)
 local remote = Instance.new("RemoteEvent")
 remote.Name = "GameAction"
@@ -443,9 +444,11 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local tiers,total,factor,event,modifiers,now=rollContext(s)
   remote:FireClient(player,{oddsSnapshot=true,odds={tiers=RollOdds.disclose(tiers,total,#Config.Rarities),rebirth=s.rebirth,nonCommonFactor=factor,modifiers=modifiers,eclipse=event.eclipse==true,at=now}})
  elseif action=="roll" and nearby(player,s.plot.lever) then
+  local allowed,reason=OfferSafety.canRoll(s.rolls,s.autoRolling)
+  if not allowed then send(player,reason); return end
   if now-(s.lastRoll or 0)<0.35 then return end
-  s.lastRoll=now; s.autoRolling=false; rollBatch(s)
-  send(player,"Choose parts to buy, or roll again.")
+  s.lastRoll=now; rollBatch(s)
+  send(player,"Choose parts to buy or skip before rolling again.")
  elseif (action=="buy" or action=="buyWithVoucher") and nearby(player,s.plot.lever) then
   if s.autoRolling then send(player,"Stop auto-roll before buying manually."); return end
   local i,item=findById(s.rolls,value)
@@ -545,7 +548,8 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if i then table.remove(s.rolls,i); if #s.rolls==0 then s.offerExpires=0 end; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Offer skipped.") end
  elseif action=="discardOffers" and nearby(player,s.plot.lever) then
   if s.autoRolling then send(player,"Stop auto-roll before discarding offers."); return end
-  if #s.rolls>0 then s.rolls={}; s.offerExpires=0; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"All unpurchased offers discarded.") end
+  if not OfferSafety.matches(s.rolls,value) then send(player,"Offers changed. Review them before discarding."); return end
+  s.rolls={}; s.offerExpires=0; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Reviewed unpurchased offers discarded.")
  elseif action=="autoRoll" then
   if value==false then s.autoRolling=false; send(player,"Auto-roll stopped.")
   elseif s.autoRolling then send(player,"Stop auto-roll before changing its settings.")
