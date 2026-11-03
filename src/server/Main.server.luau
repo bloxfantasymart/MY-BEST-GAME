@@ -107,6 +107,7 @@ local rebirthBoard=part(world,"Server rebirth leaderboard",Vector3.new(13,9,1),V
 local cashCaption=label(cashBoard,"SERVER CASH",6); cashCaption.Parent.Size=UDim2.fromOffset(250,180)
 local rebirthCaption=label(rebirthBoard,"SERVER REBIRTHS",6); rebirthCaption.Parent.Size=UDim2.fromOffset(250,180)
 
+local settleIncome
 local function incomeSummary(s,rates,event)
  return PlotEconomy.summary(rates or PlotEconomy.rates(s.creatures,Config.Income),event or currentEvent(),PassService.owned(s.passes,"VIP"),s.extras.sigmaStatue)
 end
@@ -130,6 +131,7 @@ prompt(forge,"Open fusion forge").Triggered:Connect(function(player)
  if s and not joinGate.closed and DataService.isHealthy(player.UserId) and nearby(player,forge) then remote:FireClient(player,{open="forge"}) end
 end)
 local function collect(player,s)
+ if settleIncome then settleIncome(s,os.clock(),currentEvent()) end
  local amount=math.floor(s.pending)
  if amount<=0 then send(player,"No cash ready to collect yet."); return end
  s.cash+=amount; s.pending-=amount
@@ -234,6 +236,20 @@ local function refreshStands(s)
  if s.extras.sigmaStatue then for key,value in pairs(rates) do rates[key]=value*1.5 end end
  for n=1,24 do updateStand(s,n,rates) end
 end
+-- Settle before changing stands, levels or persistent multipliers. The prior
+-- observed event applies to the elapsed interval; transitions are approximate
+-- to the next checkpoint, since event boundaries can fall between ticks.
+settleIncome=function(s,now,event)
+ local elapsed=math.max(0,now-s.lastIncomeClock)
+ s.lastIncomeClock=now
+ local earned,leveled=PlotEconomy.advance(s.creatures,elapsed,Config.Income,s.incomeEvent,PassService.owned(s.passes,"VIP"),s.extras.sigmaStatue)
+ s.incomeEvent=event
+ s.pending+=earned
+ if leveled then
+  s.incomeDirty=true
+  if not joinGate.closed and states[s.player]==s then refreshStands(s) end
+ end
+end
 local function rollContext(s)
  local now=os.time(); local event=currentEvent()
  local modifiers={frenzy=event.frenzy,weekend=event.weekend,luckPass=PassService.owned(s.passes,"Luck"),
@@ -310,6 +326,7 @@ local function refreshPass(player,s,key)
  task.spawn(function()
   local result=PassService.lookup(player.UserId,Config.GamePasses[key])
   if joinGate.closed or states[player]~=s or s.passVersion[key]~=version then return end
+  if key=="VIP" then settleIncome(s,os.clock(),currentEvent()) end
   -- A failed service lookup must never erase an ownership already confirmed this session.
   if s.passes[key]~="owned" then s.passes[key]=result end
   if key=="KeepSlots" and result=="owned" then s.keepSlotsEntitled=true end
@@ -323,6 +340,7 @@ MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player,passId
  for _,key in ipairs(Config.PassOrder) do
   if Config.GamePasses[key]==passId and s.passes[key]~="disabled" and s.passes[key]~="invalid" then
    -- Roblox's server-side purchase-finished event is authoritative; invalidate stale queries.
+   if key=="VIP" then settleIncome(s,os.clock(),currentEvent()) end
    s.passVersion[key]=(s.passVersion[key] or 0)+1; s.passes[key]="owned"
    if key=="KeepSlots" then s.keepSlotsEntitled=true end
    send(player,"Gamepass unlocked: "..key.."!"); return
@@ -354,7 +372,10 @@ local function runAdmin(admin,payload)
  local plan,reason=AdminService.plan(Config.AdminUserIds,admin.UserId,payload,#Config.Catalog)
  if not plan then send(admin,reason); return end
  if plan.command=="event" then
+  local at=os.clock(); local before=currentEvent()
+  for player,session in pairs(states) do if DataService.isHealthy(player.UserId) then settleIncome(session,at,before) end end
   adminEvent={name=plan.event,expires=os.clock()+120}
+  local after=currentEvent(); for _,session in pairs(states) do session.incomeEvent=after end
   warn("[Admin] "..admin.UserId.." triggered "..plan.event.." for 120 seconds")
   send(admin,"Server event started for 120 seconds."); adminSnapshot(admin); return
  end
@@ -397,6 +418,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
  if s.requestCount>15 then s.blockUntil=now+5; return end
  if now-(s.lastAction or 0)<0.15 then return end
  s.lastAction=now
+ settleIncome(s,now,currentEvent())
  if action=="adminOpen" then
   if AdminService.authorized(Config.AdminUserIds,player.UserId) then adminSnapshot(player,value) end
  elseif action=="adminAction" then
@@ -641,7 +663,7 @@ local function joinImpl(player,context)
   context.data=nil
   plot.owner=nil; plot.sign.Text="Unclaimed plot"; return
  end
- local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
+ local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),lastIncomeClock=os.clock(),incomeEvent=currentEvent(),incomeDirty=false,giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
  states[player]=s; context.data=nil; plot.sign.Text=player.DisplayName.."'s plot"
  for _,key in ipairs(Config.PassOrder) do refreshPass(player,s,key) end
  local stats=Instance.new("Folder"); stats.Name="leaderstats"; stats.Parent=player
@@ -689,6 +711,7 @@ Players.PlayerRemoving:Connect(function(player)
  local s=states[player]; if not s or not ShutdownGate.beginDeparture(joinGate,player.UserId) then return end
  states[player]=nil
  local ok,err=pcall(function()
+  if DataService.isHealthy(player.UserId) then settleIncome(s,os.clock(),currentEvent()) end
   local snapshot=profile(s,true)
   local cleared,clearErr=pcall(clearPlot,s)
   if not cleared then warn("Failed to clear plot for "..player.UserId..": "..tostring(clearErr)) end
@@ -711,18 +734,9 @@ task.spawn(function()
     local changed=previousDay~=s.progress.questDay
     local expired=expireOffers(s,os.clock())
     if expired then changed=true end
-    local leveled=false
+    settleIncome(s,os.clock(),incomeEvent)
+    if s.incomeDirty then changed=true; s.incomeDirty=false end
     local rates=PlotEconomy.rates(s.creatures,Config.Income)
-    for _,creature in ipairs(s.creatures) do
-     if creature.stand>0 then
-      s.pending+=(rates[creature.stand] or 0)*PlotEconomy.multiplier(incomeEvent,PassService.owned(s.passes,"VIP"),s.extras.sigmaStatue)
-      if creature.level<1000 then
-       creature.exp=(creature.exp or 0)+1
-       if creature.exp>=10 then creature.exp-=10; creature.level+=1; leveled=true; changed=true end
-      else creature.exp=0 end
-     end
-    end
-    if leveled then refreshStands(s); rates=PlotEconomy.rates(s.creatures,Config.Income) end
     if AutoCollector.due(s.autoCollector,s.rebirth,os.clock(),s.pending) then collect(player,s) end
     s.plot.bankLabel.Text="Bank: $"..math.floor(s.pending)
     if changed then send(player,expired and "Unpurchased roll offers expired after 60 seconds." or nil)
@@ -810,7 +824,10 @@ task.spawn(function()
   if joinGate.closed then break end
   for player,s in pairs(states) do
    task.spawn(function()
-    if states[player]==s and not DataService.save(player.UserId,profile(s),false) then warn("Autosave failed for "..player.UserId) end
+    if states[player]==s then
+     if DataService.isHealthy(player.UserId) then settleIncome(s,os.clock(),currentEvent()) end
+     if not DataService.save(player.UserId,profile(s),false) then warn("Autosave failed for "..player.UserId) end
+    end
    end)
   end
  end
@@ -819,6 +836,7 @@ game:BindToClose(function()
  ShutdownGate.close(joinGate)
  local remaining=0
  for player,s in pairs(states) do
+  if DataService.isHealthy(player.UserId) then settleIncome(s,os.clock(),currentEvent()) end
   states[player]=nil; remaining+=1
   task.spawn(function()
    local ok,saved=pcall(function() return DataService.save(player.UserId,profile(s,true),true) end)
