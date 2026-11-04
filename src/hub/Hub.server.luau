@@ -12,6 +12,7 @@ local BoothLogic=require(script.Parent.BoothLogic)
 local ShowcaseView=require(script.Parent.Services.ShowcaseView)
 local Titles=require(script.Parent.Services.Titles)
 local ShutdownGate=require(script.Parent.Services.ShutdownGate)
+local InteractionGate=require(script.Parent.Services.InteractionGate)
 local remote=Instance.new("RemoteEvent"); remote.Name="HubAction"; remote.Parent=ReplicatedStorage
 local profiles={}
 local joinGate=ShutdownGate.new()
@@ -43,6 +44,7 @@ local function text(player,message) remote:FireClient(player,{message=message}) 
 local function travel(player)
  local s=profiles[player]
  if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not nearby(player,portal) then return end
+ if not InteractionGate.allow(s,"prompt",os.clock()) then return end
  local id=Config.PlaceIds.Main
  if type(id)~="number" or id<=0 or id%1~=0 then text(player,"Return portal is not configured. See the setup guide."); return end
  if os.clock()-(s.lastPortal or -20)<10 then return end
@@ -120,6 +122,7 @@ for i=1,15 do
  prompt(counter,"Claim / inspect").Triggered:Connect(function(player)
   local s=profiles[player]
   if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not nearby(player,counter) then return end
+  if not InteractionGate.allow(s,"prompt",os.clock()) then return end
   if not booth.owner then
    local ok,reason=BoothLogic.claim(booth,player,s)
    if not ok then text(player,reason); return end
@@ -132,12 +135,7 @@ remote.OnServerEvent:Connect(function(player,action,payload)
  local s=profiles[player]
  if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or type(action)~="string" or #action>30 then return end
  local now=os.clock()
- if now<(s.blockUntil or 0) then return end
- if now-(s.windowStart or 0)>=1 then s.windowStart=now; s.count=0 end
- s.count=(s.count or 0)+1
- if s.count>15 then s.blockUntil=now+5; return end
- if now-(s.lastAction or 0)<0.15 then return end
- s.lastAction=now
+ if not InteractionGate.allow(s,"remote",now) then return end
  if type(payload)~="table" then return end
  local index=payload.booth
  if type(index)~="number" or index~=index or index%1~=0 or index<1 or index>15 then return end

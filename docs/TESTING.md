@@ -209,3 +209,7 @@ Back up test data, update and publish **both** places from the same revision, an
 ### Item ID and roll failure safety
 
 Run `python3 tests/run_item_ids_tests.py /path/to/luau`. The allocator retries at most five times against IDs in the current player session, including stale saved-layout references and active reviews. Roll batches are prepared before replacing offers or recording progression; errors leave the inventory and offers unchanged. Box creation failure does not consume the box. This is not a global cross-player uniqueness registry, and it does not make trading safe. Test the complete paths in a private Roblox server before publishing.
+
+### Interaction rate limits
+
+Run `python3 tests/run_interaction_gate_tests.py /path/to/luau`. The main place and showcase hub use separate per-player remote and physical-prompt limits. Rapid prompt requests are ignored and sustained bursts temporarily block that channel; prompt activity does not block inventory remotes. Authority, profile-health and proximity checks still apply. In a private Roblox test, try normal prompts, rapid repeated prompts and multiple players; these controls do not constitute complete exploit or denial-of-service protection.

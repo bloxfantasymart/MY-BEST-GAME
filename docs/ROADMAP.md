@@ -42,3 +42,6 @@ Extend the showcase hub with recoverable, secure transfers, booth sales and dire
 
 ## Validation before release
 Perform Studio and published test-place tests for persistence, lease expiry, server crashes, overlapping sessions, rejoin and shutdown. Test malformed remote inputs, concurrent actions and client disconnections. Validate balance and responsive UI on real mobile and PC devices. Test real paid receipts and trading recovery only in an appropriate test environment. Do not treat static syntax/config checks as Roblox runtime validation.
+
+### Interaction abuse safeguards
+Main-place and showcase-hub prompts now have a per-player rate limit separate from remote actions, after ownership/health/proximity checks. Excessive bursts are temporarily blocked per channel. This is a server-side traffic safeguard, not a substitute for Roblox multiplayer and exploit testing.

@@ -33,6 +33,7 @@ local Rebirth = require(script.Parent.Services.Rebirth)
 local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
 local Obby = require(script.Parent.Services.Obby)
 local Loadouts = require(script.Parent.Services.Loadouts)
+local InteractionGate=require(script.Parent.Services.InteractionGate)
 local ItemIds = require(script.Parent.Services.ItemIds)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
@@ -179,13 +180,14 @@ prompt(summitChest,"Claim summit reward").Triggered:Connect(function(player)
  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
  if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not root or not humanoid or humanoid.Health<=0
   or (root.Position-summitChest.Position).Magnitude>10 then return end
+ if not InteractionGate.allow(s,"prompt",os.clock()) then return end
  local ok,reason=Obby.claim(s,character,os.clock(),os.time(),RewardExtras.MaxVouchers)
  if not ok then send(player,reason); return end
  send(player,"Summit reward: $"..Obby.Cash.." and "..Obby.Vouchers.." free-part vouchers! Cooldown: 6 hours.")
 end)
 prompt(forge,"Open fusion forge").Triggered:Connect(function(player)
  local s=states[player]
- if s and not joinGate.closed and DataService.isHealthy(player.UserId) and nearby(player,forge) then remote:FireClient(player,{open="forge"}) end
+ if s and not joinGate.closed and DataService.isHealthy(player.UserId) and nearby(player,forge) and InteractionGate.allow(s,"prompt",os.clock()) then remote:FireClient(player,{open="forge"}) end
 end)
 local function collect(player,s)
  if settleIncome then settleIncome(s,os.clock(),currentEvent()) end
@@ -201,6 +203,7 @@ end
 local function goToHub(player)
  local s=states[player]
  if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not nearby(player,hubPortal) then return end
+ if not InteractionGate.allow(s,"prompt",os.clock()) then return end
  local id=Config.PlaceIds.TradingHub
  if type(id)~="number" or id<=0 or id%1~=0 then send(player,"Trading hub is not configured yet. See the setup guide."); return end
  if os.clock()-(s.lastPortal or -20)<10 then return end
@@ -229,13 +232,13 @@ local function makePlot(i)
  plot.atm = part(folder,"Cash ATM",Vector3.new(8,4,5),center+Vector3.new(18,2.5,-16),Color3.fromRGB(48,205,115))
  label(plot.lever,"ROLL",4); label(plot.pod,"ASSEMBLE",5); plot.bankLabel = label(plot.atm,"Bank: $0",4)
  prompt(plot.lever,"Roll").Triggered:Connect(function(player)
-  if owned(player,plot) and nearby(player,plot.lever) then remote:FireClient(player,{open="roll"}) end
+  if owned(player,plot) and nearby(player,plot.lever) and InteractionGate.allow(states[player],"prompt",os.clock()) then remote:FireClient(player,{open="roll"}) end
  end)
  prompt(plot.pod,"Open assembly").Triggered:Connect(function(player)
-  if owned(player,plot) and nearby(player,plot.pod) then remote:FireClient(player,{open="assemble"}) end
+  if owned(player,plot) and nearby(player,plot.pod) and InteractionGate.allow(states[player],"prompt",os.clock()) then remote:FireClient(player,{open="assemble"}) end
  end)
  prompt(plot.atm,"Collect").Triggered:Connect(function(player)
-  if owned(player,plot) and nearby(player,plot.atm) then collect(player,states[player]) end
+  if owned(player,plot) and nearby(player,plot.atm) and InteractionGate.allow(states[player],"prompt",os.clock()) then collect(player,states[player]) end
  end)
  local pad=part(folder,"Collect pad",Vector3.new(7,0.5,4),plot.atm.Position+Vector3.new(0,-1.7,5),Color3.fromRGB(80,255,140),Enum.Material.Neon)
  pad.Touched:Connect(function(hit)
@@ -252,7 +255,7 @@ local function makePlot(i)
   local stand=part(folder,"Stand "..n,Vector3.new(6,1,6),center+Vector3.new(x,1,z),Color3.fromRGB(255,205,75))
   plot.stands[n]=stand
   prompt(stand,"Place / remove").Triggered:Connect(function(player)
-   if owned(player,plot) and nearby(player,stand) then
+   if owned(player,plot) and nearby(player,stand) and InteractionGate.allow(states[player],"prompt",os.clock()) then
     if n <= states[player].standsUnlocked then remote:FireClient(player,{open="stand",stand=n}) else send(player,"This stand is locked. Upgrade stands from the menu.") end
    end
   end)
@@ -479,12 +482,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   send(player,"Unpurchased roll offers expired after 60 seconds.")
   if action=="buy" or action=="buyWithVoucher" or action=="skip" then return end
  end
- if now<(s.blockUntil or 0) then return end
- if now-(s.windowStart or 0)>=1 then s.windowStart=now; s.requestCount=0 end
- s.requestCount=(s.requestCount or 0)+1
- if s.requestCount>15 then s.blockUntil=now+5; return end
- if now-(s.lastAction or 0)<0.15 then return end
- s.lastAction=now
+ if not InteractionGate.allow(s,"remote",now) then return end
  settleIncome(s,now,currentEvent())
  if action=="adminOpen" then
   if AdminService.authorized(Config.AdminUserIds,player.UserId) then adminSnapshot(player,value) end
