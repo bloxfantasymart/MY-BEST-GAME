@@ -100,6 +100,9 @@ local bagBatch=nil; local bagBatchPage=1
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
 local bagRarity=0; local bagMutation=0; local bagPlacement="All"
 local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local craftConfirm=false
+local craftWaiting=nil; local forgeWaiting=nil; local conversionSequence=0
+local function clearCraftReview() craftConfirm=false; craftWaiting=nil end
+local function clearForgeReview() forgeConfirm=false; forgeWaiting=nil end
 local craftKind="Head"; local craftPage=1; local craftQuery=""; local craftDraft=""; local craftSort="Newest"
 local forgePage=1; local forgeQuery=""; local forgeDraft=""
 local standPage=1; local standQuery=""; local standDraft=""; local standSort="Income"; local standSelection=nil
@@ -381,10 +384,10 @@ render=function()
  elseif mode=="assemble" then
   title.Text="ASSEMBLY: select one of each"
   row("RARE BLUEPRINT: "..(useBlueprint and "ON" or "OFF").." | owned: "..(state.rareBlueprints or 0).." (requires 4 Rare+ parts, +25% base income)",function()
-   useBlueprint=not useBlueprint; craftConfirm=false; chosen={}; render()
+   useBlueprint=not useBlueprint; clearCraftReview(); chosen={}; render()
   end,Color3.fromRGB(125,75,175))
   row("AUTO-FILL BEST eligible part of each type",function()
-   craftConfirm=false; chosen=AutoFill.best(state.parts,Config.Rarities,Config.Types,useBlueprint and 3 or 1) or {}
+   clearCraftReview(); chosen=AutoFill.best(state.parts,Config.Rarities,Config.Types,useBlueprint and 3 or 1) or {}
    if not next(chosen) then notice.Text="You need one eligible part of each type to auto-fill." end
    render()
   end,Color3.fromRGB(60,120,180))
@@ -401,20 +404,35 @@ render=function()
   else row("Select one eligible part of each type to preview the creature.",nil,Color3.fromRGB(70,75,105)) end
   if #state.creatures>=100 then row("Creature inventory is full. Free a slot before crafting.",nil,Color3.fromRGB(150,65,65)) end
   if useBlueprint and (state.rareBlueprints or 0)<1 then row("No rare blueprints available. Claim the 25-minute session gift.",nil,Color3.fromRGB(150,65,65)) end
-  row(craftConfirm and "CONFIRM: CONSUME FOUR PARTS"..(useBlueprint and " AND ONE BLUEPRINT" or "") or "REVIEW ASSEMBLY",function()
-   if not ready then notice.Text="Select four eligible parts and check inventory and blueprint availability."; return end
-   if not craftConfirm then craftConfirm=true; render(); return end
-   chosen.useBlueprint=useBlueprint; remote:FireServer("assemble",chosen); chosen={}; craftConfirm=false
-  end,Color3.fromRGB(52,170,105))
-  if craftConfirm then row("CANCEL ASSEMBLY",function() craftConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
+  if craftConfirm then
+   local review=craftConfirm
+   row("SERVER ASSEMBLY REVIEW — expires in 60 seconds",nil,Color3.fromRGB(150,85,45))
+   for _,item in ipairs(review.inputs) do row(item.kind..": "..(item.mutation or "Standard").." x"..(item.mutationMultiplier or 1).." "..item.name.." ["..Config.Rarities[item.rarity].name.."] | base "..string.format("%.4g",item.income).." | price $"..(item.price or 10).." #"..string.sub(item.id,-6),nil,Color3.fromRGB(70,75,105)) end
+   row("OUTPUT: "..review.output.name.." | $"..string.format("%.4g",review.output.income).."/s | blueprint "..(review.selection.useBlueprint and "CONSUMED" or "not used"),nil,Color3.fromRGB(60,120,180))
+   row("CONFIRM: CONSUME FOUR REVIEWED PARTS",function()
+    if craftConfirm~=review then return end
+    clearCraftReview(); remote:FireServer("craftConfirm",review.token); chosen={}; notice.Text="Requesting reviewed assembly..."; render()
+   end,Color3.fromRGB(52,170,105))
+   row("CANCEL ASSEMBLY REVIEW",function() clearCraftReview(); remote:FireServer("cancelCraftReview"); render() end,Color3.fromRGB(70,75,105))
+  elseif craftWaiting then
+   row("WAITING FOR SERVER ASSEMBLY REVIEW...",nil,Color3.fromRGB(70,75,105))
+   row("CANCEL ASSEMBLY REQUEST",function() clearCraftReview(); remote:FireServer("cancelCraftReview"); render() end,Color3.fromRGB(70,75,105))
+  else
+   row("REQUEST SERVER ASSEMBLY REVIEW",function()
+    if not ready then notice.Text="Select four eligible parts and check inventory and blueprint availability."; return end
+    conversionSequence=conversionSequence%2147483647+1; craftWaiting=conversionSequence
+    local selection={useBlueprint=useBlueprint}; for _,kind in ipairs(Config.Types) do selection[kind]=chosen[kind] end
+    remote:FireServer("craftReview",{requestId=craftWaiting,selection=selection}); render()
+   end,Color3.fromRGB(52,170,105))
+  end
   row("CHOOSE A SOCKET",nil,Color3.fromRGB(70,75,105))
   for _,kind in ipairs(Config.Types) do
    local picked=components[kind]
    row((craftKind==kind and "▶ " or "")..kind..": "..(picked and ((picked.mutation or "Standard").." "..picked.name.." ["..Config.Rarities[picked.rarity].name.."] #"..string.sub(picked.id,-6)) or "empty"),function()
-    craftKind=kind; craftPage=1; craftConfirm=false; render()
+    craftKind=kind; craftPage=1; clearCraftReview(); render()
    end,craftKind==kind and Color3.fromRGB(60,120,180) or Color3.fromRGB(70,75,105))
   end
-  if chosen[craftKind] then row("CLEAR "..craftKind.." SOCKET",function() chosen[craftKind]=nil; craftConfirm=false; render() end,Color3.fromRGB(150,65,65)) end
+  if chosen[craftKind] then row("CLEAR "..craftKind.." SOCKET",function() chosen[craftKind]=nil; clearCraftReview(); render() end,Color3.fromRGB(150,65,65)) end
   searchField(craftDraft,"Search part names or mutations",function(v) craftDraft=v end)
   row("APPLY PART SEARCH"..(craftQuery~="" and (": "..craftQuery) or ""),function() craftQuery=craftDraft; craftPage=1; render() end,Color3.fromRGB(60,120,180))
   row("SORT PARTS: "..craftSort.." (tap to change)",function()
@@ -429,7 +447,7 @@ render=function()
   for _,entry in ipairs(page) do
    local item=entry.item
    row((chosen[craftKind]==item.id and "✓ " or "")..(item.mutation or "Standard").." "..item.name.." ["..Config.Rarities[item.rarity].name.."] | contribution "..string.format("%.4g",item.income*(item.mutationMultiplier or 1)).." #"..string.sub(item.id,-6),function()
-    chosen[item.kind]=item.id; craftConfirm=false; render()
+    chosen[item.kind]=item.id; clearCraftReview(); render()
    end,Config.Rarities[item.rarity].color)
   end
   if #entries==0 then row("No eligible parts match. Protected parts and blueprint-ineligible parts are hidden.",nil,Color3.fromRGB(70,75,105)) end
@@ -448,7 +466,7 @@ render=function()
     row(kind..": "..component.name.." ["..Config.Rarities[component.rarity].name.."] "..(component.mutation or "Standard").." x"..(component.mutationMultiplier or 1).." | base "..component.income,nil,Color3.fromRGB(70,75,105))
    end
    row("OUTPUT if valid: level 1, $"..string.format("%.4g",first.income*5).."/s base; adjacent stands gain 20%.",nil,Color3.fromRGB(60,120,180))
-   row("CLEAR FUSION SELECTION",function() forgeIds={}; forgeConfirm=false; render() end,Color3.fromRGB(70,75,105))
+   row("CLEAR FUSION SELECTION",function() forgeIds={}; clearForgeReview(); render() end,Color3.fromRGB(70,75,105))
   end
   local valid=state.rebirth>=15 and #forgeIds==3 and first and first.income*5<=CraftMath.MaxIncome and state.cash>=fee
   for _,id in ipairs(forgeIds) do
@@ -456,15 +474,32 @@ render=function()
    if not FusionRecipe.eligible(selected) or not FusionRecipe.matches(first,selected) then valid=false end
    row("REMOVE SELECTED: "..(selected and (selected.name.." Lv."..selected.level) or "no longer available").." #"..string.sub(id,-6),function()
     for i,chosenId in ipairs(forgeIds) do if chosenId==id then table.remove(forgeIds,i); break end end
-    forgePage=1; forgeConfirm=false; render()
+    forgePage=1; clearForgeReview(); render()
    end,Color3.fromRGB(150,65,65))
   end
-  row(forgeConfirm and "CONFIRM: CONSUME 3 CREATURES AND CASH" or "REVIEW FUSION",function()
-   if not valid then notice.Text="Choose three matching eligible creatures and check rebirth and cash."; return end
-   if forgeConfirm then remote:FireServer("fusion",forgeIds); forgeIds={}; forgeConfirm=false
-   else forgeConfirm=true; render() end
-  end,Color3.fromRGB(185,100,35))
-  if forgeConfirm then row("CANCEL FUSION REVIEW",function() forgeConfirm=false; render() end,Color3.fromRGB(70,75,105)) end
+  if forgeConfirm then
+   local review=forgeConfirm
+   row("SERVER FUSION REVIEW — expires in 60 seconds | FEE $"..review.cost,nil,Color3.fromRGB(150,85,45))
+   for _,item in ipairs(review.inputs) do
+    row("CONSUME: "..item.name.." Lv."..item.level.." | base $"..string.format("%.4g",item.income).."/s | "..(item.blueprintApplied and "blueprint" or "no blueprint").." #"..string.sub(item.id,-6),nil,Color3.fromRGB(70,75,105))
+    for _,kind in ipairs(Config.Types) do local c=item.components[kind]; row(kind..": "..(c.mutation or "Standard").." x"..(c.mutationMultiplier or 1).." "..c.name.." ["..Config.Rarities[c.rarity].name.."] | base "..string.format("%.4g",c.income).." | price $"..(c.price or 10).." #"..string.sub(c.id,-6),nil,Color3.fromRGB(70,75,105)) end
+   end
+   row("OUTPUT: ascended level 1 | $"..string.format("%.4g",review.outputIncome).."/s base",nil,Color3.fromRGB(60,120,180))
+   row("CONFIRM: CONSUME 3 REVIEWED CREATURES AND $"..review.cost,function()
+    if forgeConfirm~=review then return end
+    clearForgeReview(); remote:FireServer("fusionConfirm",review.token); forgeIds={}; notice.Text="Requesting reviewed fusion..."; render()
+   end,Color3.fromRGB(185,100,35))
+   row("CANCEL FUSION REVIEW",function() clearForgeReview(); remote:FireServer("cancelFusionReview"); render() end,Color3.fromRGB(70,75,105))
+  elseif forgeWaiting then
+   row("WAITING FOR SERVER FUSION REVIEW...",nil,Color3.fromRGB(70,75,105))
+   row("CANCEL FUSION REQUEST",function() clearForgeReview(); remote:FireServer("cancelFusionReview"); render() end,Color3.fromRGB(70,75,105))
+  else
+   row("REQUEST SERVER FUSION REVIEW",function()
+    if not valid then notice.Text="Choose three matching eligible creatures and check rebirth and cash."; return end
+    conversionSequence=conversionSequence%2147483647+1; forgeWaiting=conversionSequence
+    remote:FireServer("fusionReview",{requestId=forgeWaiting,ids=table.clone(forgeIds)}); render()
+   end,Color3.fromRGB(185,100,35))
+  end
   searchField(forgeDraft,"Search creature names",function(v) forgeDraft=v end)
   row("APPLY CREATURE SEARCH"..(forgeQuery~="" and (": "..forgeQuery) or ""),function() forgeQuery=forgeDraft; forgePage=1; render() end,Color3.fromRGB(60,120,180))
   local entries=CraftPicker.fusion(state.creatures,forgeQuery,first)
@@ -478,7 +513,7 @@ render=function()
    row(text,function()
     if selected then for i,id in ipairs(forgeIds) do if id==creature.id then table.remove(forgeIds,i); break end end
     elseif #forgeIds<3 then table.insert(forgeIds,creature.id) end
-    forgePage=1; forgeConfirm=false; render()
+    forgePage=1; clearForgeReview(); render()
    end,selected and Color3.fromRGB(45,150,110) or nil)
   end
   if #entries==0 then row("No matching eligible creatures. Use unplaced, unprotected, non-ascended level 10+ creatures.",nil,Color3.fromRGB(70,75,105)) end
@@ -1121,6 +1156,14 @@ updateEvent=function(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.conversionReview then
+  if data.kind=="craft" and craftWaiting==data.requestId and mode=="assemble" and panel.Visible then
+   craftWaiting=nil; craftConfirm=data.quote; if data.reason then notice.Text=data.reason end; requestRender()
+  elseif data.kind=="fusion" and forgeWaiting==data.requestId and mode=="forge" and panel.Visible then
+   forgeWaiting=nil; forgeConfirm=data.quote; if data.reason then notice.Text=data.reason end; requestRender()
+  end
+  return
+ end
  if data.singleSaleReview then
   local waiting=singleSaleWaiting
   if waiting and waiting.requestId==data.requestId and mode=="bag" and panel.Visible and selectedSell
@@ -1169,7 +1212,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false; craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; forgeConfirm=false; forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; clearCraftReview(); craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; clearForgeReview(); forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; if state.manualProtectMutations==false then manualProtectionConfirm=false end; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  if data.offlineReport and not offlineShown then

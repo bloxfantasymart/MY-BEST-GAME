@@ -3,7 +3,7 @@
 local Fusion={}
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local FusionRecipe=require(ReplicatedStorage.Shared:WaitForChild("FusionRecipe"))
-function Fusion.execute(creatures,ids,rebirth,cash,costFn,newId)
+function Fusion.plan(creatures,ids,rebirth,cash,costFn)
  if rebirth<15 then return nil,"Fusion requires rebirth 15." end
  if type(ids)~="table" or #ids~=3 then return nil,"Select exactly three creatures." end
  local byId={}
@@ -24,6 +24,12 @@ function Fusion.execute(creatures,ids,rebirth,cash,costFn,newId)
  if chosen[1].income*5>1e18 then return nil,"This creature is too powerful to fuse safely." end
  local cost=costFn(chosen[1])
  if cash<cost then return nil,"Not enough cash for fusion." end
+ return {seen=seen,chosen=chosen,cost=cost}
+end
+function Fusion.execute(creatures,ids,rebirth,cash,costFn,newId)
+ local plan,reason=Fusion.plan(creatures,ids,rebirth,cash,costFn)
+ if not plan then return nil,reason end
+ local seen,chosen,cost=plan.seen,plan.chosen,plan.cost
  local ok,id=pcall(newId)
  if not ok or type(id)~="string" or #id<1 or #id>64 then return nil,"Could not create a new creature safely." end
  for _,creature in ipairs(creatures) do

@@ -36,6 +36,7 @@ local Loadouts = require(script.Parent.Services.Loadouts)
 local InteractionGate=require(script.Parent.Services.InteractionGate)
 local ItemIds = require(script.Parent.Services.ItemIds)
 local SingleSale = require(script.Parent.Services.SingleSale)
+local ConversionReviews = require(script.Parent.Services.ConversionReviews)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -720,19 +721,37 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="upgradeSlots" then
   local cost=Config.SlotCosts[s.slots+1]
   if cost and s.cash>=cost then s.cash-=cost; s.slots+=1; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Slot unlocked!") else send(player,"Not enough cash, or all slots unlocked.") end
- elseif action=="assemble" and nearby(player,s.plot.pod) and type(value)=="table" then
+ elseif (action=="craftReview" or action=="fusionReview") and type(value)=="table" then
+  local requestId=value.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  local crafting=action=="craftReview"
+  if crafting then s.craftQuote=nil else s.fusionQuote=nil end
+  local quote,reason
+  if not nearby(player,crafting and s.plot.pod or forge) then reason=crafting and "Move closer to your assembly pod." or "Move closer to the fusion forge."
+  else
+   local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+   if not ok then reason="Could not create a review. Try again."
+   elseif crafting then quote,reason=ConversionReviews.craft(s,value.selection,os.clock(),token,Crafting,Config.Rarities)
+   else quote,reason=ConversionReviews.fusion(s,value.ids,os.clock(),token,Fusion,Config.FusionCost) end
+  end
+  if crafting then s.craftQuote=quote else s.fusionQuote=quote end
+  remote:FireClient(player,{conversionReview=true,kind=crafting and "craft" or "fusion",requestId=requestId,quote=quote,reason=reason})
+ elseif action=="cancelCraftReview" then s.craftQuote=nil
+ elseif action=="cancelFusionReview" then s.fusionQuote=nil
+ elseif action=="craftConfirm" then
+  if not nearby(player,s.plot.pod) then s.craftQuote=nil; send(player,"Move closer to your assembly pod."); return end
   local tutorialParts={}; for _,item in ipairs(s.parts) do table.insert(tutorialParts,item) end
-  local result,reason=Crafting.execute(s.parts,s.creatures,s.rareBlueprints,value,Config.Rarities,function() return newSessionItemId(s) end)
+  local result,reason=ConversionReviews.confirmCraft(s,value,os.clock(),Crafting,Config.Rarities,function() return newSessionItemId(s) end)
   if not result then send(player,reason); return end
   s.rareBlueprints=result.blueprintCount
   if result.highest>=3 then Progression.increment(s.progress,"rareCrafts",1,os.time()) end
   Season.addXP(s.season,20); Tutorial.advance(s.tutorial,"craft",tutorialParts)
   send(player,result.usedBlueprint and "Rare blueprint used: assembled with +25% base income!" or "Assembled! Take it to a stand.","craft")
- elseif action=="fusion" then
-  if not nearby(player,forge) then send(player,"Move closer to the fusion forge."); return end
-  local creature,costOrError=Fusion.execute(s.creatures,value,s.rebirth,s.cash,Config.FusionCost,function() return newSessionItemId(s) end)
+ elseif action=="fusionConfirm" then
+  if not nearby(player,forge) then s.fusionQuote=nil; send(player,"Move closer to the fusion forge."); return end
+  local creature,costOrError=ConversionReviews.confirmFusion(s,value,os.clock(),Fusion,Config.FusionCost,function() return newSessionItemId(s) end)
   if not creature then send(player,costOrError)
-  else s.cash-=costOrError; send(player,"Fusion complete! Your ascended creature starts at level 1.","craft") end
+  else send(player,"Fusion complete! Your ascended creature starts at level 1.","craft") end
  elseif action=="stand" and type(value)=="table" then
   local n=value.stand
   if type(n)~="number" or n~=n or n%1~=0 or n<1 or n>s.standsUnlocked or not nearby(player,s.plot.stands[n]) then return end
