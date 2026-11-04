@@ -330,6 +330,7 @@ render=function()
    if mods.luckPass then table.insert(bonuses,"Luck pass x2") end
    if mods.luck2 then table.insert(bonuses,"2x boost") end
    if mods.luck3 then table.insert(bonuses,"3x boost") end
+   if mods.altar then table.insert(bonuses,"Altar blessing x1.5") end
    if mods.goldenLever then table.insert(bonuses,"Golden Lever x1.05") end
    row("Non-Common weight bonuses: "..(#bonuses>0 and table.concat(bonuses,", ") or "none").." | factor x"..string.format("%.2f",catalogOdds.nonCommonFactor),nil,Color3.fromRGB(70,75,105))
    row("Each slot rolls independently. Bonuses change weights, not final percentages; rebirth also changes weights. Refresh when events or boosts change.",nil,Color3.fromRGB(70,75,105))
@@ -741,6 +742,7 @@ render=function()
   row("USE 3x LUCK POTION (15 min) — "..(extras.luckPotions or 0).." owned",function() remote:FireServer("useLuckPotion") end,Color3.fromRGB(125,75,175))
   questRewardTools(extras)
   row("Free-part vouchers: "..(extras.rollVouchers or 0).." — use at roll station; rolls are already free.",nil,Color3.fromRGB(70,75,105))
+  row("Waterfall altar blessing: "..((state.blessingRemaining or 0)>0 and (formatDuration(state.blessingRemaining).." remaining at panel refresh") or "inactive").." | 1.5x non-Common weight | session only",nil,Color3.fromRGB(70,75,105))
   row("Golden Lever: "..(extras.goldenLever and "unlocked (+5% non-common weight)" or "locked").." | Sigma Statue: "..(extras.sigmaStatue and "unlocked (+50% income)" or "locked"),nil,Color3.fromRGB(70,75,105))
   row("Daily targets vary per player and reset at UTC midnight; unclaimed rewards expire. Rolls count generated parts, even if not purchased.",nil,Color3.fromRGB(70,75,105))
   for _,quest in ipairs(state.quests) do
@@ -1230,9 +1232,9 @@ remote.OnClientEvent:Connect(function(data)
  if data.announcement then notice.Text=data.announcement; playEffect("rare"); return end
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
- if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
+ if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.blessingRemaining=data.blessingRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
  if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; clearCraftReview(); craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; clearForgeReview(); forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
- state=data; if state.manualProtectMutations==false then manualProtectionConfirm=false end; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
+ state=data; if state.manualProtectMutations==false then manualProtectionConfirm=false end; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  if data.offlineReport and not offlineShown then
   offlineShown=true

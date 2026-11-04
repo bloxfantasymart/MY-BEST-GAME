@@ -4,7 +4,7 @@ local RollOdds={}
 function RollOdds.nonCommonFactor(modifiers)
  return (modifiers.frenzy and 2 or 1)*(modifiers.weekend and 1.5 or 1)
   *(modifiers.luckPass and 2 or 1)*(modifiers.luck2 and 2 or 1)
-  *(modifiers.luck3 and 3 or 1)*(modifiers.goldenLever and 1.05 or 1)
+  *(modifiers.luck3 and 3 or 1)*(modifiers.goldenLever and 1.05 or 1)*(modifiers.altar and 1.5 or 1)
 end
 function RollOdds.build(rarities,catalog,rebirth,modifiers)
  local tiers={}; local total=0; local factor=RollOdds.nonCommonFactor(modifiers)

@@ -1,0 +1,20 @@
+local a,b={},{}
+assert(Blessing.remaining(a,0)==0)
+assert(not Blessing.activate(a,0/0) and not Blessing.activate(a,math.huge))
+assert(Blessing.activate(a,10) and Blessing.remaining(a,10)==600)
+assert(Blessing.remaining(b,10)==0)
+assert(not Blessing.activate(a,39.99) and Blessing.remaining(a,39.99)==571)
+assert(Blessing.activate(a,40) and Blessing.remaining(a,40)==600)
+assert(Blessing.remaining(a,639.5)==1 and Blessing.remaining(a,640)==0)
+assert(Blessing.activate(a,700) and Blessing.remaining(a,700)==600)
+-- A refresh sets exactly ten minutes, never adds ten minutes to remaining time.
+assert(Blessing.activate(a,730) and Blessing.remaining(a,730)==600)
+assert(RollOdds.nonCommonFactor({altar=true})==1.5)
+assert(RollOdds.nonCommonFactor({altar=true,luck2=true,luck3=true,frenzy=true})==1.5*2*3*2)
+local rarities={{weight=100},{weight=10}}; local catalog={{rarity=1,rebirth=0},{rarity=2,rebirth=0}}
+local plain,total=RollOdds.build(rarities,catalog,0,{})
+local boosted,boostTotal=RollOdds.build(rarities,catalog,0,{altar=true})
+assert(plain[1].weight==boosted[1].weight and boosted[2].weight==plain[2].weight*1.5 and boostTotal>total)
+local odds=RollOdds.disclose(boosted,boostTotal,2)
+assert(odds[2].chance==boosted[2].weight/boostTotal)
+print("Altar blessing expiry, refresh, isolation and odds disclosure passed")

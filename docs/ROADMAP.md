@@ -51,3 +51,6 @@ A new connection is rejected while the same user's prior join or departure is st
 
 ### Inventory safety overview
 The backpack has an all-inventory overview with capacity, protection, placed and mutation counts, unprotected part types and indicative sale totals. It can capture all unprotected mutated loose parts and mutation-containing creatures into the existing paginated batch-protection review, including placed creatures. Confirmation revalidates ownership and protection atomically on the server; the snapshot and estimates are not sale quotes. This UI needs Roblox device and multiplayer testing.
+
+### Waterfall altar prototype
+A small walk-through waterfall/cave and altar offer a free, server-owned 10-minute 1.5× non-Common weight blessing. It stacks multiplicatively with other roll-weight boosts, is shown in odds disclosures and the HUD, and resets on leaving; refreshing resets the timer with a 30-second interaction cooldown. The geometry is a small placeholder and is not the requested expansive mountain terrain. Actual Roblox accessibility, physics, effects and multiplayer behavior remain untested.

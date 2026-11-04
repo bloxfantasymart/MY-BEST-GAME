@@ -37,6 +37,7 @@ local InteractionGate=require(script.Parent.Services.InteractionGate)
 local ItemIds = require(script.Parent.Services.ItemIds)
 local SingleSale = require(script.Parent.Services.SingleSale)
 local ConversionReviews = require(script.Parent.Services.ConversionReviews)
+local Blessing = require(script.Parent.Services.Blessing)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -137,7 +138,7 @@ local function send(player, message, effect)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, manualProtectMutations=s.manualProtectMutations, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, manualProtectMutations=s.manualProtectMutations, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -187,6 +188,26 @@ prompt(summitChest,"Claim summit reward").Triggered:Connect(function(player)
   function() return rng:NextInteger(1,100) end,function() return HttpService:GenerateGUID(false) end,Config.SummitHead)
  if not ok then send(player,result); return end
  send(player,"Summit reward: $"..Obby.Cash.." and "..Obby.Vouchers.." free-part vouchers! "..(result and "Bonus: protected Peak Mountain Head! " or "No bonus head this time. ").."Cooldown: 6 hours.")
+end)
+-- Prototype waterfall cave: decorative parts remain non-colliding so the
+-- entrance is walkable. This small scene is not the final mountain biome.
+local cave=Instance.new("Folder"); cave.Name="Waterfall Cave"; cave.Parent=world
+local caveBase=Vector3.new(195,0,170)
+part(cave,"Stone floor",Vector3.new(42,1,30),caveBase+Vector3.new(0,0.2,0),Color3.fromRGB(83,99,118),Enum.Material.Slate)
+part(cave,"Left wall",Vector3.new(5,18,26),caveBase+Vector3.new(-19,9,2),Color3.fromRGB(75,90,112),Enum.Material.Slate)
+part(cave,"Right wall",Vector3.new(5,18,26),caveBase+Vector3.new(19,9,2),Color3.fromRGB(75,90,112),Enum.Material.Slate)
+part(cave,"Back wall",Vector3.new(42,18,4),caveBase+Vector3.new(0,9,15),Color3.fromRGB(75,90,112),Enum.Material.Slate)
+part(cave,"Cave roof",Vector3.new(42,3,30),caveBase+Vector3.new(0,18,1),Color3.fromRGB(65,78,95),Enum.Material.Slate)
+local waterfall=part(cave,"Waterfall veil",Vector3.new(34,16,1),caveBase+Vector3.new(0,8,-13),Color3.fromRGB(75,185,245),Enum.Material.Glass)
+waterfall.CanCollide=false; waterfall.Transparency=0.5
+local altar=part(cave,"Ancient Meme Altar",Vector3.new(5,3,5),caveBase+Vector3.new(0,2,6),Color3.fromRGB(180,120,245),Enum.Material.Neon)
+label(altar,"ANCIENT MEME ALTAR\n1.5x LUCK",4)
+prompt(altar,"Receive free luck blessing").Triggered:Connect(function(player)
+ local s=states[player]
+ if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not nearby(player,altar) then return end
+ if not InteractionGate.allow(s,"prompt",os.clock()) then return end
+ local ok,reason=Blessing.activate(s,os.clock())
+ send(player,ok and "Altar blessing: 1.5x non-Common roll weight for 10 minutes in this server." or reason)
 end)
 prompt(forge,"Open fusion forge").Triggered:Connect(function(player)
  local s=states[player]
@@ -316,7 +337,7 @@ end
 local function rollContext(s)
  local now=os.time(); local event=currentEvent()
  local modifiers={frenzy=event.frenzy,weekend=event.weekend,luckPass=PassService.owned(s.passes,"Luck"),
-  luck2=s.luckUntil>now,luck3=s.tripleLuckUntil>now,goldenLever=s.extras.goldenLever}
+  luck2=s.luckUntil>now,luck3=s.tripleLuckUntil>now,goldenLever=s.extras.goldenLever,altar=Blessing.remaining(s,os.clock())>0}
  local tiers,total,factor=RollOdds.build(Config.Rarities,Config.Catalog,s.rebirth,modifiers)
  return tiers,total,factor,event,modifiers,now
 end
@@ -911,7 +932,7 @@ task.spawn(function()
     if AutoCollector.due(s.autoCollector,s.rebirth,os.clock(),s.pending) then collect(player,s) end
     s.plot.bankLabel.Text="Bank: $"..math.floor(s.pending)
     if changed then send(player,expired and "Unpurchased roll offers expired after 60 seconds." or nil)
-    else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=incomeEvent, income=incomeSummary(s,rates,incomeEvent), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock()))}) end
+    else remote:FireClient(player, {tick=true, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=incomeEvent, income=incomeSummary(s,rates,incomeEvent), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock()))}) end
    end
   end
  end
