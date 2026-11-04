@@ -4,9 +4,10 @@ import subprocess
 import sys
 import tempfile
 root = pathlib.Path(__file__).resolve().parents[1]
-service = (root / 'src/server/Services/Obby.luau').read_text()
+service = (root / 'src/server/Services/Obby.luau').read_text().replace('local ItemIds=require(script.Parent.ItemIds)\n', '')
+item_ids = (root / 'src/server/Services/ItemIds.luau').read_text()
 tests = (root / 'tests/obby.luau').read_text()
-source = 'local Obby = (function()\n' + service + '\nend)()\n' + tests
+source = 'local ItemIds = (function()\n' + item_ids + '\nend)()\nlocal Obby = (function()\n' + service + '\nend)()\n' + tests
 with tempfile.NamedTemporaryFile(mode='w', suffix='.luau', encoding='utf8') as file:
     file.write(source)
     file.flush()

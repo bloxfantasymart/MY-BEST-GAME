@@ -90,6 +90,9 @@ function Config.CreatureSellValue(creature)
  end
  return math.max(1, math.floor(total * 0.5))
 end
+-- Exclusive head is not in the rolling catalog and cannot become a rebirth target.
+-- Rarity/income/price are prototype balance choices; the spec leaves them open.
+Config.SummitHead = {name="Peak Mountain",kind="Head",rarity=3,income=50,price=10,mutation="Standard",mutationMultiplier=1}
 Config.Types = {"Head", "Chest", "Arms", "Legs"}
 Config.Rarities = {
  {name="Common", weight=5000, multiplier=1, color=Color3.fromRGB(180,180,180)},

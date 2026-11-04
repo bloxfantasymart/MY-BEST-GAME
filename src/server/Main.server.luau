@@ -183,9 +183,10 @@ prompt(summitChest,"Claim summit reward").Triggered:Connect(function(player)
  if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not root or not humanoid or humanoid.Health<=0
   or (root.Position-summitChest.Position).Magnitude>10 then return end
  if not InteractionGate.allow(s,"prompt",os.clock()) then return end
- local ok,reason=Obby.claim(s,character,os.clock(),os.time(),RewardExtras.MaxVouchers)
- if not ok then send(player,reason); return end
- send(player,"Summit reward: $"..Obby.Cash.." and "..Obby.Vouchers.." free-part vouchers! Cooldown: 6 hours.")
+ local ok,result=Obby.claimWithDrop(s,character,os.clock(),os.time(),RewardExtras.MaxVouchers,partCapacity(s),
+  function() return rng:NextInteger(1,100) end,function() return HttpService:GenerateGUID(false) end,Config.SummitHead)
+ if not ok then send(player,result); return end
+ send(player,"Summit reward: $"..Obby.Cash.." and "..Obby.Vouchers.." free-part vouchers! "..(result and "Bonus: protected Peak Mountain Head! " or "No bonus head this time. ").."Cooldown: 6 hours.")
 end)
 prompt(forge,"Open fusion forge").Triggered:Connect(function(player)
  local s=states[player]

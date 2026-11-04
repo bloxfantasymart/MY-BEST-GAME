@@ -892,7 +892,7 @@ render=function()
   title.Text="SUMMIT PARKOUR"
   local challenge=state.obby or {step=0,ready=false,remaining=0}
   row("OPTIONAL COURSE: touch the green START platform, then checkpoints 2 through 9 in order. Reach the summit chest and use its prompt within 60 seconds.",nil,Color3.fromRGB(70,75,105))
-  row("Reward: $50,000 and 3 free-part vouchers, once per six hours after a saved claim. Vouchers require room below their 1,000 cap.",nil,Color3.fromRGB(70,75,105))
+  row("Reward: $50,000, 3 vouchers and a 10% chance of a protected Peak Mountain Head. One free part slot and room below the 1,000 voucher cap are required. Six-hour cooldown after a saved claim.",nil,Color3.fromRGB(70,75,105))
   row("At last sync — attempt: "..(challenge.ready and "SUMMIT READY — use the chest" or (challenge.step>0 and ("checkpoint "..challenge.step.." / 9") or "not started")).." | reward "..(challenge.remaining>0 and ("cooldown "..formatDuration(challenge.remaining).." at last sync") or "available at last sync"),nil,Color3.fromRGB(60,120,180))
   row("Attempts reset when you respawn, teleport, leave, or take too long (45 seconds per checkpoint; 3 minutes total). Touch START to retry.",nil,Color3.fromRGB(70,75,105))
   row("TRAVEL TO SUMMIT COURSE START",function() remote:FireServer("teleport","obby"); panel.Visible=false end,Color3.fromRGB(60,145,150))

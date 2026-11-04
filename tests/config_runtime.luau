@@ -49,4 +49,7 @@ for i,theme in ipairs(Config.Themes) do
  if i>1 then assert(theme.rebirth>Config.Themes[i-1].rebirth) end
  themeIds[theme.id]=true
 end
+local head=Config.SummitHead
+assert(head.name=="Peak Mountain" and head.kind=="Head" and head.rarity==3 and head.income==50 and head.price==10 and head.mutation=="Standard" and head.mutationMultiplier==1)
+for _,entry in ipairs(Config.Catalog) do assert(entry.name~=head.name, "Exclusive head must not enter normal rolls or rebirth targets") end
 print("Config runtime tests passed")

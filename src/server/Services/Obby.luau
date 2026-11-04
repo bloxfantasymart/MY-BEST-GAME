@@ -1,6 +1,7 @@
 --!strict
 -- Server-owned session course progress. Character identity, sequence and timing
 -- are checked here; the caller must also verify server-observed position/health.
+local ItemIds=require(script.Parent.ItemIds)
 local Obby={}
 Obby.Checkpoints=9
 Obby.MinStepSeconds=0.35
@@ -43,14 +44,39 @@ function Obby.status(state,character,now,epoch)
  end
  return {step=run and run.step or 0,ready=run and run.ready or false,remaining=Obby.remaining(state.obbyLastClaim,epoch)}
 end
-function Obby.claim(state,character,now,epoch,maxVouchers)
+local function validate(state,character,now,epoch,maxVouchers)
  local run=state.obbyRun
  if not run or not run.ready or run.character~=character then return nil,"Complete the course first." end
  if now<run.last or now-run.last>Obby.ClaimWindow then state.obbyRun=nil; return nil,"Summit attempt expired. Start again." end
  if Obby.remaining(state.obbyLastClaim,epoch)>0 then return nil,"Summit reward is still on its six-hour cooldown." end
  if state.extras.rollVouchers+Obby.Vouchers>maxVouchers then return nil,"Use some vouchers before claiming." end
- -- No yields between validation and applying both rewards and the cooldown.
- state.obbyLastClaim=epoch; state.cash+=Obby.Cash; state.extras.rollVouchers+=Obby.Vouchers; state.obbyRun=nil
  return true
+end
+local function commit(state,epoch)
+ state.obbyLastClaim=epoch; state.cash+=Obby.Cash; state.extras.rollVouchers+=Obby.Vouchers; state.obbyRun=nil
+end
+-- Require a free slot before drawing, even for a non-winning claim. A result
+-- that cannot be committed (e.g. ID failure) is retained for this session and
+-- later attempts, not re-rolled. draw and generateId must never yield.
+function Obby.claimWithDrop(state,character,now,epoch,maxVouchers,capacity,draw,generateId,spec)
+ local ok,reason=validate(state,character,now,epoch,maxVouchers)
+ if not ok then return nil,reason end
+ if #state.parts>=capacity then return nil,"Free a part slot before claiming the summit reward." end
+ if state.obbyPendingDrop==nil then
+  local drawn,roll=pcall(draw)
+  if not drawn or type(roll)~="number" or roll~=roll or roll%1~=0 or roll<1 or roll>100 then return nil,"Could not prepare the summit reward. Try again." end
+  state.obbyPendingDrop=roll<=10
+ end
+ local item=nil
+ if state.obbyPendingDrop then
+  local id=ItemIds.allocate(ItemIds.collect(state),generateId)
+  if not id then return nil,"Could not create the summit part safely. Try again." end
+  item={id=id,name=spec.name,kind=spec.kind,rarity=spec.rarity,income=spec.income,price=spec.price,mutation=spec.mutation,mutationMultiplier=spec.mutationMultiplier,locked=true}
+ end
+ -- No yields between validation, grant and cooldown. The pending result is
+ -- session-only; a server crash or failed save can still lose this reward.
+ if item then table.insert(state.parts,item) end
+ commit(state,epoch); state.obbyPendingDrop=nil
+ return true,item
 end
 return Obby

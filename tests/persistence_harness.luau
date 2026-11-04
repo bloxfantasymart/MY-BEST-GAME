@@ -404,3 +404,12 @@ local oldFinished,oldResult=coroutine.resume(inFlight)
 assert(oldFinished and not oldResult and database.player_93007.cash==200)
 assert(isolated.isHealthy(93007) and isolated.save(93007,replacement,true))
 print("A rejected final save cannot let an old in-flight save overwrite a replacement session")
+-- The summit-only head uses ordinary saved-part schema and remains protected.
+local summitService=makeService()
+local summitProfile=summitService.load(93008); assert(summitProfile)
+summitProfile.parts={{id="peak-head",name="Peak Mountain",kind="Head",rarity=3,income=50,price=10,mutation="Standard",mutationMultiplier=1,locked=true}}
+assert(summitService.save(93008,summitProfile,true))
+local summitLoaded=summitService.load(93008)
+assert(summitLoaded and summitLoaded.parts[1].name=="Peak Mountain" and summitLoaded.parts[1].locked)
+assert(summitService.save(93008,summitLoaded,true))
+print("Protected exclusive summit head profile round-trip passed")
