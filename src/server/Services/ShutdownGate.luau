@@ -2,16 +2,18 @@
 -- Tracks in-flight joins, rejects new ones after shutdown starts, and ignores duplicates.
 local ShutdownGate={}
 function ShutdownGate.new()
- return {closed=false,pending=0,joining={},pendingDepartures=0,departing={}}
+ return {closed=false,pending=0,joining={},joiningOwners={},pendingDepartures=0,departing={}}
 end
-function ShutdownGate.begin(gate,key)
- if gate.closed or gate.joining[key] then return false end
- gate.joining[key]=true; gate.pending+=1
+function ShutdownGate.begin(gate,key,owner)
+ if gate.closed then return false,"closed" end
+ if gate.departing[key] then return false,"departing" end
+ if gate.joining[key] then return false,"joining" end
+ gate.joining[key]=true; gate.joiningOwners[key]=owner; gate.pending+=1
  return true
 end
 function ShutdownGate.finish(gate,key)
  if not gate.joining[key] then return false end
- gate.joining[key]=nil; gate.pending-=1
+ gate.joining[key]=nil; gate.joiningOwners[key]=nil; gate.pending-=1
  return true
 end
 -- Departure saves may already be in flight when BindToClose starts.

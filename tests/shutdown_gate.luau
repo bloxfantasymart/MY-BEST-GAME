@@ -25,3 +25,18 @@ assert(not ShutdownGate.finishDeparture(other,"player") and other.pendingDepartu
 assert(ShutdownGate.beginDeparture(other,"late") and other.pendingDepartures==1)
 assert(ShutdownGate.finishDeparture(other,"late") and other.pendingDepartures==0)
 print("Shutdown departure bookkeeping tests passed")
+-- A new connection must not start loading while its prior departure is saving.
+local reconnect=ShutdownGate.new()
+local first={}; local second={}
+assert(ShutdownGate.begin(reconnect,123,first))
+local ok,reason=ShutdownGate.begin(reconnect,123,second)
+assert(not ok and reason=="joining" and reconnect.joiningOwners[123]==first)
+assert(ShutdownGate.finish(reconnect,123) and reconnect.joiningOwners[123]==nil)
+assert(ShutdownGate.beginDeparture(reconnect,123))
+ok,reason=ShutdownGate.begin(reconnect,123,second)
+assert(not ok and reason=="departing" and reconnect.pending==0)
+assert(ShutdownGate.begin(reconnect,456,second)) -- different user unaffected
+assert(ShutdownGate.finishDeparture(reconnect,123))
+assert(ShutdownGate.begin(reconnect,123,second))
+assert(ShutdownGate.finish(reconnect,123) and ShutdownGate.finish(reconnect,456))
+print("Reconnect waits for join/departure ownership and does not block other users")

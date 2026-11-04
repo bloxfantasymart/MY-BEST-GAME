@@ -340,3 +340,67 @@ local badLayouts={
 }
 for _,bad in ipairs(badLayouts) do database.player_521.standLoadouts=bad; assert(a.load(521)==nil) end
 print("Stand layout legacy, stale-reference round-trip and malformed-data validation passed")
+
+-- One DataService instance cannot load a second profile while a load or final
+-- save is in flight; otherwise an old final save could clear a new session.
+local concurrent=makeService()
+pauseNextStore=true
+local loadingThread=coroutine.create(function() return concurrent.load(93001) end)
+local started,step=coroutine.resume(loadingThread)
+assert(started and step=="store")
+assert(concurrent.load(93001)==nil, "Concurrent load must be refused")
+local resumed,owned=coroutine.resume(loadingThread)
+assert(resumed and owned and concurrent.isHealthy(93001))
+assert(concurrent.load(93001)==nil, "Existing live session cannot be replaced")
+pauseNextStore=true
+local closing=coroutine.create(function() return concurrent.save(93001,owned,true) end)
+local closeOk,closeStep=coroutine.resume(closing)
+assert(closeOk and closeStep=="store")
+assert(concurrent.load(93001)==nil, "Loading must be blocked until final save completes")
+local finished,saved=coroutine.resume(closing)
+assert(finished and saved)
+local nextProfile=concurrent.load(93001)
+assert(nextProfile and concurrent.save(93001,nextProfile,true))
+-- An acquisition error must not permanently wedge the local load guard.
+local failService=makeService()
+assert(failService.load(93002,function() error("bad acquire") end)==nil)
+local retry=failService.load(93002)
+assert(retry and failService.save(93002,retry,true))
+-- Studio memory sessions obey the same exclusion and do not leak on callback errors.
+services.RunService.IsStudio=function() return true end
+local studio=makeService()
+assert(studio.load(93003,function() error("bad studio acquire") end)==nil)
+local memory=studio.load(93003)
+assert(memory and studio.load(93003)==nil and studio.save(93003,memory,true))
+assert(studio.load(93004,function(data) data.cash=-1; return data end)==nil)
+local validMemory=studio.load(93004); assert(validMemory and studio.save(93004,validMemory,true))
+services.RunService.IsStudio=function() return false end
+print("Concurrent local loads and final-save overlap are refused, including Studio")
+-- Failed final snapshots do not write invalid data or permanently wedge this
+-- server's local session. The persisted lease still prevents premature reload.
+local finalFailure=makeService()
+local badFinal=finalFailure.load(93005); assert(badFinal)
+badFinal.cash=-1
+assert(not finalFailure.save(93005,badFinal,true) and not finalFailure.isHealthy(93005))
+assert(database.player_93005.cash==200 and finalFailure.load(93005)==nil)
+database.player_93005.lock.expires=0
+local recovered=finalFailure.load(93005); assert(recovered and recovered.cash==200 and finalFailure.save(93005,recovered,true))
+local copyFailure=finalFailure.load(93006); assert(copyFailure)
+copyFails=true; assert(not finalFailure.save(93006,copyFailure,true)); copyFails=false
+assert(not finalFailure.isHealthy(93006) and finalFailure.load(93006)==nil)
+database.player_93006.lock.expires=0
+local copyRecovered=finalFailure.load(93006); assert(copyRecovered and finalFailure.save(93006,copyRecovered,true))
+print("Failed final snapshot leaves a lease but does not wedge local sessions")
+local isolated=makeService()
+local stale=isolated.load(93007); assert(stale)
+local oldSnapshot=clone(stale); oldSnapshot.cash=400
+pauseNextStore=true
+local inFlight=coroutine.create(function() return isolated.save(93007,oldSnapshot,false) end)
+local oldStarted,oldStep=coroutine.resume(inFlight); assert(oldStarted and oldStep=="store")
+stale.cash=-1; assert(not isolated.save(93007,stale,true))
+database.player_93007.lock.expires=0
+local replacement=isolated.load(93007); assert(replacement)
+local oldFinished,oldResult=coroutine.resume(inFlight)
+assert(oldFinished and not oldResult and database.player_93007.cash==200)
+assert(isolated.isHealthy(93007) and isolated.save(93007,replacement,true))
+print("A rejected final save cannot let an old in-flight save overwrite a replacement session")

@@ -819,7 +819,16 @@ local function joinImpl(player,context)
  else send(player,"Welcome! Roll at your station.") end
 end
 local function join(player)
- if states[player] or not ShutdownGate.begin(joinGate,player.UserId) then return end
+ if states[player] then return end
+ local started,reason=ShutdownGate.begin(joinGate,player.UserId,player)
+ if not started then
+  -- A duplicate callback for the same Player is harmless, but a different
+  -- connection must not remain stranded or overlap a pending save/load.
+  if player.Parent and (reason=="departing" or (reason=="joining" and joinGate.joiningOwners[player.UserId]~=player)) then
+   player:Kick("Your previous session is still closing. Please wait a moment and rejoin.")
+  end
+  return
+ end
  local context={}
  local ok,err=pcall(joinImpl,player,context)
  if not ok then

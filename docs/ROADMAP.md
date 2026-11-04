@@ -45,3 +45,6 @@ Perform Studio and published test-place tests for persistence, lease expiry, ser
 
 ### Interaction abuse safeguards
 Main-place and showcase-hub prompts now have a per-player rate limit separate from remote actions, after ownership/health/proximity checks. Excessive bursts are temporarily blocked per channel. This is a server-side traffic safeguard, not a substitute for Roblox multiplayer and exploit testing.
+
+### Reconnect safety
+A new connection is rejected while the same user's prior join or departure is still in progress on that server; duplicate callbacks for the same player are ignored. The profile service also rejects concurrent local loads or a load while a local session exists. A rejected final snapshot is not saved and may leave a lease until expiry. These safeguards cannot prevent lost progress after a failed final save or replace live DataStore testing.

@@ -10,6 +10,7 @@ local DataService = {}
 DataService.TestPersistence = false
 local leaseSeconds = 180
 local sessions = {}
+local loading = {}
 local function defaults()
  return {version=1, cash=200, pending=0, slots=1, standsUnlocked=12, rebirth=0, parts={}, creatures={}}
 end
@@ -134,9 +135,11 @@ end
 local function copy(data)
  return HttpService:JSONDecode(HttpService:JSONEncode(data))
 end
-function DataService.load(userId,onAcquire)
+local function loadImpl(userId,onAcquire)
  if RunService:IsStudio() and not DataService.TestPersistence then
-  sessions[userId]={memory=true, lastSuccess=os.clock()}; local data=defaults(); if onAcquire then data=onAcquire(data) end; return data
+  local data=defaults(); if onAcquire then data=onAcquire(data) end
+  if not validProfile(data) then return nil end
+  sessions[userId]={memory=true, lastSuccess=os.clock()}; return data
  end
  local token=HttpService:GenerateGUID(false)
  local key="player_"..userId
@@ -164,15 +167,33 @@ function DataService.load(userId,onAcquire)
  end
  return nil
 end
+function DataService.load(userId,onAcquire)
+ -- One live or in-flight load per user within this server, including Studio.
+ -- The outer guard is released even if a service or callback throws.
+ if sessions[userId] or loading[userId] then return nil end
+ loading[userId]=true
+ local ok,result=pcall(loadImpl,userId,onAcquire)
+ loading[userId]=nil
+ if not ok then warn("Profile load failed: "..tostring(userId)); return nil end
+ return result
+end
 function DataService.save(userId, data, release)
  local session=sessions[userId]
  if not session or session.closing then return false end
- if not validProfile(data) then warn("Refusing to save invalid profile: "..userId); return false end
+ local function failEarly(message)
+  warn(message..userId)
+  -- No invalid final snapshot is written. Drop the local session so future
+  -- joins can retry after the persisted lease expires; pending saves observe
+  -- closing/session identity and cannot replace a newer local session.
+  if release then session.closing=true; if sessions[userId]==session then sessions[userId]=nil end end
+  return false
+ end
+ if not validProfile(data) then return failEarly("Refusing to save invalid profile: ") end
  if session.memory then if release then sessions[userId]=nil end; return true end
  -- Snapshot before waiting so scalar and table fields describe the same moment.
  local copied,snapshot=pcall(copy,data)
- if not copied then warn("Failed to copy player profile: "..userId); return false end
- if not validProfile(snapshot) then warn("Refusing to save invalid profile snapshot: "..userId); return false end
+ if not copied then return failEarly("Failed to copy player profile: ") end
+ if not validProfile(snapshot) then return failEarly("Refusing to save invalid profile snapshot: ") end
  session.issued+=1
  local sequence=session.issued
  if release then session.closing=true end
@@ -198,7 +219,7 @@ function DataService.save(userId, data, release)
   if attempt<3 then task.wait(attempt*2) end
  end
  session.busy=false
- if release then sessions[userId]=nil end
+ if release and sessions[userId]==session then sessions[userId]=nil end
  return saved
 end
 function DataService.isHealthy(userId)
