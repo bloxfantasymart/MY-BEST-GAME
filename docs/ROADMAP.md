@@ -48,3 +48,6 @@ Main-place and showcase-hub prompts now have a per-player rate limit separate fr
 
 ### Reconnect safety
 A new connection is rejected while the same user's prior join or departure is still in progress on that server; duplicate callbacks for the same player are ignored. The profile service also rejects concurrent local loads or a load while a local session exists. A rejected final snapshot is not saved and may leave a lease until expiry. These safeguards cannot prevent lost progress after a failed final save or replace live DataStore testing.
+
+### Inventory safety overview
+The backpack has an all-inventory overview with capacity, protection, placed and mutation counts, unprotected part types and indicative sale totals. It can capture all unprotected mutated loose parts and mutation-containing creatures into the existing paginated batch-protection review, including placed creatures. Confirmation revalidates ownership and protection atomically on the server; the snapshot and estimates are not sale quotes. This UI needs Roblox device and multiplayer testing.

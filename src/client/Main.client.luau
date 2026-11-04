@@ -10,6 +10,7 @@ local CraftMath=require(ReplicatedStorage.Shared:WaitForChild("CraftMath"))
 local CraftPicker=require(ReplicatedStorage.Shared:WaitForChild("CraftPicker"))
 local FusionRecipe=require(ReplicatedStorage.Shared:WaitForChild("FusionRecipe"))
 local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView"))
+local InventorySummary=require(ReplicatedStorage.Shared:WaitForChild("InventorySummary"))
 local TutorialGuide=require(ReplicatedStorage.Shared:WaitForChild("TutorialGuide"))
 local StandLayout=require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
 local CollectionIndex=require(ReplicatedStorage.Shared:WaitForChild("CollectionIndex"))
@@ -905,8 +906,26 @@ render=function()
   row("FUSION FORGE",function() remote:FireServer("teleport","forge"); panel.Visible=false end)
   row("SUMMIT COURSE START",function() remote:FireServer("teleport","obby"); panel.Visible=false end)
   row("TRADING HUB PORTAL",function() remote:FireServer("teleport","portal"); panel.Visible=false end)
+ elseif mode=="bagSummary" then
+  title.Text="BACKPACK — SAFETY OVERVIEW"
+  local report=InventorySummary.build(state.parts,state.creatures,state.partCapacity,Config.PartSellValue,Config.CreatureSellValue)
+  row("ALL INVENTORY, ignoring browsing filters. Snapshot at last server update; values are estimates, not sale quotes.",nil,Color3.fromRGB(70,75,105))
+  row("BODY PARTS: "..report.parts.."/"..report.partCapacity.." | free slots "..report.freeParts.." | protected "..report.protectedParts,nil,Color3.fromRGB(60,120,180))
+  row("CREATURES: "..report.creatures.."/100 | free slots "..report.freeCreatures.." | protected "..report.protectedCreatures.." | placed "..report.placed,nil,Color3.fromRGB(60,120,180))
+  if report.parts>report.partCapacity then row("Your part inventory exceeds current capacity. Nothing is deleted; free space before buying or claiming parts.",nil,Color3.fromRGB(150,85,45)) end
+  row("UNPROTECTED PARTS BY TYPE (blueprints require Rare+) — Head "..report.available.Head.." | Chest "..report.available.Chest.." | Arms "..report.available.Arms.." | Legs "..report.available.Legs,nil,Color3.fromRGB(70,75,105))
+  row("NON-STANDARD: "..report.mutatedParts.." loose parts ("..report.unprotectedMutatedParts.." unprotected) | "..report.mutatedCreatures.." creatures with a mutation ("..report.unprotectedMutatedCreatures.." unprotected)",nil,Color3.fromRGB(150,85,45))
+  row("Estimated resale of all currently unprotected loose parts: $"..report.eligiblePartValue.."; unprotected, unplaced creatures: $"..report.eligibleCreatureValue..". No sale is initiated here.",nil,Color3.fromRGB(70,75,105))
+  if #report.protect.items>0 then
+   row("REVIEW PROTECTION FOR "..#report.protect.items.." UNPROTECTED MUTATED ITEMS",function()
+    bagTab="All"; bagBatch=report.protect; bagBatchPage=1; selectedSell=nil; levelReview=nil; clearSingleSale(); clearBulk(); mode="bag"; list.CanvasPosition=Vector2.zero; render()
+   end,Color3.fromRGB(60,120,180))
+  else row("No unprotected mutations found in the latest snapshot.",nil,Color3.fromRGB(70,75,105)) end
+  row("Protecting creatures includes placed creatures. Protection blocks sale, crafting, fusion and sacrifice; it does not remove or move items. Review the full list before confirming.",nil,Color3.fromRGB(70,75,105))
+  row("BACK TO BACKPACK",function() mode="bag"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="bag" then
   title.Text="BACKPACK — "..bagTab
+  row("OPEN INVENTORY SAFETY OVERVIEW",function() selectedSell=nil; clearSingleSale(); clearBulk(); bagBatch=nil; mode="bagSummary"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
   row("TAB: "..bagTab.." (tap to change)",function()
    if bagTab=="All" then bagTab="Body Parts" elseif bagTab=="Body Parts" then bagTab="Brainrots" elseif bagTab=="Brainrots" then bagTab="Boosts" else bagTab="All" end
    selectedSell=nil; clearBulk(); bagBatch=nil; bagPlacement="All"; bagPage=1; render()
@@ -1025,7 +1044,7 @@ render=function()
    if bagBatch then
     local label=bagBatch.locked and "PROTECT" or "UNPROTECT"
     row("REVIEW "..label.." "..#bagBatch.items.." MATCHING ITEMS ("..bagBatch.parts.." parts, "..bagBatch.creatures.." creatures) — ALL PAGES",nil,Color3.fromRGB(150,85,45))
-    row("Fixed selection captured from the applied filters. "..(bagBatch.locked and "Protection blocks sale and consumption." or "Unprotected items can be sold or consumed after confirmation."),nil,Color3.fromRGB(150,85,45))
+    row("Fixed selection captured from "..(bagBatch.source or "the applied filters")..". "..(bagBatch.locked and "Protection blocks sale and consumption." or "Unprotected items can be sold or consumed after confirmation."),nil,Color3.fromRGB(150,85,45))
     local reviewPage,currentReviewPage,reviewPages=InventoryView.page(bagBatch.labels,bagBatchPage,10); bagBatchPage=currentReviewPage
     row("REVIEW PAGE "..currentReviewPage.." / "..reviewPages,nil,Color3.fromRGB(70,75,105))
     if currentReviewPage>1 then row("PREVIOUS REVIEW PAGE",function() bagBatchPage-=1; render() end,Color3.fromRGB(60,120,180)) end
