@@ -324,3 +324,19 @@ for _,bad in ipairs({-1,1.5,"100",true,math.huge,1000000000001}) do
  assert(a.load(520)==nil and database.player_520.obbyLastClaim==bad)
 end
 print("Obby cooldown legacy compatibility, round-trip and validation passed")
+-- Layouts are bounded references, including intentionally stale IDs: never reject
+-- a profile just because a creature was sold or sacrificed after saving a layout.
+database.player_521={version=1,cash=0,pending=0,slots=1,rebirth=0,parts={},creatures={}}
+local oldLayouts=a.load(521); assert(oldLayouts and oldLayouts.standLoadouts==nil)
+oldLayouts.standLoadouts={["1"]={{id="missing",stand=1},{id="other",stand=24}},["2"]={}}
+assert(a.save(521,oldLayouts,true))
+local persistedLayouts=b.load(521)
+assert(persistedLayouts and persistedLayouts.standLoadouts["1"][2].stand==24 and #persistedLayouts.standLoadouts["2"]==0)
+assert(b.save(521,persistedLayouts,true))
+local badLayouts={
+ {["0"]={}}, {[1]={}}, {["1"]={{id="x",stand=1},{id="x",stand=2}}},
+ {["1"]={{id="x",stand=2},{id="y",stand=1}}}, {["1"]={{id="x",stand=25}}},
+ {["1"]={{id="x",stand=1,extra=true}}}, {["1"]="bad"},
+}
+for _,bad in ipairs(badLayouts) do database.player_521.standLoadouts=bad; assert(a.load(521)==nil) end
+print("Stand layout legacy, stale-reference round-trip and malformed-data validation passed")

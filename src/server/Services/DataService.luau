@@ -1,6 +1,7 @@
 --!strict
 -- A lease prevents two servers from actively modifying the same profile.
 -- Studio defaults to an in-memory profile; turn on TestPersistence explicitly to test DataStores.
+local Loadouts=require(script.Parent.Loadouts)
 local DataStoreService = game:GetService("DataStoreService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -50,6 +51,7 @@ local function validProfile(data)
  if data.backpackUpgrades~=nil and (not finite(data.backpackUpgrades,0,10) or data.backpackUpgrades%1~=0) then return false end
  if data.rareBlueprints~=nil and (not finite(data.rareBlueprints,0,100) or data.rareBlueprints%1~=0) then return false end
  if data.autoCollect~=nil and type(data.autoCollect)~="boolean" then return false end
+ if data.standLoadouts~=nil and not Loadouts.valid(data.standLoadouts) then return false end
  if data.season~=nil then
   local season=data.season
   if type(season)~="table" or not finite(season.xp,0,5000) or season.xp%1~=0

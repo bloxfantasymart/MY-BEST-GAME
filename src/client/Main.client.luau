@@ -101,6 +101,14 @@ local forgeIds={}; local forgeConfirm=false; local useBlueprint=false; local cra
 local craftKind="Head"; local craftPage=1; local craftQuery=""; local craftDraft=""; local craftSort="Newest"
 local forgePage=1; local forgeQuery=""; local forgeDraft=""
 local standPage=1; local standQuery=""; local standDraft=""; local standSort="Income"; local standSelection=nil
+local layoutSlot=1; local layoutPage=1; local layoutStage=nil; local layoutQuote=nil; local layoutWaiting=nil; local layoutSequence=0
+local function clearLayoutReview() layoutStage=nil; layoutQuote=nil; layoutWaiting=nil; layoutPage=1 end
+local function captureLayout(creatures)
+ local entries={}
+ for _,creature in ipairs(creatures) do if creature.stand>0 then table.insert(entries,{id=creature.id,stand=creature.stand}) end end
+ table.sort(entries,function(a,b) return a.stand<b.stand end)
+ return entries
+end
 local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
 local autoMutationRules={Shiny="hold",Golden="hold",Void="hold",Glitched="hold"}; local autoProtectMutations=true
 local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false; local skipReview=nil
@@ -563,11 +571,77 @@ render=function()
   local bagCost=Config.BackpackUpgradeCosts[(state.backpackUpgrades or 0)+1]
   row(bagCost and ("BACKPACK +5 PART SLOTS — $"..bagCost.." ("..(state.backpackUpgrades or 0).."/10)") or "All cash backpack upgrades unlocked",function() remote:FireServer("upgradeBackpack") end,Color3.fromRGB(210,130,35))
   row("PLOT INCOME BREAKDOWN",function() mode="income"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,145,150))
+  row("SAVED STAND LAYOUTS",function() clearLayoutReview(); layoutSlot=1; mode="layouts"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,145,150))
   if state.rebirth<10 then row("AUTO-COLLECTOR DRONE — unlocks at rebirth 10 (free)",nil,Color3.fromRGB(70,75,105))
   else row("AUTO-COLLECTOR: "..(state.autoCollect and "ON" or "OFF").." (every 10 seconds while online)",function() remote:FireServer("setAutoCollect",not state.autoCollect) end,Color3.fromRGB(60,145,150)) end
   row("FUSION FORGE (REBIRTH 15+)",function() remote:FireServer("teleport","forge"); panel.Visible=false end,Color3.fromRGB(175,120,45))
   row("PLOT THEMES",function() mode="themes"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,130,160))
   row("OPEN GAMEPASS SHOP",function() mode="shop"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(180,65,160))
+ elseif mode=="layouts" then
+  title.Text="SAVED STAND LAYOUTS"
+  row("Save, delete and apply layouts near your assembly pod. Three slots store creature IDs and stand numbers, not copies of creatures.",nil,Color3.fromRGB(70,75,105))
+  row("LAYOUT SLOT "..layoutSlot.." / 3 (tap to change)",function()
+   clearLayoutReview(); layoutSlot=layoutSlot%3+1; render()
+  end,Color3.fromRGB(70,75,105))
+  local stored=(state.standLoadouts or {})[tostring(layoutSlot)]
+  local function nameFor(id)
+   local creature=InventoryView.find({},state.creatures,"creature",id)
+   return creature and creature.name or "MISSING CREATURE"
+  end
+  local function pageEntries(entries)
+   local page,current,pages=InventoryView.page(entries,layoutPage,10); layoutPage=current
+   row("PAGE "..current.." / "..pages.." | "..#entries.." entries",nil,Color3.fromRGB(70,75,105))
+   if current>1 then row("PREVIOUS LAYOUT PAGE",function() layoutPage-=1; render() end,Color3.fromRGB(60,120,180)) end
+   if current<pages then row("NEXT LAYOUT PAGE",function() layoutPage+=1; render() end,Color3.fromRGB(60,120,180)) end
+   return page
+  end
+  if layoutQuote then
+   local review=layoutQuote
+   row("SERVER REVIEW: "..#review.changes.." changed stands. Applying removes current occupants not in this layout; no items are consumed. Expires in 60 seconds.",nil,Color3.fromRGB(150,85,45))
+   row("Estimated normal plot income: $"..string.format("%.4g",review.beforeIncome).."/s → $"..string.format("%.4g",review.afterIncome).."/s. Includes adjacency and Sigma Statue; excludes events/VIP. Levels can change.",nil,Color3.fromRGB(70,75,105))
+   for _,change in ipairs(pageEntries(review.changes)) do
+    local old=change.oldName..(change.oldId~="" and (" #"..string.sub(change.oldId,-6)) or "")
+    local new=change.newName..(change.newId~="" and (" #"..string.sub(change.newId,-6)) or "")
+    row("STAND "..change.stand..": "..old.." → "..new,nil,Color3.fromRGB(70,75,105))
+   end
+   row("CONFIRM APPLY LAYOUT "..review.slot,function()
+    if layoutQuote~=review then return end
+    clearLayoutReview(); remote:FireServer("applyStandLayout",review.token); notice.Text="Requesting layout change..."; render()
+   end,Color3.fromRGB(52,170,105))
+   row("CANCEL LAYOUT REVIEW",function() clearLayoutReview(); remote:FireServer("cancelStandLayoutReview"); render() end,Color3.fromRGB(70,75,105))
+  elseif layoutWaiting then
+   row("WAITING FOR SERVER REVIEW...",nil,Color3.fromRGB(70,75,105))
+   row("CANCEL REVIEW REQUEST",function() clearLayoutReview(); remote:FireServer("cancelStandLayoutReview"); render() end,Color3.fromRGB(70,75,105))
+  elseif layoutStage then
+   local review=layoutStage
+   row((review.action=="save" and "REVIEW SAVE / OVERWRITE" or "REVIEW DELETE").." SLOT "..layoutSlot..": "..#review.entries.." stands. "..(review.action=="save" and "This replaces the saved slot, not your creatures." or "This deletes the saved layout only."),nil,Color3.fromRGB(150,85,45))
+   for _,entry in ipairs(pageEntries(review.entries)) do row("STAND "..entry.stand..": "..nameFor(entry.id).." #"..string.sub(entry.id,-6),nil,Color3.fromRGB(70,75,105)) end
+   row("CONFIRM "..string.upper(review.action).." LAYOUT "..layoutSlot,function()
+    if layoutStage~=review then return end
+    clearLayoutReview(); remote:FireServer(review.action=="save" and "saveStandLayout" or "deleteStandLayout",{slot=review.slot,entries=review.entries,hadSaved=review.hadSaved,oldSaved=review.oldSaved}); notice.Text="Requesting layout update..."; render()
+   end,Color3.fromRGB(185,100,35))
+   row("CANCEL",function() clearLayoutReview(); render() end,Color3.fromRGB(70,75,105))
+  else
+   row(stored and ("Saved layout contains "..#stored.." stands.") or "This layout slot is empty.",nil,Color3.fromRGB(70,75,105))
+   if stored then
+    for _,entry in ipairs(pageEntries(stored)) do row("STAND "..entry.stand..": "..nameFor(entry.id).." #"..string.sub(entry.id,-6),nil,Color3.fromRGB(70,75,105)) end
+    row("REQUEST SERVER REVIEW TO APPLY",function()
+     layoutSequence=layoutSequence%2147483647+1; layoutWaiting=layoutSequence
+     remote:FireServer("reviewStandLayout",{slot=layoutSlot,requestId=layoutWaiting}); render()
+    end,Color3.fromRGB(52,170,105))
+    row("REVIEW DELETE SAVED LAYOUT",function()
+     local copy={}; for _,entry in ipairs(stored) do table.insert(copy,{id=entry.id,stand=entry.stand}) end
+     layoutStage={action="delete",slot=layoutSlot,entries=copy}; layoutPage=1; render()
+    end,Color3.fromRGB(185,100,35))
+   end
+   row("REVIEW SAVE CURRENT STANDS TO SLOT "..layoutSlot,function()
+    local old=nil
+    if stored then old={}; for _,entry in ipairs(stored) do table.insert(old,{id=entry.id,stand=entry.stand}) end end
+    layoutStage={action="save",slot=layoutSlot,entries=captureLayout(state.creatures),hadSaved=stored~=nil,oldSaved=old}; layoutPage=1; render()
+   end,Color3.fromRGB(60,120,180))
+   row("Missing creatures or locked stands prevent applying a saved layout. Protected creatures can be rearranged. Nothing is sold or consumed.",nil,Color3.fromRGB(70,75,105))
+  end
+  row("BACK TO UPGRADES",function() clearLayoutReview(); mode="upgrades"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="offline" then
   title.Text="WELCOME BACK — OFFLINE EARNINGS"
   local report=state.offlineReport
@@ -1012,6 +1086,14 @@ updateEvent=function(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.layoutReview then
+  if layoutWaiting==data.requestId and mode=="layouts" and panel.Visible then
+   layoutWaiting=nil; layoutQuote=data.quote; layoutPage=1
+   if data.reason then notice.Text=data.reason end
+   requestRender()
+  end
+  return
+ end
  if data.bulkSaleReview then
   if bulkWaiting==data.requestId and mode=="bag" and panel.Visible and bagTab~="Brainrots" and bagTab~="Boosts" then
    bulkWaiting=nil; confirmBulk=data.quote; bulkReviewPage=1

@@ -32,6 +32,7 @@ local RollOdds = require(script.Parent.Services.RollOdds)
 local Rebirth = require(script.Parent.Services.Rebirth)
 local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
 local Obby = require(script.Parent.Services.Obby)
+local Loadouts = require(script.Parent.Services.Loadouts)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -132,7 +133,7 @@ local function send(player, message, effect)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -658,6 +659,37 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local index,creature=findById(s.creatures,value)
   if index and creature.stand==0 and Inventory.canConsume(creature) then table.remove(s.creatures,index); local amount=Config.CreatureSellValue(creature); s.cash+=amount; send(player,"Creature sold for $"..amount..".")
   elseif index then send(player,creature.locked and "Unlock this creature before selling." or "Remove the creature from its stand before selling.") end
+ elseif action=="saveStandLayout" and type(value)=="table" then
+  if not nearby(player,s.plot.pod) then send(player,"Move near your assembly pod to save layouts."); return end
+  local ok,reason=Loadouts.save(s,value.slot,value.entries,value.hadSaved,value.oldSaved)
+  send(player,ok and ("Saved stand layout "..value.slot..".") or reason)
+ elseif action=="deleteStandLayout" and type(value)=="table" then
+  if not nearby(player,s.plot.pod) then send(player,"Move near your assembly pod to delete layouts."); return end
+  local ok,reason=Loadouts.delete(s,value.slot,value.entries)
+  send(player,ok and ("Deleted stand layout "..value.slot..". Your creatures are unchanged.") or reason)
+ elseif action=="reviewStandLayout" and type(value)=="table" then
+  local requestId=value.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  s.layoutQuote=nil
+  local quote,reason
+  if not nearby(player,s.plot.pod) then reason="Move near your assembly pod to review layouts."
+  else
+   local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+   if ok then quote,reason=Loadouts.review(s,value.slot,os.clock(),token,PlotEconomy.rates,Config.Income,s.extras.sigmaStatue)
+   else reason="Could not create a layout review. Try again." end
+  end
+  s.layoutQuote=quote
+  remote:FireClient(player,{layoutReview=true,requestId=requestId,quote=quote,reason=reason})
+ elseif action=="cancelStandLayoutReview" then
+  s.layoutQuote=nil
+ elseif action=="applyStandLayout" then
+  if not nearby(player,s.plot.pod) then s.layoutQuote=nil; send(player,"Move near your assembly pod to apply layouts."); return end
+  local quote,reason=Loadouts.apply(s,value,os.clock())
+  if not quote then send(player,reason); return end
+  for _,change in ipairs(quote.changes) do
+   if change.newId~="" then Tutorial.advance(s.tutorial,"place",s.parts); break end
+  end
+  refreshStands(s); send(player,"Stand layout "..quote.slot.." applied. No creatures were sold or consumed.")
  elseif action=="upgradeBackpack" then
   local cost=Config.BackpackUpgradeCosts[s.backpackUpgrades+1]
   if not cost then send(player,"All backpack upgrades are unlocked.")
@@ -713,7 +745,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
 end)
 local function profile(s,closing)
  CollectionIndex.record(s.collection,s.parts,s.creatures,collectionNames)
- return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,backpackUpgrades=s.backpackUpgrades,rareBlueprints=s.rareBlueprints,autoCollect=s.autoCollector.enabled,obbyLastClaim=s.obbyLastClaim,parts=s.parts,creatures=s.creatures,collection=s.collection,progress=s.progress,season=s.season,extras=s.extras,luckUntil=s.luckUntil,tripleLuckUntil=s.tripleLuckUntil,tutorial=s.tutorial,theme=s.theme,keepSlotsEntitled=s.keepSlotsEntitled,lastLogout=closing and os.time() or 0}
+ return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,backpackUpgrades=s.backpackUpgrades,rareBlueprints=s.rareBlueprints,autoCollect=s.autoCollector.enabled,obbyLastClaim=s.obbyLastClaim,standLoadouts=s.standLoadouts,parts=s.parts,creatures=s.creatures,collection=s.collection,progress=s.progress,season=s.season,extras=s.extras,luckUntil=s.luckUntil,tripleLuckUntil=s.tripleLuckUntil,tutorial=s.tutorial,theme=s.theme,keepSlotsEntitled=s.keepSlotsEntitled,lastLogout=closing and os.time() or 0}
 end
 local function clearPlot(s)
  for n=1,24 do
@@ -745,7 +777,7 @@ local function joinImpl(player,context)
   context.data=nil
   plot.owner=nil; plot.sign.Text="Unclaimed plot"; return
  end
- local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),lastIncomeClock=os.clock(),incomeEvent=currentEvent(),incomeDirty=false,giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,obbyLastClaim=data.obbyLastClaim or 0,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),collection=data.collection or {},parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
+ local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),lastIncomeClock=os.clock(),incomeEvent=currentEvent(),incomeDirty=false,giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,obbyLastClaim=data.obbyLastClaim or 0,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),collection=data.collection or {},standLoadouts=data.standLoadouts or {},parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
  if (data.lastOfflineAward or 0)>0 then
   -- This is informational only: the amount was already credited atomically on acquisition.
   s.offlineReport={amount=data.lastOfflineAward,seconds=data.lastOfflineSeconds,rate=data.lastOfflineRate,capped=data.lastOfflineCapped}
