@@ -92,6 +92,8 @@ local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={st
 local loaded=false; local offlineShown=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
+local singleSaleQuote=nil; local singleSaleWaiting=nil; local singleSaleSequence=0
+local function clearSingleSale() singleSaleQuote=nil; singleSaleWaiting=nil end
 local bulkRarity=1; local confirmBulk=nil; local bulkWaiting=nil; local bulkSequence=0; local bulkReviewPage=1; local bulkStandardOnly=true
 local function clearBulk() confirmBulk=nil; bulkWaiting=nil end
 local bagBatch=nil; local bagBatchPage=1
@@ -914,6 +916,8 @@ render=function()
    end,Color3.fromRGB(70,75,105))
    local mutationFilter=bagMutation==0 and "All" or Config.Mutations[bagMutation].name
    local entries=InventoryView.build(state.parts,state.creatures,bagTab,bagQuery,bagProtection,bagSort,Config.Income,bagRarity,mutationFilter,bagPlacement)
+   if singleSaleQuote and (not selectedSell or singleSaleQuote.category~=selectedSell.category or singleSaleQuote.item.id~=selectedSell.id) then singleSaleQuote=nil end
+   if singleSaleWaiting and (not selectedSell or singleSaleWaiting.category~=selectedSell.category or singleSaleWaiting.id~=selectedSell.id) then singleSaleWaiting=nil end
    if not selectedSell then levelReview=nil end
    if selectedSell then
     local selected=InventoryView.find(state.parts,state.creatures,selectedSell.category,selectedSell.id)
@@ -942,9 +946,30 @@ render=function()
      if selected.locked then row("Protected items cannot be sold, crafted, fused or sacrificed.",nil,Color3.fromRGB(70,75,105))
      elseif category=="creature" and selected.stand>0 then row("Remove this creature from its stand before selling.",nil,Color3.fromRGB(70,75,105))
      else
-      row("CONFIRM PERMANENT SALE: "..name.." for $"..resale,function()
-       remote:FireServer(category=="part" and "sellPart" or "sellCreature",selected.id); selectedSell=nil; levelReview=nil
-      end,Color3.fromRGB(200,65,85))
+      if singleSaleQuote then
+       local review=singleSaleQuote; local item=review.item
+       row("SERVER REVIEW (expires after 60 seconds): "..item.name.." #"..string.sub(item.id,-6).." | $"..review.value,nil,Color3.fromRGB(150,85,45))
+       if category=="part" then
+        row((item.mutation or "Standard").." x"..(item.mutationMultiplier or 1).." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] | base "..string.format("%.4g",item.income).." | recorded price $"..(item.price or 10),nil,Color3.fromRGB(70,75,105))
+       else
+        row((item.ascended and "ASCENDED | " or "")..(item.blueprintApplied and "BLUEPRINT | " or "").."Lv."..item.level.." | base $"..string.format("%.4g",item.income).."/s | unplaced",nil,Color3.fromRGB(70,75,105))
+        for _,kind in ipairs(Config.Types) do local c=item.components[kind]; row(kind..": "..(c.mutation or "Standard").." "..c.name.." ["..Config.Rarities[c.rarity].name.."] #"..string.sub(c.id,-6),nil,Color3.fromRGB(70,75,105)) end
+       end
+       row("CONFIRM PERMANENT SALE FOR $"..review.value,function()
+        if singleSaleQuote~=review then return end
+        clearSingleSale(); remote:FireServer("singleSaleConfirm",review.token); selectedSell=nil; levelReview=nil; notice.Text="Requesting reviewed sale..."; render()
+       end,Color3.fromRGB(200,65,85))
+       row("CANCEL SALE REVIEW",function() clearSingleSale(); remote:FireServer("cancelSingleSaleReview"); render() end,Color3.fromRGB(70,75,105))
+      elseif singleSaleWaiting then
+       row("WAITING FOR SERVER SALE REVIEW...",nil,Color3.fromRGB(70,75,105))
+       row("CANCEL SALE REVIEW REQUEST",function() clearSingleSale(); remote:FireServer("cancelSingleSaleReview"); render() end,Color3.fromRGB(70,75,105))
+      else
+       row("REQUEST SERVER REVIEW OF PERMANENT SALE",function()
+        singleSaleSequence=singleSaleSequence%2147483647+1
+        singleSaleWaiting={requestId=singleSaleSequence,category=category,id=selected.id}
+        remote:FireServer("singleSaleReview",singleSaleWaiting); render()
+       end,Color3.fromRGB(200,65,85))
+      end
      end
      if category=="creature" then
       if selected.level>=1000 then levelReview=nil; row("Maximum creature level reached.",nil,Color3.fromRGB(70,75,105))
@@ -1034,11 +1059,11 @@ render=function()
     local item=entry.item; local protected=item.locked and "[PROTECTED] " or ""
     if entry.category=="part" then
      row(protected..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] | sell $"..Config.PartSellValue(item),function()
-      selectedSell={id=item.id,category="part"}; levelReview=nil; clearBulk(); bagBatch=nil; list.CanvasPosition=Vector2.zero; render()
+      clearSingleSale(); selectedSell={id=item.id,category="part"}; levelReview=nil; clearBulk(); bagBatch=nil; list.CanvasPosition=Vector2.zero; render()
      end,Config.Rarities[item.rarity].color)
     else
      row(protected..(item.ascended and "ASCENDED " or "")..(item.blueprintApplied and "[BLUEPRINT] " or "")..item.name.." Lv."..item.level.." | $"..math.floor(entry.income).."/s | "..(item.stand==0 and "Unplaced" or "Stand "..item.stand),function()
-      selectedSell={id=item.id,category="creature"}; levelReview=nil; clearBulk(); bagBatch=nil; list.CanvasPosition=Vector2.zero; render()
+      clearSingleSale(); selectedSell={id=item.id,category="creature"}; levelReview=nil; clearBulk(); bagBatch=nil; list.CanvasPosition=Vector2.zero; render()
      end,Config.Rarities[entry.rarity].color)
     end
    end
@@ -1067,7 +1092,7 @@ rewards.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="rew
 slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgrades"; panel.Visible=true; render() end)
 travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
 rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; rebirthSelected=nil; rebirthQuote=nil; mode="rebirth"; panel.Visible=true; render() end)
-bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; selectedSell=nil; clearBulk(); bulkStandardOnly=true; bagBatch=nil; mode="bag"; panel.Visible=true; render() end)
+bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; clearSingleSale(); selectedSell=nil; clearBulk(); bulkStandardOnly=true; bagBatch=nil; mode="bag"; panel.Visible=true; render() end)
 updateTutorial=function()
  local step=state.tutorial and state.tutorial.step or 7
  local instruction,targetName,caption=TutorialGuide.describe(step,state.parts,state.creatures,state.standsUnlocked or 12,Config.TutorialText)
@@ -1096,6 +1121,16 @@ updateEvent=function(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.singleSaleReview then
+  local waiting=singleSaleWaiting
+  if waiting and waiting.requestId==data.requestId and mode=="bag" and panel.Visible and selectedSell
+   and selectedSell.id==waiting.id and selectedSell.category==waiting.category then
+   singleSaleWaiting=nil; singleSaleQuote=data.quote
+   if data.reason then notice.Text=data.reason end
+   requestRender()
+  end
+  return
+ end
  if data.layoutReview then
   if layoutWaiting==data.requestId and mode=="layouts" and panel.Visible then
    layoutWaiting=nil; layoutQuote=data.quote; layoutPage=1

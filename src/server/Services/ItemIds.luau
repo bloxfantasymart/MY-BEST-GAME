@@ -23,6 +23,11 @@ function ItemIds.collect(state)
  if quote then addEntries(used,quote.before); addEntries(used,quote.after) end
  quote=state.bulkSaleQuote
  if quote then addEntries(used,quote.items) end
+ quote=state.singleSaleQuote
+ if quote and quote.item then
+  add(used,quote.item.id)
+  for _,part in pairs(quote.item.components or {}) do if type(part)=="table" then add(used,part.id) end end
+ end
  quote=state.rebirthQuote
  if quote then
   add(used,quote.id)

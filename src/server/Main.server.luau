@@ -35,6 +35,7 @@ local Obby = require(script.Parent.Services.Obby)
 local Loadouts = require(script.Parent.Services.Loadouts)
 local InteractionGate=require(script.Parent.Services.InteractionGate)
 local ItemIds = require(script.Parent.Services.ItemIds)
+local SingleSale = require(script.Parent.Services.SingleSale)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -663,14 +664,23 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local count,total=Inventory.confirmBulkSale(s,value,os.clock(),Config.PartSellValue)
   if not count then send(player,total); return end
   s.cash+=total; Tutorial.reconcile(s.tutorial,s.parts); send(player,"Sold "..count.." parts for $"..total..".")
- elseif action=="sellPart" then
-  local index,item=findById(s.parts,value)
-  if index and Inventory.canConsume(item) then table.remove(s.parts,index); Tutorial.reconcile(s.tutorial,s.parts); local amount=Config.PartSellValue(item); s.cash+=amount; send(player,"Part sold for $"..amount..".")
-  elseif index then send(player,"Unlock this part before selling.") end
- elseif action=="sellCreature" then
-  local index,creature=findById(s.creatures,value)
-  if index and creature.stand==0 and Inventory.canConsume(creature) then table.remove(s.creatures,index); local amount=Config.CreatureSellValue(creature); s.cash+=amount; send(player,"Creature sold for $"..amount..".")
-  elseif index then send(player,creature.locked and "Unlock this creature before selling." or "Remove the creature from its stand before selling.") end
+ elseif action=="singleSaleReview" and type(value)=="table" then
+  local requestId=value.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  s.singleSaleQuote=nil
+  local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+  local quote,reason
+  if ok then quote,reason=SingleSale.review(s,value.category,value.id,os.clock(),token,Config.PartSellValue,Config.CreatureSellValue)
+  else reason="Could not create a sale review. Try again." end
+  s.singleSaleQuote=quote
+  remote:FireClient(player,{singleSaleReview=true,requestId=requestId,quote=quote,reason=reason})
+ elseif action=="cancelSingleSaleReview" then
+  s.singleSaleQuote=nil
+ elseif action=="singleSaleConfirm" then
+  local quote,reason=SingleSale.confirm(s,value,os.clock(),Config.PartSellValue,Config.CreatureSellValue)
+  if not quote then send(player,reason); return end
+  if quote.category=="part" then Tutorial.reconcile(s.tutorial,s.parts) end
+  send(player,"Item sold for $"..quote.value..".")
  elseif action=="saveStandLayout" and type(value)=="table" then
   if not nearby(player,s.plot.pod) then send(player,"Move near your assembly pod to save layouts."); return end
   local ok,reason=Loadouts.save(s,value.slot,value.entries,value.hadSaved,value.oldSaved)
