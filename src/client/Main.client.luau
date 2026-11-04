@@ -629,6 +629,7 @@ render=function()
   row("CATALOG & ROLL ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
   row("LIVE EVENT SCHEDULE",function() eventSchedule=nil; mode="events"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestEvents"); render() end,Color3.fromRGB(60,120,180))
   row("OPEN FREE SEASON TRACK",function() seasonPage=1; mode="season"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(120,75,180))
+  row("SUMMIT PARKOUR CHALLENGE",function() mode="obby"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,145,150))
   row("SESSION GIFTS — timers reset when you leave",nil,Color3.fromRGB(70,75,105))
   for _,gift in ipairs(Config.SessionGifts) do
    local b=row(giftText(gift),function() remote:FireServer("claimGift",gift.id) end,Color3.fromRGB(155,105,45))
@@ -765,12 +766,23 @@ render=function()
   row("4. Step on the green ATM pad or tap the cash counter to collect your earnings.",nil,Color3.fromRGB(70,75,105))
   row("5. Upgrade, then open REBIRTH to see the cash and creature you must sacrifice.",nil,Color3.fromRGB(70,75,105))
   row("Tier odds show the chance of the rarity tier, not an individual part or mutation. Auto-roll spends cash!",nil,Color3.fromRGB(70,75,105))
+ elseif mode=="obby" then
+  title.Text="SUMMIT PARKOUR"
+  local challenge=state.obby or {step=0,ready=false,remaining=0}
+  row("OPTIONAL COURSE: touch the green START platform, then checkpoints 2 through 9 in order. Reach the summit chest and use its prompt within 60 seconds.",nil,Color3.fromRGB(70,75,105))
+  row("Reward: $50,000 and 3 free-part vouchers, once per six hours after a saved claim. Vouchers require room below their 1,000 cap.",nil,Color3.fromRGB(70,75,105))
+  row("At last sync — attempt: "..(challenge.ready and "SUMMIT READY — use the chest" or (challenge.step>0 and ("checkpoint "..challenge.step.." / 9") or "not started")).." | reward "..(challenge.remaining>0 and ("cooldown "..formatDuration(challenge.remaining).." at last sync") or "available at last sync"),nil,Color3.fromRGB(60,120,180))
+  row("Attempts reset when you respawn, teleport, leave, or take too long (45 seconds per checkpoint; 3 minutes total). Touch START to retry.",nil,Color3.fromRGB(70,75,105))
+  row("TRAVEL TO SUMMIT COURSE START",function() remote:FireServer("teleport","obby"); panel.Visible=false end,Color3.fromRGB(60,145,150))
+  row("REFRESH CHALLENGE STATUS",function() remote:FireServer("sync"); notice.Text="Requesting current status..." end,Color3.fromRGB(60,120,180))
+  row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="travel" then
   title.Text="TRAVEL AROUND YOUR PLOT"
   row("ROLL STATION",function() remote:FireServer("teleport","lever"); panel.Visible=false end)
   row("ASSEMBLY POD",function() remote:FireServer("teleport","pod"); panel.Visible=false end)
   row("CASH ATM",function() remote:FireServer("teleport","atm"); panel.Visible=false end)
   row("FUSION FORGE",function() remote:FireServer("teleport","forge"); panel.Visible=false end)
+  row("SUMMIT COURSE START",function() remote:FireServer("teleport","obby"); panel.Visible=false end)
   row("TRADING HUB PORTAL",function() remote:FireServer("teleport","portal"); panel.Visible=false end)
  elseif mode=="bag" then
   title.Text="BACKPACK — "..bagTab

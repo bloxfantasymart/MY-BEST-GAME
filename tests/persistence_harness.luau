@@ -313,3 +313,14 @@ local retained=b.load(519)
 assert(retained.collection["Dirt Boy"]==15 and #retained.parts==0 and #retained.creatures==0)
 assert(b.save(519,retained,true))
 print("Collection bootstrap from legacy inventory survives later removal and save")
+-- Summit cooldown is optional in legacy profiles, bounded and retained on saves.
+database.player_520={version=1,cash=0,pending=0,slots=1,rebirth=0,parts={},creatures={}}
+local legacyObby=a.load(520); assert(legacyObby and legacyObby.obbyLastClaim==nil)
+legacyObby.obbyLastClaim=1800000000; assert(a.save(520,legacyObby,true))
+local obbySaved=b.load(520); assert(obbySaved and obbySaved.obbyLastClaim==1800000000)
+assert(b.save(520,obbySaved,true))
+for _,bad in ipairs({-1,1.5,"100",true,math.huge,1000000000001}) do
+ database.player_520.obbyLastClaim=bad
+ assert(a.load(520)==nil and database.player_520.obbyLastClaim==bad)
+end
+print("Obby cooldown legacy compatibility, round-trip and validation passed")

@@ -31,6 +31,7 @@ local ShutdownGate = require(script.Parent.Services.ShutdownGate)
 local RollOdds = require(script.Parent.Services.RollOdds)
 local Rebirth = require(script.Parent.Services.Rebirth)
 local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
+local Obby = require(script.Parent.Services.Obby)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -117,6 +118,9 @@ local function partCapacity(s)
  return PassService.capacity(s.passes,s.backpackUpgrades,SeasonRewards.bonusSlots(s.season.claimed))
 end
 local settleIncome
+local function obbyStatus(s)
+ return Obby.status(s,s.player.Character,os.clock(),os.time())
+end
 local function incomeSummary(s,rates,event)
  return PlotEconomy.summary(rates or PlotEconomy.rates(s.creatures,Config.Income),event or currentEvent(),PassService.owned(s.passes,"VIP"),s.extras.sigmaStatue)
 end
@@ -128,7 +132,7 @@ local function send(player, message, effect)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -137,6 +141,46 @@ local function nearby(player, p)
  local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
  return root and (root.Position - p.Position).Magnitude <= 20
 end
+-- Optional public parkour. Only server-observed checkpoint touches and a summit
+-- prompt advance/claim; these checks are not a complete movement anti-cheat.
+local course=Instance.new("Folder"); course.Name="Summit Course"; course.Parent=world
+local positions={
+ Vector3.new(-25,1,-165),Vector3.new(-15,3.5,-165),Vector3.new(-5,6,-165),
+ Vector3.new(5,8.5,-165),Vector3.new(15,11,-165),Vector3.new(25,13.5,-165),
+ Vector3.new(25,16,-155),Vector3.new(15,18.5,-155),Vector3.new(5,21,-155),
+}
+local obbyStart=nil; local summit=nil
+for index,position in ipairs(positions) do
+ local platform=part(course,"Checkpoint "..index,Vector3.new(7,1,7),position,
+  index==1 and Color3.fromRGB(65,210,145) or (index==#positions and Color3.fromRGB(255,200,65) or Color3.fromRGB(70,165,220)),Enum.Material.SmoothPlastic)
+ label(platform,index==1 and "START SUMMIT COURSE" or (index==#positions and "SUMMIT" or ("CHECKPOINT "..index.." / "..#positions)),3)
+ if index==1 then obbyStart=platform end
+ if index==#positions then summit=platform end
+ platform.Touched:Connect(function(hit)
+  local character=hit.Parent; local player=character and Players:GetPlayerFromCharacter(character)
+  local s=player and states[player]
+  local root=character and character:FindFirstChild("HumanoidRootPart")
+  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+  if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or player.Character~=character
+   or not root or not humanoid or humanoid.Health<=0 or (root.Position-platform.Position).Magnitude>12 then return end
+  if Obby.touch(s,index,character,os.clock()) then
+   send(player,index==#positions and "Summit reached! Use the chest within 60 seconds." or ("Summit course: checkpoint "..index.." / "..#positions.."."))
+  end
+ end)
+end
+local summitChest=part(course,"Summit chest",Vector3.new(4,2,4),summit.Position+Vector3.new(0,2,0),Color3.fromRGB(255,200,65),Enum.Material.Metal)
+summitChest.CanCollide=false -- Do not block landing on the final checkpoint.
+label(summitChest,"SUMMIT REWARD",4)
+prompt(summitChest,"Claim summit reward").Triggered:Connect(function(player)
+ local s=states[player]; local character=player.Character
+ local root=character and character:FindFirstChild("HumanoidRootPart")
+ local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+ if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not root or not humanoid or humanoid.Health<=0
+  or (root.Position-summitChest.Position).Magnitude>10 then return end
+ local ok,reason=Obby.claim(s,character,os.clock(),os.time(),RewardExtras.MaxVouchers)
+ if not ok then send(player,reason); return end
+ send(player,"Summit reward: $"..Obby.Cash.." and "..Obby.Vouchers.." free-part vouchers! Cooldown: 6 hours.")
+end)
 prompt(forge,"Open fusion forge").Triggered:Connect(function(player)
  local s=states[player]
  if s and not joinGate.closed and DataService.isHealthy(player.UserId) and nearby(player,forge) then remote:FireClient(player,{open="forge"}) end
@@ -537,10 +581,10 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local success,reason=Season.claimRepeat(s.season,s.extras,RewardExtras.MaxVouchers)
   send(player,success and "Repeatable roll objective: one free-part voucher!" or reason)
  elseif action=="teleport" then
-  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal,forge=forge}
+  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal,forge=forge,obby=obbyStart}
   local destination=type(value)=="string" and destinations[value] or nil
   if destination and now-(s.lastTeleport or -10)>=3 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-   s.lastTeleport=now; player.Character:PivotTo(CFrame.new(destination.Position+Vector3.new(0,4,8))); send(player,"Teleported to "..destination.Name..".")
+   s.lastTeleport=now; s.obbyRun=nil; player.Character:PivotTo(CFrame.new(destination.Position+Vector3.new(0,4,8))); send(player,"Teleported to "..destination.Name..".")
   end
  elseif action=="skip" and nearby(player,s.plot.lever) then
   if s.autoRolling then send(player,"Stop auto-roll before skipping manually."); return end
@@ -669,7 +713,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
 end)
 local function profile(s,closing)
  CollectionIndex.record(s.collection,s.parts,s.creatures,collectionNames)
- return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,backpackUpgrades=s.backpackUpgrades,rareBlueprints=s.rareBlueprints,autoCollect=s.autoCollector.enabled,parts=s.parts,creatures=s.creatures,collection=s.collection,progress=s.progress,season=s.season,extras=s.extras,luckUntil=s.luckUntil,tripleLuckUntil=s.tripleLuckUntil,tutorial=s.tutorial,theme=s.theme,keepSlotsEntitled=s.keepSlotsEntitled,lastLogout=closing and os.time() or 0}
+ return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,backpackUpgrades=s.backpackUpgrades,rareBlueprints=s.rareBlueprints,autoCollect=s.autoCollector.enabled,obbyLastClaim=s.obbyLastClaim,parts=s.parts,creatures=s.creatures,collection=s.collection,progress=s.progress,season=s.season,extras=s.extras,luckUntil=s.luckUntil,tripleLuckUntil=s.tripleLuckUntil,tutorial=s.tutorial,theme=s.theme,keepSlotsEntitled=s.keepSlotsEntitled,lastLogout=closing and os.time() or 0}
 end
 local function clearPlot(s)
  for n=1,24 do
@@ -701,7 +745,7 @@ local function joinImpl(player,context)
   context.data=nil
   plot.owner=nil; plot.sign.Text="Unclaimed plot"; return
  end
- local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),lastIncomeClock=os.clock(),incomeEvent=currentEvent(),incomeDirty=false,giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),collection=data.collection or {},parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
+ local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),lastIncomeClock=os.clock(),incomeEvent=currentEvent(),incomeDirty=false,giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,obbyLastClaim=data.obbyLastClaim or 0,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),collection=data.collection or {},parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
  if (data.lastOfflineAward or 0)>0 then
   -- This is informational only: the amount was already credited atomically on acquisition.
   s.offlineReport={amount=data.lastOfflineAward,seconds=data.lastOfflineSeconds,rate=data.lastOfflineRate,capped=data.lastOfflineCapped}
@@ -719,6 +763,7 @@ local function joinImpl(player,context)
  refreshStands(s)
  Visuals.showRolls(s.plot,s.rolls,s.slots)
  local function teleport(character)
+  s.obbyRun=nil
   local root=character:WaitForChild("HumanoidRootPart",10)
   if root and states[player]==s then
    character:PivotTo(CFrame.new(plot.lever.Position+Vector3.new(0,4,10)))
