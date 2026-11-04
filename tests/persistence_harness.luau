@@ -413,3 +413,18 @@ local summitLoaded=summitService.load(93008)
 assert(summitLoaded and summitLoaded.parts[1].name=="Peak Mountain" and summitLoaded.parts[1].locked)
 assert(summitService.save(93008,summitLoaded,true))
 print("Protected exclusive summit head profile round-trip passed")
+-- Multi-roll tokens are optional for legacy profiles and validated when present.
+local tokens=makeService()
+local tokenProfile=tokens.load(93009); assert(tokenProfile)
+tokenProfile.extras={luckPotions=0,rollVouchers=3,goldenLever=false,sigmaStatue=false,ohioCrown=false}
+assert(tokens.save(93009,tokenProfile,true))
+local oldTokens=tokens.load(93009); assert(oldTokens and oldTokens.extras.multiRollTokens==nil)
+oldTokens.extras.multiRollTokens=1000
+assert(tokens.save(93009,oldTokens,true))
+local restored=tokens.load(93009); assert(restored.extras.multiRollTokens==1000 and restored.extras.rollVouchers==3)
+assert(tokens.save(93009,restored,true))
+for _,bad in ipairs({-1,1001,1.5,"3"}) do
+ database.player_93009.extras.multiRollTokens=bad
+ assert(tokens.load(93009)==nil and database.player_93009.extras.multiRollTokens==bad)
+end
+print("Multi-roll token legacy compatibility, limits and profile round-trip passed")

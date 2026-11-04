@@ -10,7 +10,7 @@ Obby.MaxRunSeconds=180
 Obby.ClaimWindow=60
 Obby.Cooldown=6*60*60
 Obby.Cash=50000
-Obby.Vouchers=3
+Obby.Tokens=3
 
 function Obby.touch(state,index,character,now)
  if type(index)~="number" or index%1~=0 or index<1 or index>Obby.Checkpoints or character==nil then return false end
@@ -44,22 +44,22 @@ function Obby.status(state,character,now,epoch)
  end
  return {step=run and run.step or 0,ready=run and run.ready or false,remaining=Obby.remaining(state.obbyLastClaim,epoch)}
 end
-local function validate(state,character,now,epoch,maxVouchers)
+local function validate(state,character,now,epoch,maxTokens)
  local run=state.obbyRun
  if not run or not run.ready or run.character~=character then return nil,"Complete the course first." end
  if now<run.last or now-run.last>Obby.ClaimWindow then state.obbyRun=nil; return nil,"Summit attempt expired. Start again." end
  if Obby.remaining(state.obbyLastClaim,epoch)>0 then return nil,"Summit reward is still on its six-hour cooldown." end
- if state.extras.rollVouchers+Obby.Vouchers>maxVouchers then return nil,"Use some vouchers before claiming." end
+ if state.extras.multiRollTokens+Obby.Tokens>maxTokens then return nil,"Use some multi-roll tokens before claiming." end
  return true
 end
 local function commit(state,epoch)
- state.obbyLastClaim=epoch; state.cash+=Obby.Cash; state.extras.rollVouchers+=Obby.Vouchers; state.obbyRun=nil
+ state.obbyLastClaim=epoch; state.cash+=Obby.Cash; state.extras.multiRollTokens+=Obby.Tokens; state.obbyRun=nil
 end
 -- Require a free slot before drawing, even for a non-winning claim. A result
 -- that cannot be committed (e.g. ID failure) is retained for this session and
 -- later attempts, not re-rolled. draw and generateId must never yield.
-function Obby.claimWithDrop(state,character,now,epoch,maxVouchers,capacity,draw,generateId,spec)
- local ok,reason=validate(state,character,now,epoch,maxVouchers)
+function Obby.claimWithDrop(state,character,now,epoch,maxTokens,capacity,draw,generateId,spec)
+ local ok,reason=validate(state,character,now,epoch,maxTokens)
  if not ok then return nil,reason end
  if #state.parts>=capacity then return nil,"Free a part slot before claiming the summit reward." end
  if state.obbyPendingDrop==nil then

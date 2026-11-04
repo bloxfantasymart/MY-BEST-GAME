@@ -38,6 +38,7 @@ local ItemIds = require(script.Parent.Services.ItemIds)
 local SingleSale = require(script.Parent.Services.SingleSale)
 local ConversionReviews = require(script.Parent.Services.ConversionReviews)
 local Blessing = require(script.Parent.Services.Blessing)
+local MultiRoll = require(script.Parent.Services.MultiRoll)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -184,10 +185,10 @@ prompt(summitChest,"Claim summit reward").Triggered:Connect(function(player)
  if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not root or not humanoid or humanoid.Health<=0
   or (root.Position-summitChest.Position).Magnitude>10 then return end
  if not InteractionGate.allow(s,"prompt",os.clock()) then return end
- local ok,result=Obby.claimWithDrop(s,character,os.clock(),os.time(),RewardExtras.MaxVouchers,partCapacity(s),
+ local ok,result=Obby.claimWithDrop(s,character,os.clock(),os.time(),RewardExtras.MaxMultiRollTokens,partCapacity(s),
   function() return rng:NextInteger(1,100) end,function() return HttpService:GenerateGUID(false) end,Config.SummitHead)
  if not ok then send(player,result); return end
- send(player,"Summit reward: $"..Obby.Cash.." and "..Obby.Vouchers.." free-part vouchers! "..(result and "Bonus: protected Peak Mountain Head! " or "No bonus head this time. ").."Cooldown: 6 hours.")
+ send(player,"Summit reward: $"..Obby.Cash.." and "..Obby.Tokens.." multi-roll tokens! "..(result and "Bonus: protected Peak Mountain Head! " or "No bonus head this time. ").."Cooldown: 6 hours.")
 end)
 -- Prototype waterfall cave: decorative parts remain non-colliding so the
 -- entrance is walkable. This small scene is not the final mountain biome.
@@ -360,12 +361,11 @@ local function roll(s,id)
  return {rarityChance=tier.weight/total, mutation=mutation.name, mutationMultiplier=mutation.multiplier,id=id, name=archetype.name, kind=kind, rarity=archetype.rarity, income=archetype.income, price=math.max(1,math.floor(math.max(10,archetype.income*5)*(event.eclipse and 0.5 or 1)))}
 end
 local lastAnnouncement=-10
-local function rollBatch(s)
- local offers,reason=ItemIds.prepareBatch(s,s.slots,generateItemId,function(id) return roll(s,id) end)
- if not offers then return false,reason end
- s.rolls=offers; s.offerExpires=os.clock()+60
- Progression.increment(s.progress,"rolls",s.slots,os.time())
- Season.recordRolls(s.season,s.slots)
+local function rollBatch(s,useToken)
+ local count,reason=MultiRoll.create(s,useToken==true,os.clock(),generateItemId,function(id) return roll(s,id) end)
+ if not count then return false,reason end
+ Progression.increment(s.progress,"rolls",count,os.time())
+ Season.recordRolls(s.season,count)
  Tutorial.advance(s.tutorial,"roll",s.parts)
  local best=nil
  for _,item in ipairs(s.rolls) do if item.rarity>=6 and (not best or item.rarity>best.rarity) then best=item end end
@@ -373,7 +373,7 @@ local function rollBatch(s)
   lastAnnouncement=os.clock()
   remote:FireAllClients({announcement=s.player.DisplayName.." rolled "..best.name.." "..best.kind.." ["..Config.Rarities[best.rarity].name.."]! (offer, not a purchase)"})
  end
- Visuals.showRolls(s.plot,s.rolls,s.slots); Visuals.pull(s.plot)
+ Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls)); Visuals.pull(s.plot)
  remote:FireClient(s.player,{effectOnly="roll"})
  return true
 end
@@ -399,7 +399,7 @@ local function chooseGiftRarity(minRarity)
 end
 local function expireOffers(s,now)
  if SessionGifts.offersExpired(s.offerExpires,now,#s.rolls) then
-  s.rolls={}; s.offerExpires=0; Visuals.showRolls(s.plot,s.rolls,s.slots); return true
+  s.rolls={}; s.offerExpires=0; Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls)); return true
  end
  return false
 end
@@ -484,7 +484,7 @@ local function runAdmin(admin,payload)
   for _,theme in ipairs(Config.Themes) do
    if theme.id==ts.theme and ts.rebirth<theme.rebirth then ts.theme="Classic"; Visuals.applyTheme(ts.plot,Config.Themes[1]); break end
   end
-  Titles.apply(target.Character,ts.rebirth,ts.extras); Visuals.showRolls(ts.plot,ts.rolls,ts.slots)
+  Titles.apply(target.Character,ts.rebirth,ts.extras); Visuals.showRolls(ts.plot,ts.rolls,math.max(ts.slots,#ts.rolls))
  elseif plan.command=="grantPart" then
   if #ts.parts>=partCapacity(ts) then send(admin,"Target's part inventory is full."); return end
   local entry=Config.Catalog[plan.index]
@@ -521,19 +521,19 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="requestOdds" then
   local tiers,total,factor,event,modifiers,now=rollContext(s)
   remote:FireClient(player,{oddsSnapshot=true,odds={tiers=RollOdds.disclose(tiers,total,#Config.Rarities),rebirth=s.rebirth,nonCommonFactor=factor,modifiers=modifiers,eclipse=event.eclipse==true,at=now}})
- elseif action=="roll" and nearby(player,s.plot.lever) then
+ elseif (action=="roll" or action=="multiRoll") and nearby(player,s.plot.lever) then
   local allowed,reason=OfferSafety.canRoll(s.rolls,s.autoRolling)
   if not allowed then send(player,reason); return end
   if now-(s.lastRoll or 0)<0.35 then return end
   s.lastRoll=now
-  local ok,reason=rollBatch(s)
-  send(player,ok and "Choose parts to buy or skip before rolling again." or reason)
+  local ok,reason=rollBatch(s,action=="multiRoll")
+  send(player,ok and (action=="multiRoll" and "Multi-roll token used: nine offers to review." or "Choose parts to buy or skip before rolling again.") or reason)
  elseif (action=="buy" or action=="buyWithVoucher") and nearby(player,s.plot.lever) then
   local voucher=action=="buyWithVoucher"
   local item,reason=Inventory.purchaseOffer(s,value,voucher,partCapacity(s))
   if not item then send(player,reason); return end
   Tutorial.advance(s.tutorial,"buy",s.parts)
-  Visuals.showRolls(s.plot,s.rolls,s.slots)
+  Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls))
   local message=(voucher and "Part claimed with a voucher!" or "Part purchased!")..(item.locked and " Protected: unlock in Backpack to craft or sell." or "")
   send(player,message,item.rarity>=4 and "rare" or "buy")
  elseif action=="setManualMutationProtection" then
@@ -615,8 +615,8 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if reward.kind=="cash" then s.cash+=reward.amount end
   send(player,"Free season tier "..s.season.claimed..": "..reward.label.."!")
  elseif action=="claimRepeatRolls" then
-  local success,reason=Season.claimRepeat(s.season,s.extras,RewardExtras.MaxVouchers)
-  send(player,success and "Repeatable roll objective: one free-part voucher!" or reason)
+  local success,reason=Season.claimRepeat(s.season,s.extras,RewardExtras.MaxMultiRollTokens)
+  send(player,success and "Repeatable roll objective: one multi-roll token!" or reason)
  elseif action=="teleport" then
   local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal,forge=forge,obby=obbyStart}
   local destination=type(value)=="string" and destinations[value] or nil
@@ -626,11 +626,11 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="skip" and nearby(player,s.plot.lever) then
   if s.autoRolling then send(player,"Stop auto-roll before skipping manually."); return end
   local i=findById(s.rolls,value)
-  if i then table.remove(s.rolls,i); if #s.rolls==0 then s.offerExpires=0 end; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Offer skipped.") end
+  if i then table.remove(s.rolls,i); if #s.rolls==0 then s.offerExpires=0 end; Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls)); send(player,"Offer skipped.") end
  elseif action=="discardOffers" and nearby(player,s.plot.lever) then
   if s.autoRolling then send(player,"Stop auto-roll before discarding offers."); return end
   if not OfferSafety.matches(s.rolls,value) then send(player,"Offers changed. Review them before discarding."); return end
-  s.rolls={}; s.offerExpires=0; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Reviewed unpurchased offers discarded.")
+  s.rolls={}; s.offerExpires=0; Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls)); send(player,"Reviewed unpurchased offers discarded.")
  elseif action=="autoRoll" then
   if value==false then s.autoRolling=false; send(player,"Auto-roll stopped.")
   elseif s.autoRolling then send(player,"Stop auto-roll before changing its settings.")
@@ -742,7 +742,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   else s.cash-=cost; s.backpackUpgrades+=1; send(player,"Backpack capacity increased by five part slots.") end
  elseif action=="upgradeSlots" then
   local cost=Config.SlotCosts[s.slots+1]
-  if cost and s.cash>=cost then s.cash-=cost; s.slots+=1; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Slot unlocked!") else send(player,"Not enough cash, or all slots unlocked.") end
+  if cost and s.cash>=cost then s.cash-=cost; s.slots+=1; Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls)); send(player,"Slot unlocked!") else send(player,"Not enough cash, or all slots unlocked.") end
  elseif (action=="craftReview" or action=="fusionReview") and type(value)=="table" then
   local requestId=value.requestId
   if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
@@ -800,7 +800,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if not index then send(player,quote); return end
   local sacrificed=table.remove(s.creatures,index)
   if sacrificed.stand>0 then refreshStands(s) end
-  s.cash=0; if not quote.keepSlots then s.slots=1 end; s.rolls={}; s.offerExpires=0; s.autoRolling=false; s.rebirth+=1; Season.addXP(s.season,100); Titles.apply(player.Character,s.rebirth,s.extras); Visuals.showRolls(s.plot,s.rolls,s.slots)
+  s.cash=0; if not quote.keepSlots then s.slots=1 end; s.rolls={}; s.offerExpires=0; s.autoRolling=false; s.rebirth+=1; Season.addXP(s.season,100); Titles.apply(player.Character,s.rebirth,s.extras); Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls))
   send(player,"Rebirth complete! New archetypes unlocked.")
  elseif action=="collect" then
   collect(player,s)
@@ -856,7 +856,7 @@ local function joinImpl(player,context)
  Visuals.applyRewardCosmetics(s.plot,s.extras)
  Visuals.autoCollector(s.plot,s.autoCollector.enabled)
  refreshStands(s)
- Visuals.showRolls(s.plot,s.rolls,s.slots)
+ Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls))
  local function teleport(character)
   s.obbyRun=nil
   local root=character:WaitForChild("HumanoidRootPart",10)
@@ -961,7 +961,7 @@ task.spawn(function()
      run.bought+=result.bought; run.skipped+=result.skipped; run.spent+=result.spent
      if result.bought>0 then Tutorial.advance(s.tutorial,"buy",s.parts) end
      if #s.rolls==0 then s.offerExpires=0 end
-     Visuals.showRolls(s.plot,s.rolls,s.slots)
+     Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls))
      local stopped=result.stop
      if not stopped and run.batches>=run.config.maxBatches then stopped="Batch limit reached." end
      if stopped then s.autoRolling=false; send(player,"Auto-roll stopped: "..stopped.." Review remaining offers.")

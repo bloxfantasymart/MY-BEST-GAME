@@ -34,7 +34,7 @@ Config.TutorialText = {
  "Collect income from your bank.",
  "Tutorial complete!",
 }
-Config.DailyRewardLabels = {"$1,000 cash", "3 x 15-minute 3x luck potions", "Golden Lever (+5% luck); $5,000 if owned", "$50,000 cash", "3 free-part vouchers", "$250,000 cash", "Sigma Statue (+50% income); $100,000 if owned"}
+Config.DailyRewardLabels = {"$1,000 cash", "3 x 15-minute 3x luck potions", "Golden Lever (+5% luck); $5,000 if owned", "$50,000 cash", "3 multi-roll tokens", "$250,000 cash", "Sigma Statue (+50% income); $100,000 if owned"}
 -- Nine defined session rewards. Three unspecified tiers are not implemented.
 Config.SessionGifts = {
  {id="cash1",seconds=60,label="$500 cash",kind="cash",value=500},

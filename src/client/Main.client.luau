@@ -117,7 +117,7 @@ local function captureLayout(creatures)
 end
 local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
 local autoMutationRules={Shiny="hold",Golden="hold",Void="hold",Glitched="hold"}; local autoProtectMutations=true
-local manualProtectionConfirm=false
+local manualProtectionConfirm=false; local multiRollConfirm=false
 local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false; local skipReview=nil
 local giftButtons={}
 local incomeLabels={}
@@ -219,6 +219,19 @@ render=function()
   if state.autoRolling then row("Stop auto-roll before rolling manually.",nil,Color3.fromRGB(70,75,105))
   elseif #state.rolls>0 then row("Buy, skip or review discarding current offers before rolling again.",nil,Color3.fromRGB(150,85,45))
   else row("PULL LEVER",function() remote:FireServer("roll") end,Color3.fromRGB(220,78,93)) end
+  if state.autoRolling or #state.rolls>0 then multiRollConfirm=false end
+  if not state.autoRolling and #state.rolls==0 then
+   local tokens=(state.extras and state.extras.multiRollTokens) or 0
+   if multiRollConfirm and tokens>0 then
+    row("CONFIRM: USE 1 TOKEN FOR 9 OFFERS ("..tokens.." owned)",function()
+     multiRollConfirm=false; remote:FireServer("multiRoll"); notice.Text="Requesting multi-roll..."; render()
+    end,Color3.fromRGB(125,75,175))
+    row("CANCEL MULTI-ROLL",function() multiRollConfirm=false; render() end,Color3.fromRGB(70,75,105))
+   elseif tokens>0 then
+    row("REVIEW MULTI-ROLL TOKEN: 9 OFFERS ("..tokens.." owned)",function() multiRollConfirm=true; render() end,Color3.fromRGB(125,75,175))
+   end
+   row("One token gives nine temporary offers, not free parts. Purchases still cost cash or vouchers; offers expire after 60 seconds. Regular rolls use your unlocked slots.",nil,Color3.fromRGB(70,75,105))
+  end
   if state.autoRolling then
    local run=state.autoRun
    row("STOP AUTO-ROLL"..(run and (" | spent $"..run.spent.." / $"..run.config.maxSpend.." | batches "..run.batches.."/"..run.config.maxBatches) or ""),function() remote:FireServer("autoRoll",false) end,Color3.fromRGB(200,65,85))
@@ -741,6 +754,7 @@ render=function()
   local extras=state.extras or {}
   row("USE 3x LUCK POTION (15 min) — "..(extras.luckPotions or 0).." owned",function() remote:FireServer("useLuckPotion") end,Color3.fromRGB(125,75,175))
   questRewardTools(extras)
+  row("Multi-roll tokens: "..(extras.multiRollTokens or 0).." — each opens nine offers; purchases cost cash or vouchers.",nil,Color3.fromRGB(70,75,105))
   row("Free-part vouchers: "..(extras.rollVouchers or 0).." — use at roll station; rolls are already free.",nil,Color3.fromRGB(70,75,105))
   row("Waterfall altar blessing: "..((state.blessingRemaining or 0)>0 and (formatDuration(state.blessingRemaining).." remaining at panel refresh") or "inactive").." | 1.5x non-Common weight | session only",nil,Color3.fromRGB(70,75,105))
   row("Golden Lever: "..(extras.goldenLever and "unlocked (+5% non-common weight)" or "locked").." | Sigma Statue: "..(extras.sigmaStatue and "unlocked (+50% income)" or "locked"),nil,Color3.fromRGB(70,75,105))
@@ -802,7 +816,7 @@ render=function()
    local status=tier<=season.claimed and "CLAIMED" or (tier<=unlocked and "UNLOCKED (claim in order)" or "LOCKED")
    row("TIER "..tier.." — "..reward.label.." — "..status,nil,Color3.fromRGB(70,75,105))
   end
-  row("Repeatable: roll 250 parts for one free-part voucher. Progress: "..season.rollProgress.." (claims: "..math.floor(season.rollProgress/250)..")",function() remote:FireServer("claimRepeatRolls") end,Color3.fromRGB(60,145,150))
+  row("Repeatable: roll 250 parts for one multi-roll token. Progress: "..season.rollProgress.." (claims: "..math.floor(season.rollProgress/250)..")",function() remote:FireServer("claimRepeatRolls") end,Color3.fromRGB(60,145,150))
   row("Permanent prototype track; no season reset or premium purchase. Free tiers are claimed in order.",nil,Color3.fromRGB(70,75,105))
   row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="admin" then
@@ -894,7 +908,7 @@ render=function()
   title.Text="SUMMIT PARKOUR"
   local challenge=state.obby or {step=0,ready=false,remaining=0}
   row("OPTIONAL COURSE: touch the green START platform, then checkpoints 2 through 9 in order. Reach the summit chest and use its prompt within 60 seconds.",nil,Color3.fromRGB(70,75,105))
-  row("Reward: $50,000, 3 vouchers and a 10% chance of a protected Peak Mountain Head. One free part slot and room below the 1,000 voucher cap are required. Six-hour cooldown after a saved claim.",nil,Color3.fromRGB(70,75,105))
+  row("Reward: $50,000, 3 multi-roll tokens and a 10% chance of a protected Peak Mountain Head. One free part slot and room below the 1,000 token cap are required. Six-hour cooldown after a saved claim.",nil,Color3.fromRGB(70,75,105))
   row("At last sync — attempt: "..(challenge.ready and "SUMMIT READY — use the chest" or (challenge.step>0 and ("checkpoint "..challenge.step.." / 9") or "not started")).." | reward "..(challenge.remaining>0 and ("cooldown "..formatDuration(challenge.remaining).." at last sync") or "available at last sync"),nil,Color3.fromRGB(60,120,180))
   row("Attempts reset when you respawn, teleport, leave, or take too long (45 seconds per checkpoint; 3 minutes total). Touch START to retry.",nil,Color3.fromRGB(70,75,105))
   row("TRAVEL TO SUMMIT COURSE START",function() remote:FireServer("teleport","obby"); panel.Visible=false end,Color3.fromRGB(60,145,150))
@@ -936,7 +950,7 @@ render=function()
    local extras=state.extras or {}
    row("USE 3x LUCK POTION (15 min) — "..(extras.luckPotions or 0).." owned",function() remote:FireServer("useLuckPotion") end,Color3.fromRGB(125,75,175))
   questRewardTools(extras)
-   row("Free-part vouchers: "..(extras.rollVouchers or 0).." | Rare blueprints: "..(state.rareBlueprints or 0).." — use at assembly.",nil,Color3.fromRGB(70,75,105))
+   row("Multi-roll tokens: "..(extras.multiRollTokens or 0).." | Free-part vouchers: "..(extras.rollVouchers or 0).." | Rare blueprints: "..(state.rareBlueprints or 0).." — use at assembly.",nil,Color3.fromRGB(70,75,105))
   else
    row("Parts "..#state.parts.."/"..state.partCapacity.." | Creatures "..#state.creatures.."/100",nil,Color3.fromRGB(70,75,105))
    local search=Instance.new("TextBox"); search.Size=UDim2.new(1,-10,0,50); search.BackgroundColor3=Color3.fromRGB(60,65,95); search.TextColor3=Color3.new(1,1,1)
@@ -1233,7 +1247,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.blessingRemaining=data.blessingRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; clearCraftReview(); craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; clearForgeReview(); forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; clearCraftReview(); craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; clearForgeReview(); forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false; multiRollConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; if state.manualProtectMutations==false then manualProtectionConfirm=false end; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  if data.offlineReport and not offlineShown then

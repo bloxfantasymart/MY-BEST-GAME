@@ -37,11 +37,11 @@ function Season.claim(season,extras,maxPotions,maxVouchers,maxBoxes)
  season.claimed=tier
  return reward
 end
-function Season.claimRepeat(season,extras,maxVouchers)
+function Season.claimRepeat(season,extras,maxTokens)
  if season.rollProgress<Season.RollGoal then return false,"Roll more parts first." end
- if extras.rollVouchers>=maxVouchers then return false,"Use a voucher before claiming." end
+ if extras.multiRollTokens>=maxTokens then return false,"Use a multi-roll token before claiming." end
  season.rollProgress-=Season.RollGoal
- extras.rollVouchers+=1
+ extras.multiRollTokens+=1
  return true
 end
 return Season

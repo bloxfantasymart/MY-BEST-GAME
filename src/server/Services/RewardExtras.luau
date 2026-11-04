@@ -3,15 +3,17 @@
 local RewardExtras={}
 RewardExtras.MaxPotions=100
 RewardExtras.MaxVouchers=1000
+RewardExtras.MaxMultiRollTokens=1000
 RewardExtras.MaxBoxes=100
 function RewardExtras.new()
- return {luckPotions=0,doubleLuckPotions=0,uncommonBoxes=0,standardBoxes=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false}
+ return {luckPotions=0,doubleLuckPotions=0,uncommonBoxes=0,standardBoxes=0,rollVouchers=0,multiRollTokens=0,goldenLever=false,sigmaStatue=false,ohioCrown=false}
 end
 -- Called only after profile validation; older profiles have no new fields.
 function RewardExtras.normalize(extras)
  if extras.doubleLuckPotions==nil then extras.doubleLuckPotions=0 end
  if extras.uncommonBoxes==nil then extras.uncommonBoxes=0 end
  if extras.standardBoxes==nil then extras.standardBoxes=0 end
+ if extras.multiRollTokens==nil then extras.multiRollTokens=0 end
  return extras
 end
 function RewardExtras.daily(extras,day)
@@ -26,8 +28,8 @@ function RewardExtras.daily(extras,day)
  end
  if day==4 then return {cash=50000,message="$50,000 cash"} end
  if day==5 then
-  if extras.rollVouchers+3>RewardExtras.MaxVouchers then return nil,"Use some vouchers before claiming." end
-  extras.rollVouchers+=3; return {cash=0,message="three free-part vouchers"}
+  if extras.multiRollTokens+3>RewardExtras.MaxMultiRollTokens then return nil,"Use some multi-roll tokens before claiming." end
+  extras.multiRollTokens+=3; return {cash=0,message="three multi-roll tokens"}
  end
  if day==6 then return {cash=250000,message="$250,000 cash"} end
  if day==7 then

@@ -1,5 +1,5 @@
 local spec={name="Peak Mountain",kind="Head",rarity=3,income=50,price=10,mutation="Standard",mutationMultiplier=1}
-local function fresh() return {cash=100,extras={rollVouchers=0},obbyLastClaim=0,parts={},creatures={},rolls={}} end
+local function fresh() return {cash=100,extras={multiRollTokens=0},obbyLastClaim=0,parts={},creatures={},rolls={}} end
 local function claim(state,character,now,epoch,maxVouchers)
  return Obby.claimWithDrop(state,character,now,epoch,maxVouchers,100,function() return 100 end,function() return "unused" end,spec)
 end
@@ -11,16 +11,16 @@ assert(not Obby.touch(s,3,player,11) and not Obby.touch(s,2,other,11))
 assert(not Obby.touch(s,2,player,10.34) and s.obbyRun.step==1)
 for i=2,9 do assert(Obby.touch(s,i,player,10+i)) end
 assert(s.obbyRun.ready and not claim(s,other,20,100000,1000))
-s.extras.rollVouchers=998
+s.extras.multiRollTokens=998
 assert(not claim(s,player,20,100000,1000) and s.obbyRun.ready and s.cash==100)
-s.extras.rollVouchers=997
-assert(claim(s,player,20,100000,1000) and s.cash==50100 and s.extras.rollVouchers==1000 and s.obbyLastClaim==100000 and not s.obbyRun)
+s.extras.multiRollTokens=997
+assert(claim(s,player,20,100000,1000) and s.cash==50100 and s.extras.multiRollTokens==1000 and s.obbyLastClaim==100000 and not s.obbyRun)
 assert(not claim(s,player,20,100000,1000) and s.cash==50100)
 assert(Obby.remaining(s.obbyLastClaim,99999)==21601 and Obby.remaining(s.obbyLastClaim,121599)==1 and Obby.remaining(s.obbyLastClaim,121600)==0)
 for i=1,9 do assert(Obby.touch(s,i,player,100+i)) end
 assert(not claim(s,player,110,121599,1000) and s.obbyRun.ready)
-s.extras.rollVouchers=0
-assert(claim(s,player,110,121600,1000) and s.cash==100100 and s.extras.rollVouchers==3)
+s.extras.multiRollTokens=0
+assert(claim(s,player,110,121600,1000) and s.cash==100100 and s.extras.multiRollTokens==3)
 local stale=fresh(); assert(Obby.touch(stale,1,player,0)); assert(not Obby.touch(stale,2,player,46) and stale.obbyRun==nil)
 assert(Obby.touch(stale,1,player,50)); assert(not Obby.touch(stale,2,player,49) and stale.obbyRun==nil)
 assert(Obby.touch(stale,1,player,100)); for i=2,9 do assert(Obby.touch(stale,i,player,100+i)) end
@@ -37,7 +37,7 @@ for i=1,9 do assert(Obby.touch(boundary,i,player,i)) end
 assert(claim(boundary,player,69,200000,1000))
 local again=fresh()
 for i=1,9 do assert(Obby.touch(again,i,player,i)) end
-assert(not claim(again,player,69.01,200000,1000) and again.cash==100 and again.extras.rollVouchers==0)
+assert(not claim(again,player,69.01,200000,1000) and again.cash==100 and again.extras.multiRollTokens==0)
 -- Starting over discards old progress; prior character cannot claim.
 local restart=fresh()
 for i=1,9 do assert(Obby.touch(restart,i,player,100+i)) end
@@ -54,14 +54,14 @@ assert(Obby.status(statusState,player,269,100000).ready)
 assert(not Obby.status(statusState,player,269.01,100000).ready and statusState.obbyRun==nil)
 print("Obby status expires stale and respawned attempts")
 local function ready()
- local state={cash=100,extras={rollVouchers=0},obbyLastClaim=0,parts={},creatures={},rolls={}}
+ local state={cash=100,extras={multiRollTokens=0},obbyLastClaim=0,parts={},creatures={},rolls={}}
  for i=1,9 do assert(Obby.touch(state,i,player,i)) end
  return state
 end
 for _,roll in ipairs({1,10,11,100}) do
  local state=ready(); local calls=0
  local ok,drop=Obby.claimWithDrop(state,player,10,100000,1000,100,function() calls+=1; return roll end,function() return "head" end,spec)
- assert(ok and calls==1 and state.cash==50100 and state.extras.rollVouchers==3 and state.obbyLastClaim==100000)
+ assert(ok and calls==1 and state.cash==50100 and state.extras.multiRollTokens==3 and state.obbyLastClaim==100000)
  assert((drop~=nil)==(roll<=10) and #state.parts==(roll<=10 and 1 or 0))
  if drop then assert(drop.id=="head" and drop.name=="Peak Mountain" and drop.kind=="Head" and drop.locked and drop.rarity==3) end
  assert(not Obby.claimWithDrop(state,player,11,100000,1000,100,function() error("replay draw") end,function() return "x" end,spec))
@@ -69,9 +69,9 @@ end
 local limited=ready(); limited.parts={{id="full"}}; local calls=0
 local function win() calls+=1; return 1 end
 assert(not Obby.claimWithDrop(limited,player,10,100000,1000,1,win,function() return "x" end,spec) and calls==0 and limited.cash==100)
-limited.extras.rollVouchers=998
+limited.extras.multiRollTokens=998
 assert(not Obby.claimWithDrop(limited,player,10,100000,1000,2,win,function() return "x" end,spec) and calls==0)
-limited.extras.rollVouchers=0
+limited.extras.multiRollTokens=0
 -- Force repeated collisions; no reward is consumed and the winning roll stays fixed.
 assert(not Obby.claimWithDrop(limited,player,10,100000,1000,2,win,function() return "full" end,spec))
 assert(calls==1 and limited.obbyPendingDrop==true and limited.cash==100 and limited.obbyLastClaim==0 and #limited.parts==1)

@@ -16,12 +16,13 @@ e.rollVouchers=999
 assert(Season.claim(s,e,100,1000)==nil and s.claimed==2)
 e.rollVouchers=998
 assert(Season.claim(s,e,100,1000).kind=="voucher" and e.rollVouchers==1000)
+e.multiRollTokens=1000
 assert(not Season.claimRepeat(s,e,1000))
 Season.recordRolls(s,400)
 assert(s.rollProgress==500 and not Season.claimRepeat(s,e,1000))
-e.rollVouchers=998
+e.multiRollTokens=998
 assert(Season.claimRepeat(s,e,1000) and Season.claimRepeat(s,e,1000))
-assert(s.rollProgress==0 and not Season.claimRepeat(s,e,1000))
+assert(s.rollProgress==0 and e.multiRollTokens==1000 and not Season.claimRepeat(s,e,1000))
 Season.addXP(s,100000)
 assert(s.xp==5000 and Season.unlocked(s)==50)
 e.luckPotions=0; e.rollVouchers=0

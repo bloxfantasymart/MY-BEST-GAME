@@ -66,6 +66,7 @@ local function validProfile(data)
    or (e.doubleLuckPotions~=nil and (not finite(e.doubleLuckPotions,0,100) or e.doubleLuckPotions%1~=0))
    or (e.uncommonBoxes~=nil and (not finite(e.uncommonBoxes,0,100) or e.uncommonBoxes%1~=0))
    or (e.standardBoxes~=nil and (not finite(e.standardBoxes,0,100) or e.standardBoxes%1~=0))
+   or (e.multiRollTokens~=nil and (not finite(e.multiRollTokens,0,1000) or e.multiRollTokens%1~=0))
    or type(e.goldenLever)~="boolean" or type(e.sigmaStatue)~="boolean" or type(e.ohioCrown)~="boolean" then return false end
  end
  if data.tripleLuckUntil~=nil and (not finite(data.tripleLuckUntil,0,1e12) or data.tripleLuckUntil%1~=0) then return false end
