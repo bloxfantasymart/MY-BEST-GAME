@@ -33,6 +33,7 @@ local Rebirth = require(script.Parent.Services.Rebirth)
 local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
 local Obby = require(script.Parent.Services.Obby)
 local Loadouts = require(script.Parent.Services.Loadouts)
+local ItemIds = require(script.Parent.Services.ItemIds)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -313,7 +314,13 @@ local function rollContext(s)
  local tiers,total,factor=RollOdds.build(Config.Rarities,Config.Catalog,s.rebirth,modifiers)
  return tiers,total,factor,event,modifiers,now
 end
-local function roll(s)
+local function generateItemId()
+ return HttpService:GenerateGUID(false)
+end
+local function newSessionItemId(s)
+ return ItemIds.allocate(ItemIds.collect(s),generateItemId)
+end
+local function roll(s,id)
  local eligible,total,_,event=rollContext(s)
  local pick=rng:NextNumber(0,total)
  local tier=eligible[#eligible]
@@ -323,13 +330,13 @@ local function roll(s)
  local mutationRoll=rng:NextInteger(1,10000)
  local mutation=Config.Mutations[1]
  for _,m in ipairs(Config.Mutations) do mutationRoll-=m.weight; if mutationRoll<=0 then mutation=m; break end end
- return {rarityChance=tier.weight/total, mutation=mutation.name, mutationMultiplier=mutation.multiplier,id=HttpService:GenerateGUID(false), name=archetype.name, kind=kind, rarity=archetype.rarity, income=archetype.income, price=math.max(1,math.floor(math.max(10,archetype.income*5)*(event.eclipse and 0.5 or 1)))}
+ return {rarityChance=tier.weight/total, mutation=mutation.name, mutationMultiplier=mutation.multiplier,id=id, name=archetype.name, kind=kind, rarity=archetype.rarity, income=archetype.income, price=math.max(1,math.floor(math.max(10,archetype.income*5)*(event.eclipse and 0.5 or 1)))}
 end
 local lastAnnouncement=-10
 local function rollBatch(s)
- s.rolls={}
- s.offerExpires=os.clock()+60
- for _=1,s.slots do table.insert(s.rolls,roll(s)) end
+ local offers,reason=ItemIds.prepareBatch(s,s.slots,generateItemId,function(id) return roll(s,id) end)
+ if not offers then return false,reason end
+ s.rolls=offers; s.offerExpires=os.clock()+60
  Progression.increment(s.progress,"rolls",s.slots,os.time())
  Season.recordRolls(s.season,s.slots)
  Tutorial.advance(s.tutorial,"roll",s.parts)
@@ -341,13 +348,15 @@ local function rollBatch(s)
  end
  Visuals.showRolls(s.plot,s.rolls,s.slots); Visuals.pull(s.plot)
  remote:FireClient(s.player,{effectOnly="roll"})
+ return true
 end
-local function makeGiftPart(rarity)
+local function makeGiftPart(rarity,s)
  local eligible={}
  for _,entry in ipairs(Config.Catalog) do if entry.rarity==rarity then table.insert(eligible,entry) end end
  if #eligible==0 then return nil end
  local entry=eligible[rng:NextInteger(1,#eligible)]
- return {id=HttpService:GenerateGUID(false),name=entry.name,kind=Config.Types[rng:NextInteger(1,#Config.Types)],rarity=entry.rarity,income=entry.income,price=math.max(10,math.floor(entry.income*5)),mutation="Standard",mutationMultiplier=1}
+ local id=newSessionItemId(s); if not id then return nil end
+ return {id=id,name=entry.name,kind=Config.Types[rng:NextInteger(1,#Config.Types)],rarity=entry.rarity,income=entry.income,price=math.max(10,math.floor(entry.income*5)),mutation="Standard",mutationMultiplier=1}
 end
 local function chooseGiftRarity(minRarity)
  local choices={}; local total=0
@@ -452,7 +461,9 @@ local function runAdmin(admin,payload)
  elseif plan.command=="grantPart" then
   if #ts.parts>=partCapacity(ts) then send(admin,"Target's part inventory is full."); return end
   local entry=Config.Catalog[plan.index]
-  table.insert(ts.parts,{id=HttpService:GenerateGUID(false),name=entry.name,kind=plan.kind,rarity=entry.rarity,income=entry.income,price=math.max(10,math.floor(entry.income*5)),mutation="Standard",mutationMultiplier=1})
+  local id=newSessionItemId(ts)
+  if not id then send(admin,"Could not create a unique part. Try again."); return end
+  table.insert(ts.parts,{id=id,name=entry.name,kind=plan.kind,rarity=entry.rarity,income=entry.income,price=math.max(10,math.floor(entry.income*5)),mutation="Standard",mutationMultiplier=1})
  elseif plan.command~="kick" then send(admin,"Unsupported admin action."); return end
  warn("[Admin] "..admin.UserId.." used "..plan.command.." on "..target.UserId..(plan.amount and (" amount="..plan.amount) or "")..(plan.index and (" catalog="..plan.index.." kind="..plan.kind) or ""))
  if plan.command=="kick" then target:Kick("Removed from this server by an administrator.")
@@ -492,8 +503,9 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local allowed,reason=OfferSafety.canRoll(s.rolls,s.autoRolling)
   if not allowed then send(player,reason); return end
   if now-(s.lastRoll or 0)<0.35 then return end
-  s.lastRoll=now; rollBatch(s)
-  send(player,"Choose parts to buy or skip before rolling again.")
+  s.lastRoll=now
+  local ok,reason=rollBatch(s)
+  send(player,ok and "Choose parts to buy or skip before rolling again." or reason)
  elseif (action=="buy" or action=="buyWithVoucher") and nearby(player,s.plot.lever) then
   if s.autoRolling then send(player,"Stop auto-roll before buying manually."); return end
   local i,item=findById(s.rolls,value)
@@ -533,8 +545,8 @@ remote.OnServerEvent:Connect(function(player, action, value)
   elseif gift.kind=="part" or gift.kind=="partPlus" then
    if #s.parts>=partCapacity(s) then send(player,"Free inventory space before claiming this gift."); return end
    local rarity=gift.kind=="part" and gift.rarity or chooseGiftRarity(gift.minRarity)
-   local item=rarity and makeGiftPart(rarity)
-   if not item then send(player,"This gift is unavailable. Please try again later."); return end
+   local ok,item=pcall(makeGiftPart,rarity,s)
+   if not rarity or not ok or not item then send(player,"This gift is unavailable. Please try again later."); return end
    table.insert(s.parts,item)
   else send(player,"This gift is not implemented."); return end
   s.giftClaims[gift.id]=true
@@ -556,13 +568,13 @@ remote.OnServerEvent:Connect(function(player, action, value)
   s.extras.doubleLuckPotions-=1; s.luckUntil=math.max(s.luckUntil,os.time())+600
   send(player,"2x luck potion activated for 10 minutes.")
  elseif action=="openUncommonBox" then
-  local item,reason=MysteryBoxes.open(s.extras,s.parts,s.creatures,s.rolls,partCapacity(s),function() return makeGiftPart(2) end)
+  local item,reason=MysteryBoxes.open(s.extras,s.parts,s.creatures,s.rolls,partCapacity(s),function() return makeGiftPart(2,s) end)
   if not item then send(player,reason); return end
   Tutorial.advance(s.tutorial,"sync",s.parts)
   send(player,"Uncommon Mystery Box: "..item.name.." "..item.kind.."!")
  elseif action=="openStandardBox" then
   local item,reason=MysteryBoxes.openStandard(s.extras,s.parts,s.creatures,s.rolls,partCapacity(s),function()
-   return makeGiftPart(MysteryBoxes.standardRarity(rng:NextInteger(1,100)))
+   return makeGiftPart(MysteryBoxes.standardRarity(rng:NextInteger(1,100)),s)
   end)
   if not item then send(player,reason); return end
   Tutorial.advance(s.tutorial,"sync",s.parts)
@@ -700,7 +712,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if cost and s.cash>=cost then s.cash-=cost; s.slots+=1; Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,"Slot unlocked!") else send(player,"Not enough cash, or all slots unlocked.") end
  elseif action=="assemble" and nearby(player,s.plot.pod) and type(value)=="table" then
   local tutorialParts={}; for _,item in ipairs(s.parts) do table.insert(tutorialParts,item) end
-  local result,reason=Crafting.execute(s.parts,s.creatures,s.rareBlueprints,value,Config.Rarities,function() return HttpService:GenerateGUID(false) end)
+  local result,reason=Crafting.execute(s.parts,s.creatures,s.rareBlueprints,value,Config.Rarities,function() return newSessionItemId(s) end)
   if not result then send(player,reason); return end
   s.rareBlueprints=result.blueprintCount
   if result.highest>=3 then Progression.increment(s.progress,"rareCrafts",1,os.time()) end
@@ -708,7 +720,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   send(player,result.usedBlueprint and "Rare blueprint used: assembled with +25% base income!" or "Assembled! Take it to a stand.","craft")
  elseif action=="fusion" then
   if not nearby(player,forge) then send(player,"Move closer to the fusion forge."); return end
-  local creature,costOrError=Fusion.execute(s.creatures,value,s.rebirth,s.cash,Config.FusionCost,function() return HttpService:GenerateGUID(false) end)
+  local creature,costOrError=Fusion.execute(s.creatures,value,s.rebirth,s.cash,Config.FusionCost,function() return newSessionItemId(s) end)
   if not creature then send(player,costOrError)
   else s.cash-=costOrError; send(player,"Fusion complete! Your ascended creature starts at level 1.","craft") end
  elseif action=="stand" and type(value)=="table" then
@@ -879,7 +891,10 @@ task.spawn(function()
      s.autoRolling=false; send(player,"Auto-roll stopped: inventory full.")
     else
      s.nextAuto=os.clock()+2
-     rollBatch(s)
+     local rolled,reason=rollBatch(s)
+     if not rolled then
+      s.autoRolling=false; send(player,reason)
+     else
      local run=s.autoRun
      local result=AutoRoll.process(s.rolls,s.parts,run.config,s.cash,run.remaining,partCapacity(s))
      s.cash=result.cash; run.remaining=result.remaining; run.batches+=1
@@ -891,6 +906,7 @@ task.spawn(function()
      if not stopped and run.batches>=run.config.maxBatches then stopped="Batch limit reached." end
      if stopped then s.autoRolling=false; send(player,"Auto-roll stopped: "..stopped.." Review remaining offers.")
      else send(player,"Auto-roll is running.") end
+     end
     end
    end
   end

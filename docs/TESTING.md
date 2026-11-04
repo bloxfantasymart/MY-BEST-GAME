@@ -205,3 +205,7 @@ Update and publish both the main place and the hub when scripts or profile field
 ### Deployment compatibility for daily targets
 
 Back up test data, update and publish **both** places from the same revision, and shut down old servers before testing or release. Older main-place servers do not understand randomized goals and can use the old fixed objectives on an already-randomized profile; do not run mixed versions. There is no automatic rollback or production migration guarantee. Use a separate private published experience with API Services enabled for real persistence tests; Studio's default memory mode does not persist across sessions.
+
+### Item ID and roll failure safety
+
+Run `python3 tests/run_item_ids_tests.py /path/to/luau`. The allocator retries at most five times against IDs in the current player session, including stale saved-layout references and active reviews. Roll batches are prepared before replacing offers or recording progression; errors leave the inventory and offers unchanged. Box creation failure does not consume the box. This is not a global cross-player uniqueness registry, and it does not make trading safe. Test the complete paths in a private Roblox server before publishing.
