@@ -11,6 +11,24 @@ end
 function Inventory.canConsume(item)
  return item~=nil and item.locked~=true
 end
+-- Buy one server-owned offer without yielding. Invalid or stale requests spend
+-- nothing. Manual mutation protection defaults on and is session-only.
+function Inventory.purchaseOffer(state,id,useVoucher,capacity)
+ if state.autoRolling then return nil,"Stop auto-roll before buying manually." end
+ if type(id)~="string" or #id<1 or #id>64 or type(useVoucher)~="boolean" then return nil,"Invalid offer request." end
+ local index,item=nil,nil
+ for i,offer in ipairs(state.rolls) do if offer.id==id then index=i; item=offer; break end end
+ if not item or #state.parts>=capacity then return nil,"Cannot buy: check the offer and inventory space." end
+ if useVoucher then
+  if state.extras.rollVouchers<1 then return nil,"No free-part vouchers available." end
+ elseif type(item.price)~="number" or item.price~=item.price or item.price<0 or item.price==math.huge or state.cash<item.price then
+  return nil,"Cannot buy: check the offer price and cash." end
+ if useVoucher then state.extras.rollVouchers-=1 else state.cash-=item.price end
+ if state.manualProtectMutations~=false and ((item.mutation or "Standard")~="Standard" or (item.mutationMultiplier or 1)~=1) then item.locked=true end
+ table.remove(state.rolls,index); table.insert(state.parts,item)
+ if #state.rolls==0 then state.offerExpires=0 end
+ return item
+end
 -- Snapshot-based batch protection. Validate every item before changing any.
 function Inventory.bulkSetLocked(parts,creatures,items,locked)
  if type(locked)~="boolean" or type(items)~="table" or #items<1 or #items>365 then return nil end

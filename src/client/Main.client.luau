@@ -88,7 +88,7 @@ local function applyLayout()
 end
 root:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyLayout)
 applyLayout()
-local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,backpackUpgrades=0,rareBlueprints=0,autoRolling=false,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
+local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,backpackUpgrades=0,rareBlueprints=0,autoRolling=false,manualProtectMutations=true,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false; local offlineShown=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
@@ -111,6 +111,7 @@ local function captureLayout(creatures)
 end
 local autoRules={"skip","skip","hold","hold","hold","hold","hold","hold"}
 local autoMutationRules={Shiny="hold",Golden="hold",Void="hold",Glitched="hold"}; local autoProtectMutations=true
+local manualProtectionConfirm=false
 local autoMaxSpend="10000"; local autoMaxPrice="1000"; local autoMaxBatches="50"; local autoConfirm=false; local discardConfirm=false; local skipReview=nil
 local giftButtons={}
 local incomeLabels={}
@@ -243,6 +244,15 @@ render=function()
      discardConfirm=review; skipReview=nil; list.CanvasPosition=Vector2.zero; render()
     end,Color3.fromRGB(160,75,70))
    end
+  end
+  row("MANUAL MUTATION PROTECTION: "..(state.manualProtectMutations~=false and "ON" or "OFF").." (session only)",function()
+   if state.manualProtectMutations~=false then manualProtectionConfirm=true; render()
+   else manualProtectionConfirm=false; remote:FireServer("setManualMutationProtection",true) end
+  end,Color3.fromRGB(70,110,150))
+  row("Manual purchases and vouchers protect non-Standard parts by default. Unlock in Backpack before crafting or selling. Auto-roll has its own setting.",nil,Color3.fromRGB(70,75,105))
+  if manualProtectionConfirm and state.manualProtectMutations~=false then
+   row("CONFIRM: turn OFF protection for future manual purchases this session",function() manualProtectionConfirm=false; remote:FireServer("setManualMutationProtection",false) end,Color3.fromRGB(160,75,70))
+   row("CANCEL: keep mutation protection on",function() manualProtectionConfirm=false; render() end,Color3.fromRGB(70,75,105))
   end
   row("VIEW CATALOG & CURRENT ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
   for _,item in ipairs(state.rolls) do
@@ -1124,8 +1134,8 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false; craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; forgeConfirm=false; forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
- state=data; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; craftConfirm=false; craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; forgeConfirm=false; forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ state=data; if state.manualProtectMutations==false then manualProtectionConfirm=false end; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  if data.offlineReport and not offlineShown then
   offlineShown=true

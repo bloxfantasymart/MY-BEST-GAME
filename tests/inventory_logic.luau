@@ -119,3 +119,23 @@ local includeMutations={parts={part("shiny",1,"Golden",60),part("protected",1,"S
 includeMutations.bulkSaleQuote=Inventory.reviewBulkSale(includeMutations.parts,1,false,0,"all",value)
 local soldAll,cashAll=Inventory.confirmBulkSale(includeMutations,"all",1,value)
 assert(soldAll==1 and cashAll==30 and #includeMutations.parts==2 and includeMutations.parts[1].id=="protected")
+-- Manual cash/voucher purchases preserve offers and funds on every failure.
+local purchase={cash=50,parts={},rolls={{id="standard",price=20,mutation="Standard",mutationMultiplier=1},{id="gold",price=30,mutation="Golden",mutationMultiplier=2.5}},extras={rollVouchers=1},offerExpires=500,autoRolling=false}
+assert(not Inventory.purchaseOffer(purchase,"missing",false,10) and purchase.cash==50 and #purchase.rolls==2)
+assert(not Inventory.purchaseOffer(purchase,"gold",false,0) and purchase.cash==50 and #purchase.rolls==2)
+assert(not Inventory.purchaseOffer(purchase,"gold","true",10) and purchase.extras.rollVouchers==1)
+purchase.autoRolling=true; assert(not Inventory.purchaseOffer(purchase,"gold",true,10) and #purchase.parts==0); purchase.autoRolling=false
+local normal=Inventory.purchaseOffer(purchase,"standard",false,10)
+assert(normal and not normal.locked and purchase.cash==30 and #purchase.parts==1 and purchase.offerExpires==500)
+local gold=Inventory.purchaseOffer(purchase,"gold",true,10)
+assert(gold and gold.locked and purchase.extras.rollVouchers==0 and #purchase.parts==2 and purchase.offerExpires==0)
+assert(not Inventory.purchaseOffer(purchase,"gold",true,10) and purchase.extras.rollVouchers==0)
+local other={cash=0,parts={},rolls={{id="void",price=99,mutation="Void",mutationMultiplier=4}},extras={rollVouchers=0},offerExpires=20,autoRolling=false,manualProtectMutations=false}
+assert(not Inventory.purchaseOffer(other,"void",false,10) and not Inventory.purchaseOffer(other,"void",true,10))
+assert(other.cash==0 and #other.rolls==1 and #other.parts==0 and other.offerExpires==20)
+other.extras.rollVouchers=1
+local unprotected=Inventory.purchaseOffer(other,"void",true,10)
+assert(unprotected and not unprotected.locked and other.extras.rollVouchers==0)
+local unusual={cash=10,parts={},rolls={{id="weird",price=5,mutation="Standard",mutationMultiplier=2}},extras={rollVouchers=0},offerExpires=20}
+assert(Inventory.purchaseOffer(unusual,"weird",false,10).locked)
+print("Manual purchase atomicity and mutation protection defaults passed")

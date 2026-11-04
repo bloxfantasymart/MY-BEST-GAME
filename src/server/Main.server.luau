@@ -135,7 +135,7 @@ local function send(player, message, effect)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, manualProtectMutations=s.manualProtectMutations, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -505,15 +505,17 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local ok,reason=rollBatch(s)
   send(player,ok and "Choose parts to buy or skip before rolling again." or reason)
  elseif (action=="buy" or action=="buyWithVoucher") and nearby(player,s.plot.lever) then
-  if s.autoRolling then send(player,"Stop auto-roll before buying manually."); return end
-  local i,item=findById(s.rolls,value)
   local voucher=action=="buyWithVoucher"
-  if i and #s.parts<partCapacity(s) and ((voucher and s.extras.rollVouchers>0) or (not voucher and s.cash>=item.price)) then
-   if voucher then s.extras.rollVouchers-=1 else s.cash-=item.price end
-   table.insert(s.parts,item); Tutorial.advance(s.tutorial,"buy",s.parts); table.remove(s.rolls,i)
-   if #s.rolls==0 then s.offerExpires=0 end
-   Visuals.showRolls(s.plot,s.rolls,s.slots); send(player,voucher and "Part claimed with a voucher!" or "Part purchased!",item.rarity>=4 and "rare" or "buy")
-  else send(player,"Cannot buy: check cash, vouchers and inventory space.") end
+  local item,reason=Inventory.purchaseOffer(s,value,voucher,partCapacity(s))
+  if not item then send(player,reason); return end
+  Tutorial.advance(s.tutorial,"buy",s.parts)
+  Visuals.showRolls(s.plot,s.rolls,s.slots)
+  local message=(voucher and "Part claimed with a voucher!" or "Part purchased!")..(item.locked and " Protected: unlock in Backpack to craft or sell." or "")
+  send(player,message,item.rarity>=4 and "rare" or "buy")
+ elseif action=="setManualMutationProtection" then
+  if type(value)~="boolean" then send(player,"Invalid protection setting."); return end
+  s.manualProtectMutations=value
+  send(player,value and "Manual mutation protection on." or "Manual mutation protection off for this session.")
  elseif action=="buyPass" and type(value)=="string" and #value<=30 then
   local status=s.passes[value]
   if status=="notOwned" then
@@ -787,7 +789,7 @@ local function joinImpl(player,context)
   context.data=nil
   plot.owner=nil; plot.sign.Text="Unclaimed plot"; return
  end
- local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),lastIncomeClock=os.clock(),incomeEvent=currentEvent(),incomeDirty=false,giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,obbyLastClaim=data.obbyLastClaim or 0,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),collection=data.collection or {},standLoadouts=data.standLoadouts or {},parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
+ local s={player=player,passes=PassService.initial(Config.GamePasses,Config.PassOrder),passVersion={},passLastRefresh={},sessionStarted=os.clock(),lastIncomeClock=os.clock(),incomeEvent=currentEvent(),incomeDirty=false,giftClaims={},autoCollector=AutoCollector.new(data.autoCollect,data.rebirth,os.clock()),season=data.season or Season.new(),luckUntil=data.luckUntil or 0,tripleLuckUntil=data.tripleLuckUntil or 0,extras=RewardExtras.normalize(data.extras or RewardExtras.new()),offerExpires=0,keepSlotsEntitled=data.keepSlotsEntitled==true,obbyLastClaim=data.obbyLastClaim or 0,cash=data.cash,pending=data.pending,slots=data.slots,standsUnlocked=data.standsUnlocked or 12,autoRolling=false,manualProtectMutations=true,autoRun=nil,backpackUpgrades=data.backpackUpgrades or 0,rareBlueprints=data.rareBlueprints or 0,rebirth=data.rebirth,tutorial=data.tutorial or Tutorial.new(),theme=data.theme or "Classic",progress=data.progress or Progression.new(),collection=data.collection or {},standLoadouts=data.standLoadouts or {},parts=data.parts,creatures=data.creatures,rolls={},plot=plot}
  if (data.lastOfflineAward or 0)>0 then
   -- This is informational only: the amount was already credited atomically on acquisition.
   s.offlineReport={amount=data.lastOfflineAward,seconds=data.lastOfflineSeconds,rate=data.lastOfflineRate,capped=data.lastOfflineCapped}
