@@ -41,10 +41,12 @@ local Blessing = require(script.Parent.Services.Blessing)
 local MultiRoll = require(script.Parent.Services.MultiRoll)
 local Treasure = require(script.Parent.Services.Treasure)
 local ScrapRefinery = require(script.Parent.Services.ScrapRefinery)
+local Environment = require(script.Parent.Services.Environment)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
 local CollectionIndex = require(ReplicatedStorage.Shared:WaitForChild("CollectionIndex"))
+local WorldPlan = require(ReplicatedStorage.Shared:WaitForChild("WorldPlan"))
 local OfferSafety = require(ReplicatedStorage.Shared:WaitForChild("OfferSafety"))
 local collectionNames=CollectionIndex.catalogNames(Config.Catalog)
 local remote = Instance.new("RemoteEvent")
@@ -107,7 +109,12 @@ end
 local world = Instance.new("Folder")
 world.Name = "GeneratedWorld"
 world.Parent = workspace
-part(world,"Grass",Vector3.new(450,1,450),Vector3.new(0,-0.5,0),Color3.fromRGB(75,185,85),Enum.Material.Grass)
+Environment.build(world)
+Environment.configureLighting()
+Environment.clock(os.time())
+task.spawn(function()
+ while not joinGate.closed do task.wait(10); if not joinGate.closed then Environment.clock(os.time()) end end
+end)
 part(world,"Plaza",Vector3.new(65,1,65),Vector3.new(0,0.1,0),Color3.fromRGB(110,105,150))
 local spawn = Instance.new("SpawnLocation")
 spawn.Size = Vector3.new(12,1,12)
@@ -118,6 +125,8 @@ local hubPortal=part(world,"Trading hub portal",Vector3.new(10,10,2),Vector3.new
 label(hubPortal,"TRADING HUB",7)
 local forge=part(world,"Fusion forge",Vector3.new(7,4,7),Vector3.new(0,2.5,20),Color3.fromRGB(255,170,40),Enum.Material.Metal)
 label(forge,"FUSION FORGE\nREBIRTH 15+",5)
+local valleyTrail=part(world,"Outer valley trail",Vector3.new(8,1,8),Vector3.new(580,0.5,40),Color3.fromRGB(105,200,145),Enum.Material.Grass)
+label(valleyTrail,"OUTER VALLEY",4)
 local cashBoard=part(world,"Server cash leaderboard",Vector3.new(13,9,1),Vector3.new(-22,5,10),Color3.fromRGB(25,35,75))
 local rebirthBoard=part(world,"Server rebirth leaderboard",Vector3.new(13,9,1),Vector3.new(22,5,10),Color3.fromRGB(70,30,105))
 local cashCaption=label(cashBoard,"SERVER CASH",6); cashCaption.Parent.Size=UDim2.fromOffset(250,180)
@@ -244,13 +253,13 @@ TeleportService.TeleportInitFailed:Connect(function(player, _result, message, pl
 end)
 
 local function makePlot(i)
- local angle = (i-1)*math.pi*2/6
- local center = Vector3.new(math.cos(angle)*105, 0, math.sin(angle)*105)
+ local location=WorldPlan.plot(i)
+ local center = Vector3.new(location.x,0,location.z)
  local folder = Instance.new("Folder")
  folder.Name = "Plot"..i
  folder.Parent = world
- local floor=part(folder,"Plot",Vector3.new(54,1,54),center,Color3.fromRGB(59,120,190))
- local path = part(folder,"Path",Vector3.new(12,0.4,70),center/2+Vector3.new(0,0.25,0),Color3.fromRGB(220,213,180))
+ local floor=part(folder,"Plot",Vector3.new(WorldPlan.PlotSize,1,WorldPlan.PlotSize),center,Color3.fromRGB(59,120,190))
+ local path = part(folder,"Path",Vector3.new(12,0.4,WorldPlan.PlotRadius),center/2+Vector3.new(0,0.25,0),Color3.fromRGB(220,213,180))
  path.CFrame = CFrame.lookAt(path.Position, center)
  local sign = part(folder,"Sign",Vector3.new(5,5,1),center+Vector3.new(0,3,22),Color3.fromRGB(255,192,65))
  local plot = {index=i, floor=floor, owner=nil, sign=label(sign,"Unclaimed plot",4), stands={}}
@@ -639,7 +648,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local success,reason=Season.claimRepeat(s.season,s.extras,RewardExtras.MaxMultiRollTokens)
   send(player,success and "Repeatable roll objective: one multi-roll token!" or reason)
  elseif action=="teleport" then
-  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal,forge=forge,obby=obbyStart}
+  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal,forge=forge,obby=obbyStart,valley=valleyTrail}
   local destination=type(value)=="string" and destinations[value] or nil
   if destination and now-(s.lastTeleport or -10)>=3 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
    s.lastTeleport=now; s.obbyRun=nil; player.Character:PivotTo(CFrame.new(destination.Position+Vector3.new(0,4,8))); send(player,"Teleported to "..destination.Name..".")
@@ -1017,8 +1026,8 @@ task.spawn(function()
   local folder=Instance.new("Folder"); folder.Name="Exploration Treasures"; folder.Parent=world
   if round then
    for index,spot in ipairs(round.spots) do
-    local angle=(spot-1)*2*math.pi/Treasure.Spots
-    local position=Vector3.new(math.cos(angle)*185,2,math.sin(angle)*185)
+    local location=WorldPlan.treasure(spot,Treasure.Spots)
+    local position=Vector3.new(location.x,2,location.z)
     local chest=part(folder,"Treasure chest",Vector3.new(4,3,3),position,Color3.fromRGB(180,105,35),Enum.Material.WoodPlanks)
     local trim=part(folder,"Chest trim",Vector3.new(4.1,0.4,3.1),position+Vector3.new(0,1.1,0),Color3.fromRGB(255,215,75),Enum.Material.Metal)
     trim.CanCollide=false

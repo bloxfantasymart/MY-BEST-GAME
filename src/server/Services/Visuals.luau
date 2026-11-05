@@ -60,8 +60,9 @@ function Visuals.decoratePlot(plot,folder,center)
  end
  -- A few bold plot edge accents help distinguish areas from the grass.
  plot.boundaries={}
- for _,x in ipairs({-26,26}) do
-  table.insert(plot.boundaries,block(folder,"Boundary",Vector3.new(0.35,0.35,54),center+Vector3.new(x,0.8,0),neon,Enum.Material.Neon))
+ local width=plot.floor.Size.X
+ for _,x in ipairs({-width/2+1,width/2-1}) do
+  table.insert(plot.boundaries,block(folder,"Boundary",Vector3.new(0.35,0.35,width),center+Vector3.new(x,0.8,0),neon,Enum.Material.Neon))
  end
 end
 function Visuals.applyTheme(plot,theme)

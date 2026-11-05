@@ -1,0 +1,29 @@
+local vmeta={}
+vmeta.__add=function(a,b) return setmetatable({X=a.X+b.X,Y=a.Y+b.Y,Z=a.Z+b.Z},vmeta) end
+local Vector3={new=function(x,y,z) return setmetatable({X=x,Y=y,Z=z},vmeta) end}
+local Color3={fromRGB=function(r,g,b) return {r=r,g=g,b=b} end}
+local Enum={Material={Grass="Grass",Slate="Slate",Wood="Wood",Glass="Glass"},PartType={Ball="Ball"}}
+local methods={}
+function methods:FindFirstChild(name) for _,child in ipairs(self.children) do if child.Name==name then return child end end end
+local meta={__index=function(t,k) return methods[k] or t.props[k] end,__newindex=function(t,k,v)
+ t.props[k]=v; if k=="Parent" and v then table.insert(v.children,t) end
+end}
+local Instance={new=function(class) return setmetatable({props={},children={},class=class},meta) end}
+local Lighting=Instance.new("Lighting")
+-- INSERT_ENVIRONMENT
+local world=Instance.new("Folder")
+local result=Environment.build(world); assert(result.Name=="Landscape")
+local counts={}
+for _,item in ipairs(result.children) do
+ counts[item.Name]=(counts[item.Name] or 0)+1
+ if item.class=="Part" then
+  assert(item.Anchored and item.Size.X<=2048 and item.Size.Y<=2048 and item.Size.Z<=2048)
+  if item.Name=="Grass tile" or item.Name=="Boundary cliff" then assert(item.CanCollide)
+  else assert(not item.CanCollide) end
+ end
+end
+assert(counts["Grass tile"]==4 and counts["Boundary cliff"]==24 and counts["Tree trunk"]==38 and counts["Tree canopy"]==38 and counts.Rock==18 and counts["Decorative lake"]==1)
+Environment.configureLighting(); Environment.configureLighting()
+assert(#Lighting.children==2 and Lighting:FindFirstChild("LandscapeAtmosphere") and Lighting:FindFirstChild("LandscapeBloom"))
+Environment.clock(360); assert(Lighting.ClockTime==12)
+print("Landscape geometry counts, collision policy and lighting configuration passed (mocked Roblox)")
