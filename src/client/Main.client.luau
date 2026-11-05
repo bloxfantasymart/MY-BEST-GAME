@@ -94,6 +94,7 @@ local loaded=false; local offlineShown=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
 local singleSaleQuote=nil; local singleSaleWaiting=nil; local singleSaleSequence=0
+local refineQuote=nil; local refineWaiting=nil; local refineSequence=0; local refineQuantity=1
 local function clearSingleSale() singleSaleQuote=nil; singleSaleWaiting=nil end
 local bulkRarity=1; local confirmBulk=nil; local bulkWaiting=nil; local bulkSequence=0; local bulkReviewPage=1; local bulkStandardOnly=true
 local function clearBulk() confirmBulk=nil; bulkWaiting=nil end
@@ -755,7 +756,7 @@ render=function()
   row("USE 3x LUCK POTION (15 min) — "..(extras.luckPotions or 0).." owned",function() remote:FireServer("useLuckPotion") end,Color3.fromRGB(125,75,175))
   questRewardTools(extras)
   row("Multi-roll tokens: "..(extras.multiRollTokens or 0).." — each opens nine offers; purchases cost cash or vouchers.",nil,Color3.fromRGB(70,75,105))
-  row("Scrap: "..(extras.scrap or 0).." / 1,000,000 — treasure and storm drops; no use yet. Ten shared chests refresh per server every 15 minutes.",nil,Color3.fromRGB(70,75,105))
+  row("Scrap: "..(extras.scrap or 0).." / 1,000,000 — refine at your assembly pod. Shared chests refresh every 15 minutes; "..((state.treasureStatus and state.treasureStatus.remaining) or 0).." daily claims remain at last sync.",nil,Color3.fromRGB(70,75,105))
   row("Free-part vouchers: "..(extras.rollVouchers or 0).." — use at roll station; rolls are already free.",nil,Color3.fromRGB(70,75,105))
   row("Waterfall altar blessing: "..((state.blessingRemaining or 0)>0 and (formatDuration(state.blessingRemaining).." remaining at panel refresh") or "inactive").." | 1.5x non-Common weight | session only",nil,Color3.fromRGB(70,75,105))
   row("Golden Lever: "..(extras.goldenLever and "unlocked (+5% non-common weight)" or "locked").." | Sigma Statue: "..(extras.sigmaStatue and "unlocked (+50% income)" or "locked"),nil,Color3.fromRGB(70,75,105))
@@ -923,6 +924,32 @@ render=function()
   row("FUSION FORGE",function() remote:FireServer("teleport","forge"); panel.Visible=false end)
   row("SUMMIT COURSE START",function() remote:FireServer("teleport","obby"); panel.Visible=false end)
   row("TRADING HUB PORTAL",function() remote:FireServer("teleport","portal"); panel.Visible=false end)
+ elseif mode=="refinery" then
+  title.Text="SCRAP REFINERY — ASSEMBLY POD"
+  local extras=state.extras or {}
+  row("Convert 100 scrap into one Uncommon Mystery Box, up to ten at once. No Robux or paid items are involved.",nil,Color3.fromRGB(70,75,105))
+  row("Each box grants one Standard Uncommon part when opened, chosen uniformly from eligible Uncommon archetypes and the four types, independent of rebirth or luck. Opening requires space.",nil,Color3.fromRGB(70,75,105))
+  row("Current snapshot: "..(extras.scrap or 0).." scrap | "..(extras.uncommonBoxes or 0).." / 100 boxes",nil,Color3.fromRGB(60,120,180))
+  if refineQuote then
+   local review=refineQuote
+   row("SERVER REVIEW: spend "..review.cost.." of "..review.scrap.." scrap for "..review.quantity.." box(es). Current boxes: "..review.boxes.." / 100. Expires after 60 seconds.",nil,Color3.fromRGB(150,85,45))
+   row("CONFIRM REFINING "..review.quantity.." BOX(ES)",function()
+    if refineQuote~=review then return end
+    refineQuote=nil; remote:FireServer("refineConfirm",review.token); notice.Text="Requesting reviewed refining..."; render()
+   end,Color3.fromRGB(52,170,105))
+   row("CANCEL REFINERY REVIEW",function() refineQuote=nil; remote:FireServer("cancelRefineReview"); render() end,Color3.fromRGB(70,75,105))
+  elseif refineWaiting then
+   row("WAITING FOR SERVER REFINERY REVIEW...",nil,Color3.fromRGB(70,75,105))
+   row("CANCEL REFINERY REQUEST",function() refineWaiting=nil; remote:FireServer("cancelRefineReview"); render() end,Color3.fromRGB(70,75,105))
+  else
+   row("BOXES: "..refineQuantity.." | COST: "..(refineQuantity*100).." SCRAP (tap to change)",function() refineQuantity=refineQuantity%10+1; render() end,Color3.fromRGB(70,75,105))
+   row("REQUEST SERVER REFINERY REVIEW",function()
+    refineSequence=refineSequence%2147483647+1; refineWaiting=refineSequence
+    remote:FireServer("refineReview",{requestId=refineWaiting,quantity=refineQuantity}); render()
+   end,Color3.fromRGB(60,120,180))
+  end
+  row("The server requires you to be near your assembly pod, rechecks resources and rejects changed or expired reviews. Boxes must be opened separately.",nil,Color3.fromRGB(70,75,105))
+  row("BACK TO BACKPACK",function() refineWaiting=nil; refineQuote=nil; mode="bag"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="bagSummary" then
   title.Text="BACKPACK — SAFETY OVERVIEW"
   local report=InventorySummary.build(state.parts,state.creatures,state.partCapacity,Config.PartSellValue,Config.CreatureSellValue)
@@ -951,7 +978,8 @@ render=function()
    local extras=state.extras or {}
    row("USE 3x LUCK POTION (15 min) — "..(extras.luckPotions or 0).." owned",function() remote:FireServer("useLuckPotion") end,Color3.fromRGB(125,75,175))
   questRewardTools(extras)
-   row("Scrap: "..(extras.scrap or 0).." / 1,000,000 — no use yet.",nil,Color3.fromRGB(70,75,105))
+   row("Scrap: "..(extras.scrap or 0).." / 1,000,000 — refine near your assembly pod.",nil,Color3.fromRGB(70,75,105))
+   row("OPEN SCRAP REFINERY",function() refineQuote=nil; refineWaiting=nil; refineQuantity=1; mode="refinery"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
    row("Multi-roll tokens: "..(extras.multiRollTokens or 0).." | Free-part vouchers: "..(extras.rollVouchers or 0).." | Rare blueprints: "..(state.rareBlueprints or 0).." — use at assembly.",nil,Color3.fromRGB(70,75,105))
   else
    row("Parts "..#state.parts.."/"..state.partCapacity.." | Creatures "..#state.creatures.."/100",nil,Color3.fromRGB(70,75,105))
@@ -1193,6 +1221,14 @@ updateEvent=function(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.refineReview then
+  if refineWaiting==data.requestId and mode=="refinery" and panel.Visible then
+   refineWaiting=nil; refineQuote=data.quote
+   if data.reason then notice.Text=data.reason end
+   requestRender()
+  end
+  return
+ end
  if data.conversionReview then
   if data.kind=="craft" and craftWaiting==data.requestId and mode=="assemble" and panel.Visible then
    craftWaiting=nil; craftConfirm=data.quote; if data.reason then notice.Text=data.reason end; requestRender()

@@ -441,3 +441,18 @@ for _,bad in ipairs({-1,1000001,0.5,"3"}) do
  assert(scrapService.load(93010)==nil and database.player_93010.extras.scrap==bad)
 end
 print("Scrap legacy compatibility, caps and saved-profile validation passed")
+local dailyTreasure=makeService()
+local dailyProfile=dailyTreasure.load(93011); assert(dailyProfile)
+dailyProfile.extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false,treasureDay=20000,treasureClaims=10}
+assert(dailyTreasure.save(93011,dailyProfile,true))
+local loadedDaily=dailyTreasure.load(93011); assert(loadedDaily and loadedDaily.extras.treasureClaims==10 and dailyTreasure.save(93011,loadedDaily,true))
+for _,bad in ipairs({-1,11,1.5,"1"}) do
+ database.player_93011.extras.treasureClaims=bad
+ assert(dailyTreasure.load(93011)==nil and database.player_93011.extras.treasureClaims==bad)
+end
+database.player_93011.extras.treasureClaims=nil
+assert(dailyTreasure.load(93011)==nil, "A partially missing daily counter must not load")
+print("Daily treasure counters round-trip and malformed data rejection passed")
+
+database.player_93011.extras.treasureDay=-1; database.player_93011.extras.treasureClaims=1
+assert(dailyTreasure.load(93011)==nil, "Uninitialized day cannot have claims")

@@ -40,6 +40,7 @@ local ConversionReviews = require(script.Parent.Services.ConversionReviews)
 local Blessing = require(script.Parent.Services.Blessing)
 local MultiRoll = require(script.Parent.Services.MultiRoll)
 local Treasure = require(script.Parent.Services.Treasure)
+local ScrapRefinery = require(script.Parent.Services.ScrapRefinery)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -140,7 +141,7 @@ local function send(player, message, effect)
  Progression.refresh(s.progress,os.time())
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, manualProtectMutations=s.manualProtectMutations, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, manualProtectMutations=s.manualProtectMutations, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, treasureStatus=Treasure.status(s.extras,os.time()), blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -592,6 +593,25 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if s.extras.doubleLuckPotions<1 then send(player,"No 2x luck potions available."); return end
   s.extras.doubleLuckPotions-=1; s.luckUntil=math.max(s.luckUntil,os.time())+600
   send(player,"2x luck potion activated for 10 minutes.")
+ elseif action=="refineReview" and type(value)=="table" then
+  local requestId=value.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  s.refineQuote=nil
+  local quote,reason
+  if not nearby(player,s.plot.pod) then reason="Move closer to your assembly pod to use the refinery."
+  else
+   local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+   if ok then quote,reason=ScrapRefinery.review(s.extras,value.quantity,os.clock(),token,RewardExtras.MaxBoxes)
+   else reason="Could not create a refinery review. Try again." end
+  end
+  s.refineQuote=quote
+  remote:FireClient(player,{refineReview=true,requestId=requestId,quote=quote,reason=reason})
+ elseif action=="cancelRefineReview" then s.refineQuote=nil
+ elseif action=="refineConfirm" then
+  if not nearby(player,s.plot.pod) then s.refineQuote=nil; send(player,"Move closer to your assembly pod to use the refinery."); return end
+  local quote,reason=ScrapRefinery.confirm(s,value,os.clock(),RewardExtras.MaxBoxes)
+  if not quote then send(player,reason); return end
+  send(player,"Refined "..quote.cost.." scrap into "..quote.quantity.." Uncommon Mystery Box(es).")
  elseif action=="openUncommonBox" then
   local item,reason=MysteryBoxes.open(s.extras,s.parts,s.creatures,s.rolls,partCapacity(s),function() return makeGiftPart(2,s) end)
   if not item then send(player,reason); return end
@@ -1010,10 +1030,10 @@ task.spawn(function()
      if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not root or not humanoid or humanoid.Health<=0
       or (root.Position-chest.Position).Magnitude>12 then return end
      if not InteractionGate.allow(s,"prompt",os.clock()) then return end
-     local cash,scrap=Treasure.claim(round,index,s,os.clock())
+     local cash,scrap=Treasure.claim(round,index,s,os.clock(),os.time())
      if not cash then send(player,scrap); return end
      chest:Destroy(); trim:Destroy()
-     send(player,"Treasure: $"..cash.." and "..scrap.." scrap! Scrap has no use yet.")
+     send(player,"Treasure: $"..cash.." and "..scrap.." scrap! Refine it at your assembly pod.")
     end)
    end
   else warn("Could not prepare treasure locations for this server.") end
