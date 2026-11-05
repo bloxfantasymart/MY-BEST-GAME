@@ -39,6 +39,7 @@ local SingleSale = require(script.Parent.Services.SingleSale)
 local ConversionReviews = require(script.Parent.Services.ConversionReviews)
 local Blessing = require(script.Parent.Services.Blessing)
 local MultiRoll = require(script.Parent.Services.MultiRoll)
+local Treasure = require(script.Parent.Services.Treasure)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -987,6 +988,40 @@ task.spawn(function()
   task.wait(10)
  end
 end)
+-- Shared first-come exploration chests refresh per server every 15 minutes.
+-- Geometry and placements are placeholders on the current small map.
+task.spawn(function()
+ while not joinGate.closed do
+  local started=os.clock()
+  local round=Treasure.new(started,function(low,high) return rng:NextInteger(low,high) end)
+  local folder=Instance.new("Folder"); folder.Name="Exploration Treasures"; folder.Parent=world
+  if round then
+   for index,spot in ipairs(round.spots) do
+    local angle=(spot-1)*2*math.pi/Treasure.Spots
+    local position=Vector3.new(math.cos(angle)*185,2,math.sin(angle)*185)
+    local chest=part(folder,"Treasure chest",Vector3.new(4,3,3),position,Color3.fromRGB(180,105,35),Enum.Material.WoodPlanks)
+    local trim=part(folder,"Chest trim",Vector3.new(4.1,0.4,3.1),position+Vector3.new(0,1.1,0),Color3.fromRGB(255,215,75),Enum.Material.Metal)
+    trim.CanCollide=false
+    label(chest,"TREASURE",3)
+    prompt(chest,"Open treasure").Triggered:Connect(function(player)
+     local s=states[player]; local character=player.Character
+     local root=character and character:FindFirstChild("HumanoidRootPart")
+     local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+     if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or not root or not humanoid or humanoid.Health<=0
+      or (root.Position-chest.Position).Magnitude>12 then return end
+     if not InteractionGate.allow(s,"prompt",os.clock()) then return end
+     local cash,scrap=Treasure.claim(round,index,s,os.clock())
+     if not cash then send(player,scrap); return end
+     chest:Destroy(); trim:Destroy()
+     send(player,"Treasure: $"..cash.." and "..scrap.." scrap! Scrap has no use yet.")
+    end)
+   end
+  else warn("Could not prepare treasure locations for this server.") end
+  local waitTime=math.max(0,Treasure.RoundSeconds-(os.clock()-started))
+  task.wait(waitTime)
+  folder:Destroy()
+ end
+end)
 -- Storm rewards are created and claimed on the server, once per drop, by its plot owner.
 task.spawn(function()
  while true do
@@ -1005,7 +1040,9 @@ task.spawn(function()
       if claimed or joinGate.closed or states[owner]~=s or not DataService.isHealthy(owner.UserId) then return end
       local character=owner.Character
       if character and hit:IsDescendantOf(character) then
-       claimed=true; s.cash+=50*(1+s.rebirth); drop:Destroy(); send(owner,"Ohio Storm bonus collected!")
+       local cash,scrap=Treasure.storm(s)
+       if not cash then return end
+       claimed=true; drop:Destroy(); send(owner,"Ohio Storm: $"..cash.." and "..scrap.." scrap!")
       end
      end)
      Debris:AddItem(drop,8)

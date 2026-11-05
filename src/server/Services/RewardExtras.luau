@@ -6,7 +6,7 @@ RewardExtras.MaxVouchers=1000
 RewardExtras.MaxMultiRollTokens=1000
 RewardExtras.MaxBoxes=100
 function RewardExtras.new()
- return {luckPotions=0,doubleLuckPotions=0,uncommonBoxes=0,standardBoxes=0,rollVouchers=0,multiRollTokens=0,goldenLever=false,sigmaStatue=false,ohioCrown=false}
+ return {luckPotions=0,doubleLuckPotions=0,uncommonBoxes=0,standardBoxes=0,rollVouchers=0,multiRollTokens=0,scrap=0,goldenLever=false,sigmaStatue=false,ohioCrown=false}
 end
 -- Called only after profile validation; older profiles have no new fields.
 function RewardExtras.normalize(extras)
@@ -14,6 +14,7 @@ function RewardExtras.normalize(extras)
  if extras.uncommonBoxes==nil then extras.uncommonBoxes=0 end
  if extras.standardBoxes==nil then extras.standardBoxes=0 end
  if extras.multiRollTokens==nil then extras.multiRollTokens=0 end
+ if extras.scrap==nil then extras.scrap=0 end
  return extras
 end
 function RewardExtras.daily(extras,day)

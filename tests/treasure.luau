@@ -1,0 +1,30 @@
+local function fresh(rebirth,scrap) return {rebirth=rebirth,cash=0,extras={scrap=scrap or 0}} end
+assert(not Treasure.new(0,function() return 0 end))
+assert(not Treasure.new(0,function() return 1.5 end))
+assert(not Treasure.new(0,function() error("rng failed") end))
+math.randomseed(424242)
+for _=1,500 do
+ local r=Treasure.new(100,function(a,b) return math.random(a,b) end)
+ assert(r and #r.spots==10 and r.expires==100+900)
+ local used={}; for _,spot in ipairs(r.spots) do assert(spot>=1 and spot<=32 and not used[spot]); used[spot]=true end
+end
+local round=Treasure.new(100,function() return 1 end)
+local a,b=fresh(2),fresh(10)
+assert(not Treasure.claim(round,0,a,100) and not Treasure.claim(round,11,a,100))
+assert(not Treasure.claim(round,1,a,99) and not Treasure.claim(round,1,a,1000))
+local cash,scrap=Treasure.claim(round,1,a,100)
+assert(cash==1500 and scrap==3 and a.cash==1500 and a.extras.scrap==3)
+assert(not Treasure.claim(round,1,b,102) and b.cash==0 and b.extras.scrap==0)
+assert(not Treasure.claim(round,2,a,101.99) and not round.claimed[2])
+assert(Treasure.claim(round,2,a,102) and a.cash==3000)
+local full=fresh(0,999998)
+assert(not Treasure.claim(round,3,full,103) and not round.claimed[3] and full.cash==0)
+assert(Treasure.claim(round,3,b,103) and b.cash==5500 and b.extras.scrap==3)
+local storm=fresh(3,999999)
+assert(Treasure.storm(storm)==200 and storm.cash==200 and storm.extras.scrap==1000000)
+assert(not Treasure.storm(storm) and storm.cash==200)
+-- Round expiry and stale callbacks cannot claim a replaced chest.
+local nextRound=Treasure.new(1000,function() return 1 end)
+assert(not Treasure.claim(round,4,b,1000))
+assert(Treasure.claim(nextRound,4,b,1000))
+print("Treasure uniqueness, one-use races, expiry, caps, cooldown and storm rewards passed")

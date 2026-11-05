@@ -28,3 +28,7 @@ assert(RewardExtras.normalize(legacy)==legacy and legacy.multiRollTokens==0 and 
 legacy.multiRollTokens=997
 assert(RewardExtras.daily(legacy,5) and legacy.multiRollTokens==1000 and legacy.rollVouchers==7)
 print("Legacy vouchers remain unchanged when multi-roll tokens are initialized")
+local oldScrap={luckPotions=0,rollVouchers=1,goldenLever=false,sigmaStatue=false,ohioCrown=false}
+RewardExtras.normalize(oldScrap)
+assert(oldScrap.scrap==0 and oldScrap.rollVouchers==1)
+print("Legacy profiles initialize scrap without changing vouchers")

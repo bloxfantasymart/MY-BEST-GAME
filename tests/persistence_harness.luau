@@ -428,3 +428,16 @@ for _,bad in ipairs({-1,1001,1.5,"3"}) do
  assert(tokens.load(93009)==nil and database.player_93009.extras.multiRollTokens==bad)
 end
 print("Multi-roll token legacy compatibility, limits and profile round-trip passed")
+-- Scrap is optional for legacy data, capped and preserved in saved extras.
+local scrapService=makeService()
+local scrapProfile=scrapService.load(93010); assert(scrapProfile)
+scrapProfile.extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false}
+assert(scrapService.save(93010,scrapProfile,true))
+local legacyScrap=scrapService.load(93010); assert(legacyScrap and legacyScrap.extras.scrap==nil)
+legacyScrap.extras.scrap=1000000; assert(scrapService.save(93010,legacyScrap,true))
+local savedScrap=scrapService.load(93010); assert(savedScrap.extras.scrap==1000000 and scrapService.save(93010,savedScrap,true))
+for _,bad in ipairs({-1,1000001,0.5,"3"}) do
+ database.player_93010.extras.scrap=bad
+ assert(scrapService.load(93010)==nil and database.player_93010.extras.scrap==bad)
+end
+print("Scrap legacy compatibility, caps and saved-profile validation passed")
