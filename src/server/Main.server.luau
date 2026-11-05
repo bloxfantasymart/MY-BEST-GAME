@@ -7,6 +7,8 @@ local Debris = game:GetService("Debris")
 local CollectionService = game:GetService("CollectionService")
 local TeleportService = game:GetService("TeleportService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local MessagingService = game:GetService("MessagingService")
+local RunService = game:GetService("RunService")
 local DataService = require(script.Parent:WaitForChild("Services"):WaitForChild("DataService"))
 local Visuals = require(script.Parent:WaitForChild("Services"):WaitForChild("Visuals"))
 local Progression = require(script.Parent.Services.Progression)
@@ -42,6 +44,7 @@ local MultiRoll = require(script.Parent.Services.MultiRoll)
 local Treasure = require(script.Parent.Services.Treasure)
 local ScrapRefinery = require(script.Parent.Services.ScrapRefinery)
 local Environment = require(script.Parent.Services.Environment)
+local Announcements = require(script.Parent.Services.Announcements)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
@@ -57,6 +60,28 @@ local states = {}
 local joinGate = ShutdownGate.new()
 local plots = {}
 local adminEvent=nil
+local announcementBus=Announcements.new(game.JobId)
+local announcementTopic="BrainrotRareOffer_v1"
+if Config.CrossServerAnnouncements and not RunService:IsStudio() then
+ task.spawn(function()
+  for attempt=1,3 do
+   if joinGate.closed then return end
+   local ok,subscription=pcall(function()
+    return MessagingService:SubscribeAsync(announcementTopic,function(message)
+     if joinGate.closed then return end
+     local text=Announcements.receive(announcementBus,message.Data,os.clock(),os.time(),Config.Catalog,Config.Types,Config.Rarities)
+     if text then remote:FireAllClients({announcement=text}) end
+    end)
+   end)
+   if ok then
+    if joinGate.closed then subscription:Disconnect() end
+    return
+   end
+   warn("Cross-server announcement subscription unavailable: "..tostring(subscription))
+   if attempt<3 then task.wait(15) end
+  end
+ end)
+end
 local function currentEvent()
  local event=LiveEvents.at(os.time())
  if adminEvent and os.clock()>=adminEvent.expires then adminEvent=nil end
@@ -382,7 +407,17 @@ local function rollBatch(s,useToken)
  for _,item in ipairs(s.rolls) do if item.rarity>=6 and (not best or item.rarity>best.rarity) then best=item end end
  if best and os.clock()-lastAnnouncement>=5 then
   lastAnnouncement=os.clock()
-  remote:FireAllClients({announcement=s.player.DisplayName.." rolled "..best.name.." "..best.kind.." ["..Config.Rarities[best.rarity].name.."]! (offer, not a purchase)"})
+  remote:FireAllClients({announcement=s.player.Name.." rolled "..best.name.." "..best.kind.." ["..Config.Rarities[best.rarity].name..", tier ~1 in "..math.floor(1/best.rarityChance+0.5).."]! (offer, not a purchase)"})
+ end
+ if best and best.rarity>=7 and Config.CrossServerAnnouncements and not RunService:IsStudio() then
+  -- Snapshot immutable, server-owned values. Publishing can yield/fail and must
+  -- never delay or change the already-committed roll batch.
+  local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+  local payload=ok and Announcements.prepare(announcementBus,os.clock(),os.time(),token,s.player.Name,best,Config.Catalog,Config.Types) or nil
+  if payload then task.spawn(function()
+   local sent,err=pcall(function() MessagingService:PublishAsync(announcementTopic,payload) end)
+   if not sent then warn("Cross-server announcement publish failed: "..tostring(err)) end
+  end) end
  end
  Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls)); Visuals.pull(s.plot)
  remote:FireClient(s.player,{effectOnly="roll"})

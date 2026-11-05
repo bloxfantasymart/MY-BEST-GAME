@@ -20,7 +20,7 @@ local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
 local sounds={}
-local localSettings={mute=false,hideTint=false,hideGuide=false}
+local localSettings={mute=false,hideTint=false,hideGuide=false,hideAnnouncements=false}
 local updateEvent; local updateTutorial
 local function playEffect(name)
  if localSettings.mute then return end
@@ -886,6 +886,9 @@ render=function()
    if localSettings.mute then for _,sound in pairs(sounds) do sound:Stop() end end
    render()
   end,Color3.fromRGB(60,120,180))
+  row("HIDE RARE ROLL ANNOUNCEMENTS: "..(localSettings.hideAnnouncements and "ON" or "OFF"),function()
+   localSettings.hideAnnouncements=not localSettings.hideAnnouncements; render()
+  end,Color3.fromRGB(70,75,105))
   row("HIDE TUTORIAL WORLD MARKERS: "..(localSettings.hideGuide and "ON" or "OFF").." (the written goal stays visible)",function()
    localSettings.hideGuide=not localSettings.hideGuide
    if updateTutorial then updateTutorial() end
@@ -1282,7 +1285,7 @@ remote.OnClientEvent:Connect(function(data)
   if mode=="admin" then requestRender() end
   return
  end
- if data.announcement then notice.Text=data.announcement; playEffect("rare"); return end
+ if data.announcement then if not localSettings.hideAnnouncements then notice.Text=data.announcement; playEffect("rare") end; return end
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.blessingRemaining=data.blessingRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end

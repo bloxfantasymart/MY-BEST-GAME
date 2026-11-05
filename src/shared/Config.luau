@@ -127,4 +127,6 @@ Config.Catalog = {}
 for _, row in ipairs(rows) do
  table.insert(Config.Catalog, {name=row[1], rarity=row[2], rebirth=row[3], income=row[4]})
 end
+-- Best-effort cosmetic MessagingService banners. Set false to disable cross-server messages.
+Config.CrossServerAnnouncements = true
 return Config
