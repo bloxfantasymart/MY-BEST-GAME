@@ -73,6 +73,9 @@ end
 local function refreshBooth(booth)
  for _,child in ipairs(booth.displays:GetChildren()) do child:Destroy() end
  booth.sign.Text=booth.owner and (booth.owner.DisplayName.."'s showcase") or ("BOOTH "..booth.index.." — UNCLAIMED")
+ local userId=booth.owner and booth.owner.UserId
+ booth.avatar.Image=(type(userId)=="number" and userId>0) and ("rbxthumb://type=AvatarHeadShot&id="..userId.."&w=150&h=150") or ""
+ booth.avatar.Visible=booth.owner~=nil and booth.avatar.Image~=""
  if not booth.owner then return end
  local ownerSession=profiles[booth.owner]
  if not ownerSession then return end
@@ -117,7 +120,10 @@ for i=1,15 do
  local counter=block(folder,"Booth "..i,Vector3.new(19,3,7),centerPos+Vector3.new(0,1.5,0),Color3.fromRGB(85,55,155))
  local roof=block(folder,"Neon canopy",Vector3.new(20,0.5,8),centerPos+Vector3.new(0,9,0),Color3.fromRGB(255,100,190),Enum.Material.Neon); roof.CanCollide=false
  local displays=Instance.new("Folder"); displays.Name="Displays"; displays.Parent=folder
- local booth={index=i,counter=counter,sign=caption(roof,"BOOTH "..i.." — UNCLAIMED",2),displays=displays,owner=nil,listings={}}
+ local avatarGui=Instance.new("BillboardGui"); avatarGui.Name="OwnerAvatar"; avatarGui.Size=UDim2.fromOffset(72,72)
+ avatarGui.StudsOffset=Vector3.new(0,6,0); avatarGui.AlwaysOnTop=true; avatarGui.MaxDistance=120; avatarGui.Parent=roof
+ local avatar=Instance.new("ImageLabel"); avatar.Size=UDim2.fromScale(1,1); avatar.BackgroundTransparency=1; avatar.Visible=false; avatar.Parent=avatarGui
+ local booth={index=i,counter=counter,sign=caption(roof,"BOOTH "..i.." — UNCLAIMED",2),avatar=avatar,displays=displays,owner=nil,listings={}}
  booths[i]=booth
  prompt(counter,"Claim / inspect").Triggered:Connect(function(player)
   local s=profiles[player]
@@ -137,8 +143,28 @@ remote.OnServerEvent:Connect(function(player,action,payload)
  local now=os.clock()
  if not InteractionGate.allow(s,"remote",now) then return end
  if type(payload)~="table" then return end
+ if action=="directory" then
+  local requestId=payload.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  remote:FireClient(player,{directory=true,requestId=requestId,booths=BoothLogic.directory(booths,player)})
+  return
+ elseif action=="visitBooth" or action=="visitPortal" then
+  local destination=portal
+  if action=="visitBooth" then
+   if not BoothLogic.validIndex(payload.booth,#booths) then return end
+   destination=booths[payload.booth].counter
+  end
+  local character=player.Character
+  local root=character and character:FindFirstChild("HumanoidRootPart")
+  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+  local allowed,reason=BoothLogic.allowTravel(s,now,root~=nil and humanoid~=nil and humanoid.Health>0)
+  if not allowed then text(player,reason); return end
+  character:PivotTo(CFrame.new(destination.Position+Vector3.new(0,4,8)))
+  text(player,"Travelled to "..destination.Name..". Use its prompt to interact.")
+  return
+ end
  local index=payload.booth
- if type(index)~="number" or index~=index or index%1~=0 or index<1 or index>15 then return end
+ if not BoothLogic.validIndex(index,#booths) then return end
  local booth=booths[index]
  if not nearby(player,booth.counter) then text(player,"Move closer to the booth."); return end
  if action=="refresh" then openBooth(player,booth); return end

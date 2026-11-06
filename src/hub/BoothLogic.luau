@@ -29,4 +29,25 @@ function BoothLogic.remove(booth,player,id)
  for i,existing in ipairs(booth.listings) do if existing==id then table.remove(booth.listings,i); return true end end
  return false,"That creature is not displayed."
 end
+-- Public booth metadata only; this must never include an owner's inventory.
+function BoothLogic.directory(booths,viewer)
+ local result={}
+ for _,booth in ipairs(booths) do
+  table.insert(result,{index=booth.index,owner=booth.owner and booth.owner.DisplayName or nil,
+   listed=#booth.listings,mine=booth.owner~=nil and booth.owner==viewer})
+ end
+ return result
+end
+function BoothLogic.validIndex(index,count)
+ return type(index)=="number" and index==index and index%1==0 and index>=1 and index<=count
+end
+function BoothLogic.allowTravel(session,now,alive)
+ if not alive then return false,"Travel is unavailable until you respawn." end
+ if type(now)~="number" or now~=now or now==math.huge or now==-math.huge then return false,"Travel unavailable." end
+ if session.lastHubTravel and now>=session.lastHubTravel and now-session.lastHubTravel<3 then
+  return false,"Please wait before traveling again."
+ end
+ session.lastHubTravel=now
+ return true
+end
 return BoothLogic

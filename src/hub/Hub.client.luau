@@ -33,9 +33,11 @@ local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); lis
 list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Padding=UDim.new(0,6); layout.Parent=list
 local accessibility=button(root,"ACCESSIBILITY",UDim2.fromOffset(110,48),Color3.fromRGB(60,120,180))
-local current=nil; local render; local showAccessibility; local requestRender; local accessibilityOpen=false
+local directoryButton=button(root,"BOOTH DIRECTORY",UDim2.fromOffset(110,40),Color3.fromRGB(145,85,180))
+local current=nil; local render; local showAccessibility; local showDirectory; local requestDirectory; local requestRender; local accessibilityOpen=false
+local directoryOpen=false; local directoryData=nil; local directoryWaiting=nil; local directorySequence=0
 local query=""; local draft=""; local sortMode="Newest"; local page=1; local hideDisplayed=false; local releaseConfirm=false; local pendingRender=false
-close.Activated:Connect(function() panel.Visible=false; current=nil; pendingRender=false; releaseConfirm=false end)
+close.Activated:Connect(function() panel.Visible=false; current=nil; pendingRender=false; releaseConfirm=false; directoryOpen=false; directoryWaiting=nil end)
 local function applyLayout()
  local size=root.AbsoluteSize
  if size.X<1 or size.Y<1 then return end
@@ -43,19 +45,21 @@ local function applyLayout()
  header.Position=UDim2.fromOffset(metrics.margin,metrics.margin); header.Size=UDim2.fromOffset(metrics.headerWidth,metrics.headerHeight)
  accessibility.Position=UDim2.fromOffset(size.X-metrics.margin-metrics.settingsWidth,metrics.margin)
  accessibility.Size=UDim2.fromOffset(metrics.settingsWidth,metrics.headerHeight)
+ directoryButton.Position=UDim2.fromOffset(size.X-metrics.margin-metrics.settingsWidth,metrics.margin+metrics.headerHeight+4)
+ directoryButton.Size=UDim2.fromOffset(metrics.settingsWidth,math.min(40,math.max(1,size.Y-metrics.margin-metrics.headerHeight-4)))
  notice.Position=UDim2.fromOffset(metrics.margin,metrics.margin+metrics.headerHeight+4); notice.Size=UDim2.fromOffset(metrics.headerWidth,math.min(30,math.max(1,size.Y-metrics.margin-metrics.headerHeight-4)))
  panel.ZIndex=5; panel.AnchorPoint=Vector2.new(0.5,0.5); panel.Position=UDim2.fromScale(0.5,0.5); panel.Size=UDim2.fromOffset(metrics.panelWidth,metrics.panelHeight)
  if panel.Visible then
   task.defer(function()
    if not panel.Visible then return end
-   if accessibilityOpen and showAccessibility then showAccessibility() elseif current and requestRender then requestRender() end
+   if accessibilityOpen and showAccessibility then showAccessibility() elseif directoryOpen and showDirectory then showDirectory() elseif current and requestRender then requestRender() end
   end)
  end
 end
 root:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyLayout)
 applyLayout()
 showAccessibility=function()
- accessibilityOpen=true; pendingRender=false; releaseConfirm=false; panel.Visible=true; list.CanvasPosition=Vector2.zero; title.Text="ACCESSIBILITY — THIS SESSION"
+ accessibilityOpen=true; directoryOpen=false; directoryWaiting=nil; pendingRender=false; releaseConfirm=false; panel.Visible=true; list.CanvasPosition=Vector2.zero; title.Text="ACCESSIBILITY — THIS SESSION"
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
  local reduced=player:GetAttribute("ReduceDisplayMotion")==true
  local toggle=button(list,"REDUCE DISPLAY MOTION: "..(reduced and "ON" or "OFF").." (idle movement, rainbow cycling and display particles)",UDim2.new(1,-10,0,UILayout.rowHeight("REDUCE DISPLAY MOTION: idle movement, rainbow cycling and display particles",math.max(200,panel.AbsoluteSize.X))),Color3.fromRGB(60,120,180))
@@ -64,7 +68,7 @@ showAccessibility=function()
 end
 accessibility.Activated:Connect(showAccessibility)
 render=function(data)
- accessibilityOpen=false; current=data; panel.Visible=true; title.Text="BOOTH "..data.booth.." — "..data.owner
+ accessibilityOpen=false; directoryOpen=false; directoryWaiting=nil; current=data; panel.Visible=true; title.Text="BOOTH "..data.booth.." — "..data.owner
  local previousScroll=list.CanvasPosition
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
  local order=0
@@ -117,6 +121,43 @@ render=function(data)
  end
  task.defer(function() if panel.Visible and current==data and not accessibilityOpen then list.CanvasPosition=previousScroll end end)
 end
+showDirectory=function()
+ if not directoryOpen then return end
+ accessibilityOpen=false; current=nil; panel.Visible=true; title.Text="SHOWCASE BOOTH DIRECTORY"
+ local previousScroll=list.CanvasPosition
+ for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
+ local order=0
+ local function row(text,action,color)
+  local b=button(list,text,UDim2.new(1,-10,0,UILayout.rowHeight(text,math.max(200,panel.AbsoluteSize.X))),color)
+  order+=1; b.LayoutOrder=order; if action then b.Activated:Connect(action) end
+ end
+ row("SHOWCASE ONLY — no buying or trading. Directory is a server snapshot; booth owners and displays can change.",nil,Color3.fromRGB(55,95,130))
+ row(directoryWaiting and "REFRESH REQUESTED..." or "REFRESH BOOTH DIRECTORY",function() requestDirectory() end,Color3.fromRGB(60,120,180))
+ row("TRAVEL TO RETURN PORTAL (use its prompt to leave)",function()
+  directoryOpen=false; directoryWaiting=nil; panel.Visible=false; remote:FireServer("visitPortal",{})
+ end,Color3.fromRGB(60,145,150))
+ if not directoryData then row("Waiting for a directory snapshot. Tap refresh if needed.",nil,Color3.fromRGB(65,65,95))
+ else
+  for _,entry in ipairs(directoryData) do
+   local booth=entry.index
+   local status=entry.owner and (entry.owner.."'s showcase"..(entry.mine and " (YOURS)" or "").." | "..entry.listed.." / 4 displayed") or "UNCLAIMED"
+   row("VISIT BOOTH "..booth.." — "..status,function()
+    directoryOpen=false; directoryWaiting=nil; panel.Visible=false; remote:FireServer("visitBooth",{booth=booth})
+   end,entry.owner and Color3.fromRGB(110,75,155) or Color3.fromRGB(65,95,105))
+  end
+ end
+ row("Travel uses a three-second cooldown. Interact with a nearby booth prompt to claim it or inspect its displays.",nil,Color3.fromRGB(65,65,95))
+ task.defer(function() if panel.Visible and directoryOpen then list.CanvasPosition=previousScroll end end)
+end
+requestDirectory=function()
+ if not directoryOpen then return end
+ directorySequence=directorySequence%2147483647+1; directoryWaiting=directorySequence
+ remote:FireServer("directory",{requestId=directoryWaiting}); showDirectory()
+end
+directoryButton.Activated:Connect(function()
+ directoryOpen=true; directoryData=nil; directoryWaiting=nil; accessibilityOpen=false; current=nil; pendingRender=false; releaseConfirm=false
+ panel.Visible=true; list.CanvasPosition=Vector2.zero; requestDirectory()
+end)
 requestRender=function()
  local focused=UserInputService:GetFocusedTextBox()
  if panel.Visible and focused and focused:IsDescendantOf(list) then pendingRender=true; return end
@@ -127,6 +168,10 @@ UserInputService.TextBoxFocusReleased:Connect(function(box)
  if pendingRender and box:IsDescendantOf(list) then task.defer(function() if pendingRender then requestRender() end end) end
 end)
 remote.OnClientEvent:Connect(function(data)
+ if data.directory then
+  if directoryOpen and panel.Visible and directoryWaiting==data.requestId then directoryWaiting=nil; directoryData=data.booths; showDirectory() end
+  return
+ end
  if data.message then notice.Text=data.message end
  if data.close and current and not accessibilityOpen and current.booth==data.booth then panel.Visible=false; current=nil; pendingRender=false; releaseConfirm=false end
  if data.open then
