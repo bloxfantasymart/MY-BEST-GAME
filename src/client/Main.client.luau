@@ -18,6 +18,7 @@ local OfferSafety=require(ReplicatedStorage.Shared:WaitForChild("OfferSafety"))
 local SeasonRewards=require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local EventPresentation=require(ReplicatedStorage.Shared:WaitForChild("EventPresentation"))
+local OddsMath=require(ReplicatedStorage.Shared:WaitForChild("OddsMath"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
 local sounds={}
@@ -144,6 +145,7 @@ local eventInfo={
  {key="weekend",name="WEEKEND FRENZY",description="Friday 17:00 to Monday 00:00 UTC: 1.5x non-Common weight and 2x online income."},
 }
 local catalogOdds=nil; local catalogRarity=0; local catalogUnlockedOnly=false; local catalogCollectionFilter="All"
+local oddsEntry=nil; local oddsType=0; local oddsMutation=0
 local catalogQuery=""; local catalogDraft=""; local catalogPage=1
 local seasonPage=1
 local adminData=nil; local adminTarget=nil; local adminAmount="1000"; local adminCatalog=1; local adminKind=1; local pendingAdmin=nil
@@ -288,10 +290,12 @@ render=function()
    row("CANCEL: keep mutation protection on",function() manualProtectionConfirm=false; render() end,Color3.fromRGB(70,75,105))
   end
   row("VIEW CATALOG & CURRENT ODDS",function() catalogOdds=nil; mode="catalog"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestOdds"); render() end,Color3.fromRGB(60,120,180))
+  if #state.rolls>0 then row("Exact combo odds include this archetype, type and mutation for one slot at roll time. An offer is not a purchase.",nil,Color3.fromRGB(70,75,105)) end
   for _,item in ipairs(state.rolls) do
    local rarity=Config.Rarities[item.rarity]
-   local odds=item.rarityChance and string.format("%.2f%% tier",item.rarityChance*100) or rarity.name
-   row("BUY "..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..rarity.name..", "..odds.."]  $"..item.price,function() remote:FireServer("buy",item.id) end,rarity.color)
+   local odds=item.rarityChance and OddsMath.format(item.rarityChance).." tier" or "tier odds unavailable"
+   local exact=item.exactChance and (" | exact combo "..OddsMath.format(item.exactChance)) or ""
+   row("BUY "..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..rarity.name..", "..odds..exact.."]  $"..item.price,function() remote:FireServer("buy",item.id) end,rarity.color)
    if state.extras and state.extras.rollVouchers>0 then
     row("FREE PART VOUCHER: "..item.name.." "..item.kind.." ("..state.extras.rollVouchers.." left)",function() remote:FireServer("buyWithVoucher",item.id) end,Color3.fromRGB(60,145,150))
    end
@@ -369,7 +373,7 @@ render=function()
    for _,mutation in ipairs(Config.Mutations) do table.insert(mutations,mutation.name.." "..string.format("%.2f%%",mutation.weight/100)) end
    row("Mutation odds (independent): "..table.concat(mutations,", "),nil,Color3.fromRGB(70,75,105))
   else row("Loading current odds from the server...",nil,Color3.fromRGB(70,75,105)) end
-  row("CATALOG: chances below are per archetype, any part or mutation. Gift odds are different.",nil,Color3.fromRGB(70,75,105))
+  row("CATALOG: chances below are per archetype, any part or mutation. Tap an archetype for a part, mutation and batch calculator. Gift odds are different.",nil,Color3.fromRGB(70,75,105))
   local search=Instance.new("TextBox"); search.Size=UDim2.new(1,-10,0,50); search.BackgroundColor3=Color3.fromRGB(60,65,95); search.TextColor3=Color3.new(1,1,1)
   search.Text=catalogDraft; search.PlaceholderText="Search archetype name"; search.ClearTextOnFocus=false; search.Font=Enum.Font.GothamBold; search.TextSize=16
   search.Parent=list; rowOrder+=1; search.LayoutOrder=rowOrder; round(search)
@@ -406,10 +410,36 @@ render=function()
    local price=math.max(10,math.floor(entry.income*5))
    local discovered={}; local mask=collection[entry.name] or 0
    for _,kind in ipairs(Config.Types) do table.insert(discovered,kind..(CollectionIndex.has(mask,kind) and " ✓" or " —")) end
-   row(entry.name.." ["..rarity.name.."] | "..(unlocked and "UNLOCKED" or "REBIRTH "..entry.rebirth).." | part base $"..price.." | contribution "..entry.income..chance.."\nDiscovered: "..table.concat(discovered,"  |  "),nil,rarity.color)
+   row(entry.name.." ["..rarity.name.."] | "..(unlocked and "UNLOCKED" or "REBIRTH "..entry.rebirth).." | part base $"..price.." | contribution "..entry.income..chance.."\nDiscovered: "..table.concat(discovered,"  |  ").." | TAP FOR ODDS",function() oddsEntry=entry; oddsType=0; oddsMutation=0; mode="oddsDetail"; list.CanvasPosition=Vector2.zero; render() end,rarity.color)
   end
   row("Prices shown are before Eclipse discount. An archetype is selected uniformly within its unlocked rarity tier; each part type is 25%.",nil,Color3.fromRGB(70,75,105))
   row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
+ elseif mode=="oddsDetail" then
+  title.Text="ODDS CALCULATOR — "..(oddsEntry and oddsEntry.name or "ARCHETYPE")
+  if oddsEntry then
+   local selectedType=oddsType==0 and "ANY TYPE" or Config.Types[oddsType]
+   local selectedMutation=oddsMutation==0 and "ANY MUTATION" or Config.Mutations[oddsMutation].name
+   row("TARGET TYPE: "..selectedType.." (tap to change)",function() oddsType=(oddsType+1)%(#Config.Types+1); render() end,Color3.fromRGB(70,75,105))
+   row("TARGET MUTATION: "..selectedMutation.." (tap to change)",function() oddsMutation=(oddsMutation+1)%(#Config.Mutations+1); render() end,Color3.fromRGB(70,75,105))
+   if not catalogOdds then row("No odds snapshot. Return to the catalog and refresh.",nil,Color3.fromRGB(150,85,45))
+   elseif catalogOdds.rebirth~=state.rebirth then row("Rebirth changed since the snapshot. Return to the catalog and refresh.",nil,Color3.fromRGB(150,85,45))
+   elseif oddsEntry.rebirth>catalogOdds.rebirth then row("This archetype was locked at the snapshot's rebirth; normal rolls cannot produce it yet. Gifts may use different rules.",nil,Color3.fromRGB(150,85,45))
+   else
+    local tier=catalogOdds.tiers[oddsEntry.rarity]
+    local mutationChance=oddsMutation==0 and 1 or Config.Mutations[oddsMutation].weight/10000
+    local perSlot=tier and OddsMath.target(tier.chance,tier.count,oddsType==0 and 1 or #Config.Types,mutationChance)
+    if perSlot then
+     local regular=OddsMath.atLeastOne(perSlot,state.slots)
+     local token=OddsMath.atLeastOne(perSlot,9)
+     row("PER SLOT: "..OddsMath.format(perSlot),nil,Color3.fromRGB(60,120,180))
+     row("AT LEAST ONE OFFER IN "..state.slots.." REGULAR SLOT(S): "..OddsMath.format(regular),nil,Color3.fromRGB(60,120,180))
+     row("AT LEAST ONE OFFER IN A 9-OFFER TOKEN BATCH: "..OddsMath.format(token),nil,Color3.fromRGB(125,75,175))
+     row("Snapshot "..os.date("!%Y-%m-%d %H:%M:%S UTC",catalogOdds.at).." at rebirth "..catalogOdds.rebirth..". Calculations assume each slot uses these same weights independently; refresh after boosts, events or rebirth change.",nil,Color3.fromRGB(70,75,105))
+    else row("Odds unavailable. Return to the catalog and refresh.",nil,Color3.fromRGB(150,85,45)) end
+   end
+  end
+  row("These are probabilities of seeing offers, not guarantees or ownership. Buying costs cash or a separate voucher; tokens generate offers, not free items. Gift and box odds differ.",nil,Color3.fromRGB(150,85,45))
+  row("BACK TO CATALOG",function() mode="catalog"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="assemble" then
   title.Text="ASSEMBLY: select one of each"
   row("RARE BLUEPRINT: "..(useBlueprint and "ON" or "OFF").." | owned: "..(state.rareBlueprints or 0).." (requires 4 Rare+ parts, +25% base income)",function()

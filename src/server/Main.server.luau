@@ -52,6 +52,7 @@ local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout")
 local CollectionIndex = require(ReplicatedStorage.Shared:WaitForChild("CollectionIndex"))
 local WorldPlan = require(ReplicatedStorage.Shared:WaitForChild("WorldPlan"))
 local TutorialGuide = require(ReplicatedStorage.Shared:WaitForChild("TutorialGuide"))
+local OddsMath = require(ReplicatedStorage.Shared:WaitForChild("OddsMath"))
 local OfferSafety = require(ReplicatedStorage.Shared:WaitForChild("OfferSafety"))
 local collectionNames=CollectionIndex.catalogNames(Config.Catalog)
 local remote = Instance.new("RemoteEvent")
@@ -394,11 +395,11 @@ local function roll(s,id)
  local tier=eligible[#eligible]
  for _, t in ipairs(eligible) do pick-=t.weight; if pick<=0 then tier=t; break end end
  local archetype=tier.list[rng:NextInteger(1,#tier.list)]
- local kind=Config.Types[rng:NextInteger(1,4)]
+ local kind=Config.Types[rng:NextInteger(1,#Config.Types)]
  local mutationRoll=rng:NextInteger(1,10000)
  local mutation=Config.Mutations[1]
  for _,m in ipairs(Config.Mutations) do mutationRoll-=m.weight; if mutationRoll<=0 then mutation=m; break end end
- return {rarityChance=tier.weight/total, mutation=mutation.name, mutationMultiplier=mutation.multiplier,id=id, name=archetype.name, kind=kind, rarity=archetype.rarity, income=archetype.income, price=math.max(1,math.floor(math.max(10,archetype.income*5)*(event.eclipse and 0.5 or 1)))}
+ return {rarityChance=tier.weight/total, exactChance=OddsMath.target(tier.weight/total,#tier.list,#Config.Types,mutation.weight/10000), mutation=mutation.name, mutationMultiplier=mutation.multiplier,id=id, name=archetype.name, kind=kind, rarity=archetype.rarity, income=archetype.income, price=math.max(1,math.floor(math.max(10,archetype.income*5)*(event.eclipse and 0.5 or 1)))}
 end
 local lastAnnouncement=-10
 local function rollBatch(s,useToken)
