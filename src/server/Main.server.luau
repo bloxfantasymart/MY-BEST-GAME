@@ -38,6 +38,7 @@ local Loadouts = require(script.Parent.Services.Loadouts)
 local InteractionGate=require(script.Parent.Services.InteractionGate)
 local ItemIds = require(script.Parent.Services.ItemIds)
 local SingleSale = require(script.Parent.Services.SingleSale)
+local DuplicateCleanup = require(script.Parent.Services.DuplicateCleanup)
 local ConversionReviews = require(script.Parent.Services.ConversionReviews)
 local Blessing = require(script.Parent.Services.Blessing)
 local MultiRoll = require(script.Parent.Services.MultiRoll)
@@ -639,6 +640,21 @@ remote.OnServerEvent:Connect(function(player, action, value)
   if s.extras.doubleLuckPotions<1 then send(player,"No 2x luck potions available."); return end
   s.extras.doubleLuckPotions-=1; s.luckUntil=math.max(s.luckUntil,os.time())+600
   send(player,"2x luck potion activated for 10 minutes.")
+ elseif action=="duplicateReview" and type(value)=="table" then
+  local requestId=value.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  s.duplicateQuote=nil
+  local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+  local quote,reason
+  if ok then quote,reason=DuplicateCleanup.review(s.parts,value.rarity,os.clock(),token,Config.PartSellValue)
+  else reason="Could not create a duplicate review. Try again." end
+  s.duplicateQuote=quote
+  remote:FireClient(player,{duplicateReview=true,requestId=requestId,quote=quote,reason=reason})
+ elseif action=="cancelDuplicateReview" then s.duplicateQuote=nil
+ elseif action=="duplicateConfirm" then
+  local quote,reason=DuplicateCleanup.confirm(s,value,os.clock(),Config.PartSellValue)
+  if not quote then send(player,reason); return end
+  send(player,"Sold "..#quote.items.." reviewed duplicate parts for $"..quote.total..". One copy per group remains.")
  elseif action=="refineReview" and type(value)=="table" then
   local requestId=value.requestId
   if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end

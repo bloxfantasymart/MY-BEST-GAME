@@ -102,6 +102,7 @@ local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
 local singleSaleQuote=nil; local singleSaleWaiting=nil; local singleSaleSequence=0
 local refineQuote=nil; local refineWaiting=nil; local refineSequence=0; local refineQuantity=1
+local duplicateQuote=nil; local duplicateWaiting=nil; local duplicateSequence=0; local duplicateRarity=1; local duplicatePage=1
 local function clearSingleSale() singleSaleQuote=nil; singleSaleWaiting=nil end
 local bulkRarity=1; local confirmBulk=nil; local bulkWaiting=nil; local bulkSequence=0; local bulkReviewPage=1; local bulkStandardOnly=true
 local function clearBulk() confirmBulk=nil; bulkWaiting=nil end
@@ -966,6 +967,37 @@ render=function()
   end
   row("The server requires you to be near your assembly pod, rechecks resources and rejects changed or expired reviews. Boxes must be opened separately.",nil,Color3.fromRGB(70,75,105))
   row("BACK TO BACKPACK",function() refineWaiting=nil; refineQuote=nil; mode="bag"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
+ elseif mode=="duplicates" then
+  title.Text="BACKPACK — DUPLICATE CLEANUP"
+  row("Optional permanent sale. Keeps the first eligible unprotected copy in each exact group. Protected parts and all non-Standard mutations are excluded, even as keepers. Creatures are never sold.",nil,Color3.fromRGB(150,85,45))
+  row("Groups must match name, type, rarity, income and recorded price. Browsing filters do not apply. Consider keeping extra copies for crafting; this is not a recommendation to sell.",nil,Color3.fromRGB(70,75,105))
+  if duplicateQuote then
+   local review=duplicateQuote
+   row("SERVER REVIEW: PERMANENTLY SELL "..#review.items.." duplicate parts for $"..review.total..". Keeps one unprotected part per group. Expires after 60 seconds.",nil,Color3.fromRGB(150,85,45))
+   local entries,current,pages=InventoryView.page(review.items,duplicatePage,10); duplicatePage=current
+   row("SALE REVIEW PAGE "..current.." / "..pages.." | "..#review.keepers.." distinct kept groups",nil,Color3.fromRGB(70,75,105))
+   if current>1 then row("PREVIOUS REVIEW PAGE",function() duplicatePage-=1; render() end,Color3.fromRGB(60,120,180)) end
+   if current<pages then row("NEXT REVIEW PAGE",function() duplicatePage+=1; render() end,Color3.fromRGB(60,120,180)) end
+   for _,item in ipairs(entries) do
+    row("SELL "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] for $"..item.value.." | base income "..string.format("%.4g",item.income).." | recorded price $"..item.price.."\nSELL ID: "..item.id.." | KEEP matching ID: "..item.keeperId,nil,Color3.fromRGB(70,75,105))
+   end
+   row("CONFIRM PERMANENT DUPLICATE SALE FOR $"..review.total,function()
+    if duplicateQuote~=review then return end
+    duplicateQuote=nil; remote:FireServer("duplicateConfirm",review.token); notice.Text="Requesting reviewed duplicate sale..."; render()
+   end,Color3.fromRGB(200,65,85))
+   row("CANCEL DUPLICATE REVIEW",function() duplicateQuote=nil; remote:FireServer("cancelDuplicateReview"); render() end,Color3.fromRGB(70,75,105))
+  elseif duplicateWaiting then
+   row("WAITING FOR SERVER DUPLICATE REVIEW...",nil,Color3.fromRGB(70,75,105))
+   row("CANCEL REVIEW REQUEST",function() duplicateWaiting=nil; remote:FireServer("cancelDuplicateReview"); render() end,Color3.fromRGB(70,75,105))
+  else
+   row("MAX RARITY: "..Config.Rarities[duplicateRarity].name.." (tap to change; starts at Common)",function() duplicateRarity=duplicateRarity%#Config.Rarities+1; render() end,Color3.fromRGB(70,75,105))
+   row("REQUEST SERVER REVIEW OF DUPLICATES",function()
+    duplicateSequence=duplicateSequence%2147483647+1; duplicateWaiting=duplicateSequence
+    remote:FireServer("duplicateReview",{requestId=duplicateWaiting,rarity=duplicateRarity}); render()
+   end,Color3.fromRGB(185,100,35))
+  end
+  row("The server checks every sold and kept item again; changed items or expired reviews reject the entire sale. New parts are not included. Proceeds use the normal part resale rule.",nil,Color3.fromRGB(70,75,105))
+  row("BACK TO BACKPACK",function() duplicateWaiting=nil; duplicateQuote=nil; remote:FireServer("cancelDuplicateReview"); mode="bag"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="bagSummary" then
   title.Text="BACKPACK — SAFETY OVERVIEW"
   local report=InventorySummary.build(state.parts,state.creatures,state.partCapacity,Config.PartSellValue,Config.CreatureSellValue)
@@ -986,6 +1018,7 @@ render=function()
  elseif mode=="bag" then
   title.Text="BACKPACK — "..bagTab
   row("OPEN INVENTORY SAFETY OVERVIEW",function() selectedSell=nil; clearSingleSale(); clearBulk(); bagBatch=nil; mode="bagSummary"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
+  row("OPTIONAL DUPLICATE CLEANUP (SERVER REVIEW)",function() duplicateQuote=nil; duplicateWaiting=nil; duplicateRarity=1; duplicatePage=1; mode="duplicates"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(150,85,45))
   row("TAB: "..bagTab.." (tap to change)",function()
    if bagTab=="All" then bagTab="Body Parts" elseif bagTab=="Body Parts" then bagTab="Brainrots" elseif bagTab=="Brainrots" then bagTab="Boosts" else bagTab="All" end
    selectedSell=nil; clearBulk(); bagBatch=nil; bagPlacement="All"; bagPage=1; render()
@@ -1245,6 +1278,14 @@ updateEvent=function(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.duplicateReview then
+  if duplicateWaiting==data.requestId and mode=="duplicates" and panel.Visible then
+   duplicateWaiting=nil; duplicateQuote=data.quote; duplicatePage=1
+   if data.reason then notice.Text=data.reason end
+   requestRender()
+  end
+  return
+ end
  if data.refineReview then
   if refineWaiting==data.requestId and mode=="refinery" and panel.Visible then
    refineWaiting=nil; refineQuote=data.quote
