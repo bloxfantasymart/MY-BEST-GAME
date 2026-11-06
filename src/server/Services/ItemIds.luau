@@ -33,6 +33,8 @@ function ItemIds.collect(state)
  end
  quote=state.duplicateQuote
  if quote then addEntries(used,quote.keepers); addEntries(used,quote.items) end
+ quote=state.purchaseQuote
+ if quote and quote.item then add(used,quote.item.id) end
  quote=state.singleSaleQuote
  if quote and quote.item then
   add(used,quote.item.id)

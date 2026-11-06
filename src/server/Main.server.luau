@@ -36,8 +36,10 @@ local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
 local Obby = require(script.Parent.Services.Obby)
 local Loadouts = require(script.Parent.Services.Loadouts)
 local InteractionGate=require(script.Parent.Services.InteractionGate)
+local Proximity=require(script.Parent.Services.Proximity)
 local ItemIds = require(script.Parent.Services.ItemIds)
 local SingleSale = require(script.Parent.Services.SingleSale)
+local PurchaseReview = require(script.Parent.Services.PurchaseReview)
 local DuplicateCleanup = require(script.Parent.Services.DuplicateCleanup)
 local ConversionReviews = require(script.Parent.Services.ConversionReviews)
 local Blessing = require(script.Parent.Services.Blessing)
@@ -183,9 +185,8 @@ end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
 end
-local function nearby(player, p)
- local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
- return root and (root.Position - p.Position).Magnitude <= 20
+local function nearby(player,part)
+ return Proximity.isAliveNear(player.Character,part,20)
 end
 -- Optional public parkour. Only server-observed checkpoint touches and a summit
 -- prompt advance/claim; these checks are not a complete movement anti-cheat.
@@ -450,7 +451,7 @@ local function chooseGiftRarity(minRarity)
 end
 local function expireOffers(s,now)
  if SessionGifts.offersExpired(s.offerExpires,now,#s.rolls) then
-  s.rolls={}; s.offerExpires=0; Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls)); return true
+  s.rolls={}; s.offerExpires=0; s.purchaseQuote=nil; Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls)); return true
  end
  return false
 end
@@ -555,7 +556,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
  local now=os.clock()
  if expireOffers(s,now) then
   send(player,"Unpurchased roll offers expired after 60 seconds.")
-  if action=="buy" or action=="buyWithVoucher" or action=="skip" then return end
+  if action=="buy" or action=="buyWithVoucher" or action=="purchaseReview" or action=="purchaseConfirm" or action=="skip" then return end
  end
  if not InteractionGate.allow(s,"remote",now) then return end
  settleIncome(s,now,currentEvent())
@@ -579,14 +580,31 @@ remote.OnServerEvent:Connect(function(player, action, value)
   s.lastRoll=now
   local ok,reason=rollBatch(s,action=="multiRoll")
   send(player,ok and (action=="multiRoll" and "Multi-roll token used: nine offers to review." or "Choose parts to buy or skip before rolling again.") or reason)
- elseif (action=="buy" or action=="buyWithVoucher") and nearby(player,s.plot.lever) then
-  local voucher=action=="buyWithVoucher"
-  local item,reason=Inventory.purchaseOffer(s,value,voucher,partCapacity(s))
+ elseif action=="purchaseReview" and type(value)=="table" then
+  local requestId=value.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  s.purchaseQuote=nil
+  local quote,reason
+  if not nearby(player,s.plot.lever) then reason="Move closer to your roll station."
+  else
+   local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+   if ok then quote,reason=PurchaseReview.review(s,value.id,value.voucher,partCapacity(s),os.clock(),token)
+   else reason="Could not create a purchase review. Try again." end
+  end
+  s.purchaseQuote=quote
+  remote:FireClient(player,{purchaseReview=true,requestId=requestId,quote=quote,reason=reason})
+ elseif action=="cancelPurchaseReview" then s.purchaseQuote=nil
+ elseif action=="purchaseConfirm" then
+  if not nearby(player,s.plot.lever) then s.purchaseQuote=nil; send(player,"Move closer to your roll station."); return end
+  local quote=s.purchaseQuote
+  local item,reason=PurchaseReview.confirm(s,value,partCapacity(s),os.clock(),Inventory)
   if not item then send(player,reason); return end
   Tutorial.advance(s.tutorial,"buy",s.parts)
   Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls))
-  local message=(voucher and "Part claimed with a voucher!" or "Part purchased!")..(item.locked and " Protected: unlock in Backpack to craft or sell." or "")
+  local message=(quote.voucher and "Part claimed with a voucher!" or "Part purchased!")..(item.locked and " Protected: unlock in Backpack to craft or sell." or "")
   send(player,message,item.rarity>=4 and "rare" or "buy")
+ elseif action=="buy" or action=="buyWithVoucher" then
+  send(player,"Please update your game client and review the purchase first.")
  elseif action=="setManualMutationProtection" then
   if type(value)~="boolean" then send(player,"Invalid protection setting."); return end
   s.manualProtectMutations=value

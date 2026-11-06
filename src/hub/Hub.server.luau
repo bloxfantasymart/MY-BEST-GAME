@@ -13,6 +13,7 @@ local ShowcaseView=require(script.Parent.Services.ShowcaseView)
 local Titles=require(script.Parent.Services.Titles)
 local ShutdownGate=require(script.Parent.Services.ShutdownGate)
 local InteractionGate=require(script.Parent.Services.InteractionGate)
+local Proximity=require(script.Parent.Services.Proximity)
 local remote=Instance.new("RemoteEvent"); remote.Name="HubAction"; remote.Parent=ReplicatedStorage
 local profiles={}
 local joinGate=ShutdownGate.new()
@@ -31,8 +32,7 @@ local function prompt(parent,text)
  local p=Instance.new("ProximityPrompt"); p.ActionText=text; p.ObjectText=parent.Name; p.MaxActivationDistance=12; p.Parent=parent; return p
 end
 local function nearby(player,part)
- local root=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
- return root and (root.Position-part.Position).Magnitude<=20
+ return Proximity.isAliveNear(player.Character,part,20)
 end
 block(world,"Bazaar floor",Vector3.new(230,1,230),Vector3.new(0,-0.5,0),Color3.fromRGB(43,35,80))
 local center=block(world,"Town square",Vector3.new(42,0.5,42),Vector3.new(0,0.3,0),Color3.fromRGB(100,70,170),Enum.Material.Neon)

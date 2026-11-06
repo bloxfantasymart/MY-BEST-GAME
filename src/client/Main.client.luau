@@ -107,6 +107,8 @@ local loaded=false; local offlineShown=false
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
 local singleSaleQuote=nil; local singleSaleWaiting=nil; local singleSaleSequence=0
+local purchaseQuote=nil; local purchaseWaiting=nil; local purchaseSequence=0
+local function clearPurchaseReview() purchaseQuote=nil; purchaseWaiting=nil end
 local refineQuote=nil; local refineWaiting=nil; local refineSequence=0; local refineQuantity=1
 local duplicateQuote=nil; local duplicateWaiting=nil; local duplicateSequence=0; local duplicateRarity=1; local duplicatePage=1
 local function clearSingleSale() singleSaleQuote=nil; singleSaleWaiting=nil end
@@ -231,6 +233,11 @@ render=function()
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
  rowOrder=0; giftButtons={}; incomeLabels={}; eventButtons={}; eventOverrideLabel=nil
  if mode=="roll" then
+  local pendingId=purchaseQuote and purchaseQuote.item.id or (purchaseWaiting and purchaseWaiting.id)
+  if pendingId then
+   local exists=false; for _,offer in ipairs(state.rolls) do if offer.id==pendingId then exists=true; break end end
+   if not exists then clearPurchaseReview() end
+  end
   title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s"
   if state.autoRolling then row("Stop auto-roll before rolling manually.",nil,Color3.fromRGB(70,75,105))
   elseif #state.rolls>0 then row("Buy, skip or review discarding current offers before rolling again.",nil,Color3.fromRGB(150,85,45))
@@ -295,10 +302,32 @@ render=function()
    local rarity=Config.Rarities[item.rarity]
    local odds=item.rarityChance and OddsMath.format(item.rarityChance).." tier" or "tier odds unavailable"
    local exact=item.exactChance and (" | exact combo "..OddsMath.format(item.exactChance)) or ""
-   row("BUY "..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..rarity.name..", "..odds..exact.."]  $"..item.price,function() remote:FireServer("buy",item.id) end,rarity.color)
-   if state.extras and state.extras.rollVouchers>0 then
-    row("FREE PART VOUCHER: "..item.name.." "..item.kind.." ("..state.extras.rollVouchers.." left)",function() remote:FireServer("buyWithVoucher",item.id) end,Color3.fromRGB(60,145,150))
-   end
+   row("OFFER: "..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..rarity.name..", "..odds..exact.."]  $"..item.price,nil,rarity.color)
+   local review=purchaseQuote and purchaseQuote.item.id==item.id and purchaseQuote or nil
+   local waiting=purchaseWaiting and purchaseWaiting.id==item.id
+   if review then
+    local saved=review.item
+    row("SERVER REVIEW: "..(saved.mutation or "Standard").." x"..(saved.mutationMultiplier or 1).." "..saved.name.." "..saved.kind.." ["..Config.Rarities[saved.rarity].name.."] #"..saved.id.." | base contribution "..string.format("%.4g",saved.income),nil,Color3.fromRGB(150,85,45))
+    row((review.voucher and ("PAY 1 FREE-PART VOUCHER; recorded part price $"..saved.price..".") or ("PAY $"..saved.price.." CASH.")).." "..(review.willProtect and "Part will be protected." or "Part will be unprotected.").." Review expires with the offer, within 60 seconds.",nil,Color3.fromRGB(150,85,45))
+    row("CONFIRM "..(review.voucher and "VOUCHER CLAIM" or ("CASH PURCHASE FOR $"..saved.price)),function()
+     if purchaseQuote~=review then return end
+     clearPurchaseReview(); remote:FireServer("purchaseConfirm",review.token); notice.Text="Requesting reviewed purchase..."; render()
+    end,Color3.fromRGB(52,170,105))
+    row("CANCEL PURCHASE REVIEW",function() clearPurchaseReview(); remote:FireServer("cancelPurchaseReview"); render() end,Color3.fromRGB(70,75,105))
+   elseif waiting then
+    row("WAITING FOR SERVER PURCHASE REVIEW...",nil,Color3.fromRGB(70,75,105))
+    row("CANCEL REVIEW REQUEST",function() clearPurchaseReview(); remote:FireServer("cancelPurchaseReview"); render() end,Color3.fromRGB(70,75,105))
+   elseif not purchaseQuote and not purchaseWaiting then
+    local function requestPurchase(voucher)
+     purchaseSequence=purchaseSequence%2147483647+1
+     purchaseWaiting={requestId=purchaseSequence,id=item.id,voucher=voucher}
+     remote:FireServer("purchaseReview",purchaseWaiting); render()
+    end
+    row("REVIEW CASH PURCHASE FOR $"..item.price,function() requestPurchase(false) end,Color3.fromRGB(60,120,180))
+    if state.extras and state.extras.rollVouchers>0 then
+     row("REVIEW 1 FREE-PART VOUCHER ("..state.extras.rollVouchers.." left)",function() requestPurchase(true) end,Color3.fromRGB(60,145,150))
+    end
+   else row("Finish or cancel the other purchase review first.",nil,Color3.fromRGB(70,75,105)) end
    local reviewed=skipReview==item.id
    row((reviewed and "CONFIRM SKIP " or "REVIEW SKIP ")..(item.mutation or "Standard").." "..item.name.." "..item.kind,function()
     if reviewed then
@@ -1326,6 +1355,16 @@ updateEvent=function(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.purchaseReview then
+  local waiting=purchaseWaiting
+  if waiting and waiting.requestId==data.requestId and mode=="roll" and panel.Visible then
+   purchaseWaiting=nil
+   if data.quote and data.quote.item.id==waiting.id and data.quote.voucher==waiting.voucher then purchaseQuote=data.quote end
+   if data.reason then notice.Text=data.reason end
+   requestRender()
+  end
+  return
+ end
  if data.duplicateReview then
   if duplicateWaiting==data.requestId and mode=="duplicates" and panel.Visible then
    duplicateWaiting=nil; duplicateQuote=data.quote; duplicatePage=1
@@ -1398,7 +1437,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.effectOnly then playEffect(data.effectOnly); return end
  if data.effect then playEffect(data.effect) end
  if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.blessingRemaining=data.blessingRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
- if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; clearCraftReview(); craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; clearForgeReview(); forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false; multiRollConfirm=false end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; clearCraftReview(); craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; clearForgeReview(); forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false; multiRollConfirm=false; clearPurchaseReview() end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  state=data; if state.manualProtectMutations==false then manualProtectionConfirm=false end; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  if data.offlineReport and not offlineShown then
