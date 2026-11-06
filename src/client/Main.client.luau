@@ -108,7 +108,8 @@ local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
 local singleSaleQuote=nil; local singleSaleWaiting=nil; local singleSaleSequence=0
 local purchaseQuote=nil; local purchaseWaiting=nil; local purchaseSequence=0
-local function clearPurchaseReview() purchaseQuote=nil; purchaseWaiting=nil end
+local batchPurchaseQuote=nil; local batchPurchaseWaiting=nil
+local function clearPurchaseReview() purchaseQuote=nil; purchaseWaiting=nil; batchPurchaseQuote=nil; batchPurchaseWaiting=nil end
 local refineQuote=nil; local refineWaiting=nil; local refineSequence=0; local refineQuantity=1
 local duplicateQuote=nil; local duplicateWaiting=nil; local duplicateSequence=0; local duplicateRarity=1; local duplicatePage=1
 local function clearSingleSale() singleSaleQuote=nil; singleSaleWaiting=nil end
@@ -233,6 +234,8 @@ render=function()
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
  rowOrder=0; giftButtons={}; incomeLabels={}; eventButtons={}; eventOverrideLabel=nil
  if mode=="roll" then
+  local batchIds=batchPurchaseQuote and batchPurchaseQuote.ids or (batchPurchaseWaiting and batchPurchaseWaiting.ids)
+  if batchIds and not OfferSafety.matches(state.rolls,batchIds) then clearPurchaseReview() end
   local pendingId=purchaseQuote and purchaseQuote.item.id or (purchaseWaiting and purchaseWaiting.id)
   if pendingId then
    local exists=false; for _,offer in ipairs(state.rolls) do if offer.id==pendingId then exists=true; break end end
@@ -265,6 +268,30 @@ render=function()
   if skipReview then
    local found=false; for _,offer in ipairs(state.rolls) do if offer.id==skipReview then found=true; break end end
    if not found then skipReview=nil end
+  end
+  if not state.autoRolling and #state.rolls>=2 then
+   if batchPurchaseQuote then
+    local review=batchPurchaseQuote
+    row("SERVER REVIEW: BUY ALL "..#review.items.." OFFERS FOR $"..review.total.." CASH — expires with offers, within 60 seconds. No vouchers are used.",nil,Color3.fromRGB(150,85,45))
+    for _,offer in ipairs(review.items) do
+     row((offer.mutation or "Standard").." x"..(offer.mutationMultiplier or 1).." "..offer.name.." "..offer.kind.." ["..Config.Rarities[offer.rarity].name.."] — $"..offer.price.." | "..(offer.willProtect and "WILL BE PROTECTED" or "UNPROTECTED").." | ID "..offer.id,nil,Color3.fromRGB(70,75,105))
+    end
+    row("CONFIRM ALL "..#review.items.." PURCHASES FOR $"..review.total,function()
+     if batchPurchaseQuote~=review then return end
+     clearPurchaseReview(); remote:FireServer("batchPurchaseConfirm",review.token); notice.Text="Requesting reviewed batch purchase..."; render()
+    end,Color3.fromRGB(52,170,105))
+    row("CANCEL BATCH PURCHASE REVIEW",function() clearPurchaseReview(); remote:FireServer("cancelPurchaseReview"); render() end,Color3.fromRGB(70,75,105))
+   elseif batchPurchaseWaiting then
+    row("WAITING FOR SERVER BATCH PURCHASE REVIEW...",nil,Color3.fromRGB(70,75,105))
+    row("CANCEL BATCH REVIEW REQUEST",function() clearPurchaseReview(); remote:FireServer("cancelPurchaseReview"); render() end,Color3.fromRGB(70,75,105))
+   elseif not purchaseQuote and not purchaseWaiting then
+    row("REVIEW BUY ALL "..#state.rolls.." OFFERS FOR CASH",function()
+     purchaseSequence=purchaseSequence%2147483647+1
+     local ids={}; for _,offer in ipairs(state.rolls) do table.insert(ids,offer.id) end
+     batchPurchaseWaiting={requestId=purchaseSequence,ids=ids}; discardConfirm=false; skipReview=nil
+     remote:FireServer("batchPurchaseReview",{requestId=purchaseSequence}); list.CanvasPosition=Vector2.zero; render()
+    end,Color3.fromRGB(60,120,180))
+   end
   end
   if not state.autoRolling and #state.rolls>0 then
    if discardConfirm then
@@ -317,7 +344,7 @@ render=function()
    elseif waiting then
     row("WAITING FOR SERVER PURCHASE REVIEW...",nil,Color3.fromRGB(70,75,105))
     row("CANCEL REVIEW REQUEST",function() clearPurchaseReview(); remote:FireServer("cancelPurchaseReview"); render() end,Color3.fromRGB(70,75,105))
-   elseif not purchaseQuote and not purchaseWaiting then
+   elseif not state.autoRolling and not purchaseQuote and not purchaseWaiting and not batchPurchaseQuote and not batchPurchaseWaiting then
     local function requestPurchase(voucher)
      purchaseSequence=purchaseSequence%2147483647+1
      purchaseWaiting={requestId=purchaseSequence,id=item.id,voucher=voucher}
@@ -327,7 +354,7 @@ render=function()
     if state.extras and state.extras.rollVouchers>0 then
      row("REVIEW 1 FREE-PART VOUCHER ("..state.extras.rollVouchers.." left)",function() requestPurchase(true) end,Color3.fromRGB(60,145,150))
     end
-   else row("Finish or cancel the other purchase review first.",nil,Color3.fromRGB(70,75,105)) end
+   else row(state.autoRolling and "Stop auto-roll before buying manually." or "Finish or cancel the other purchase review first.",nil,Color3.fromRGB(70,75,105)) end
    local reviewed=skipReview==item.id
    row((reviewed and "CONFIRM SKIP " or "REVIEW SKIP ")..(item.mutation or "Standard").." "..item.name.." "..item.kind,function()
     if reviewed then
@@ -1355,6 +1382,16 @@ updateEvent=function(flags)
  else tint.Enabled=false end
 end
 remote.OnClientEvent:Connect(function(data)
+ if data.batchPurchaseReview then
+  local waiting=batchPurchaseWaiting
+  if waiting and waiting.requestId==data.requestId and mode=="roll" and panel.Visible then
+   batchPurchaseWaiting=nil
+   if data.quote and data.quote.kind=="all" and OfferSafety.matches(state.rolls,data.quote.ids) then batchPurchaseQuote=data.quote end
+   if data.reason then notice.Text=data.reason end
+   requestRender()
+  end
+  return
+ end
  if data.purchaseReview then
   local waiting=purchaseWaiting
   if waiting and waiting.requestId==data.requestId and mode=="roll" and panel.Visible then

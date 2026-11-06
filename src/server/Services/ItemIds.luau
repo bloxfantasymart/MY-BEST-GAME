@@ -34,7 +34,7 @@ function ItemIds.collect(state)
  quote=state.duplicateQuote
  if quote then addEntries(used,quote.keepers); addEntries(used,quote.items) end
  quote=state.purchaseQuote
- if quote and quote.item then add(used,quote.item.id) end
+ if quote then if quote.item then add(used,quote.item.id) end; addEntries(used,quote.items) end
  quote=state.singleSaleQuote
  if quote and quote.item then
   add(used,quote.item.id)

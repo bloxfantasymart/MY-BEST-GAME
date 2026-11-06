@@ -87,3 +87,6 @@ Cash and free-part-voucher purchases now use a one-use server review of the exac
 
 ### Living-character proximity checks
 Main-place and showcase-hub station/booth interactions now require a living Humanoid and a real HumanoidRootPart within 20 studs, in addition to their existing ownership, session-health and rate-limit checks. The checks block ordinary dead-character interactions but do not prove legitimate movement or prevent teleport exploits. Test normal character loading, death/respawn and custom rigs in Roblox.
+
+### Reviewed buy-all
+For two to nine current offers, an optional one-use server review shows every part, cash price, total and resulting protection before an all-or-nothing cash purchase. The server rechecks the exact offer order and attributes, expiry, auto-roll, protection setting, capacity and funds with no yield before moving any item; no vouchers are used. Any stale input rejects the whole batch. Individual reviewed cash/voucher purchases remain available. Test user experience, timeouts and concurrency in Roblox.

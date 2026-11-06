@@ -42,3 +42,35 @@ s=fresh(); q=review("a",false,1,"old"); local replacement=review("b",true,2,"new
 assert(replacement and not PurchaseReview.confirm(s,"old",10,3,Inventory) and not PurchaseReview.confirm(s,"new",10,3,Inventory))
 assert(s.cash==50 and s.extras.rollVouchers==1 and #s.parts==0)
 print("Reviewed cash and voucher purchases, protection, expiry, stale state and replay passed")
+-- Batch quote is all cash, exact order, and atomic even when one offer changes.
+s=fresh()
+local function batch(now,token,capacity)
+ local result=PurchaseReview.reviewAll(s,capacity or 10,now or 1,token or "batch"); s.purchaseQuote=result; return result
+end
+q=batch(); assert(q and q.kind=="all" and q.total==40 and #q.items==2 and not q.items[1].willProtect and q.items[2].willProtect)
+assert(not PurchaseReview.confirmAll(s,"wrong",10,2) and s.cash==50 and #s.rolls==2 and #s.parts==0)
+assert(not PurchaseReview.confirmAll(s,"batch",10,2))
+q=batch(); assert(not PurchaseReview.confirm(s,"batch",10,2,Inventory) and s.cash==50)
+q=review(); assert(not PurchaseReview.confirmAll(s,"token",10,2) and s.cash==50)
+q=batch(); assert(not PurchaseReview.confirmAll(s,"batch",10,60) and #s.rolls==2)
+q=batch(); s.rolls[2].price=21; assert(not PurchaseReview.confirmAll(s,"batch",10,2) and s.cash==50 and #s.parts==0); s.rolls[2].price=20
+q=batch(); s.rolls[1],s.rolls[2]=s.rolls[2],s.rolls[1]; assert(not PurchaseReview.confirmAll(s,"batch",10,2) and s.cash==50); s.rolls[1],s.rolls[2]=s.rolls[2],s.rolls[1]
+q=batch(); local removedBatch=table.remove(s.rolls,2); assert(ItemIds.collect(s).b); assert(not PurchaseReview.confirmAll(s,"batch",10,2)); table.insert(s.rolls,removedBatch)
+q=batch(); table.insert(s.rolls,offer("new")); assert(not PurchaseReview.confirmAll(s,"batch",10,2)); table.remove(s.rolls,3)
+q=batch(); s.manualProtectMutations=false; assert(not PurchaseReview.confirmAll(s,"batch",10,2)); s.manualProtectMutations=true
+q=batch(); s.cash=39; assert(not PurchaseReview.confirmAll(s,"batch",10,2) and s.cash==39 and #s.parts==0); s.cash=50
+q=batch(); assert(not PurchaseReview.confirmAll(s,"batch",1,2) and s.cash==50)
+s.cash=30; assert(not batch() and #s.rolls==2 and #s.parts==0); s.cash=50
+q=batch(); local result=PurchaseReview.confirmAll(s,"batch",10,2)
+assert(result and s.cash==10 and #s.parts==2 and #s.rolls==0 and s.offerExpires==0 and s.extras.rollVouchers==1)
+assert(not s.parts[1].locked and s.parts[2].locked and not PurchaseReview.confirmAll(s,"batch",10,2))
+-- Nine-offer token batches use the same all-or-nothing bounds.
+s=fresh(); s.rolls={}; s.cash=200; s.manualProtectMutations=false
+for i=1,9 do table.insert(s.rolls,offer("id"..i,"Golden")) end
+q=batch(); assert(q and #q.items==9 and q.total==180 and not q.items[1].willProtect)
+assert(PurchaseReview.confirmAll(s,"batch",9,2) and #s.parts==9 and s.cash==20)
+for _,p in ipairs(s.parts) do assert(not p.locked) end
+s=fresh(); s.rolls={offer("only")}; assert(not batch())
+s=fresh(); s.rolls={offer("duplicate"),offer("duplicate")}; assert(not batch() and #s.parts==0)
+s=fresh(); s.offerExpires=5; q=batch(2); assert(q and q.expires==5 and not PurchaseReview.confirmAll(s,"batch",10,5))
+print("Reviewed batch purchase, cross-mode tokens, capacity, staleness and all-or-nothing commit passed")

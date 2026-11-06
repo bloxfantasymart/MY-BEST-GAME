@@ -556,7 +556,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
  local now=os.clock()
  if expireOffers(s,now) then
   send(player,"Unpurchased roll offers expired after 60 seconds.")
-  if action=="buy" or action=="buyWithVoucher" or action=="purchaseReview" or action=="purchaseConfirm" or action=="skip" then return end
+  if action=="buy" or action=="buyWithVoucher" or action=="purchaseReview" or action=="purchaseConfirm" or action=="batchPurchaseReview" or action=="batchPurchaseConfirm" or action=="skip" then return end
  end
  if not InteractionGate.allow(s,"remote",now) then return end
  settleIncome(s,now,currentEvent())
@@ -593,6 +593,27 @@ remote.OnServerEvent:Connect(function(player, action, value)
   end
   s.purchaseQuote=quote
   remote:FireClient(player,{purchaseReview=true,requestId=requestId,quote=quote,reason=reason})
+ elseif action=="batchPurchaseReview" and type(value)=="table" then
+  local requestId=value.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  s.purchaseQuote=nil
+  local quote,reason
+  if not nearby(player,s.plot.lever) then reason="Move closer to your roll station."
+  else
+   local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+   if ok then quote,reason=PurchaseReview.reviewAll(s,partCapacity(s),os.clock(),token)
+   else reason="Could not create a batch review. Try again." end
+  end
+  s.purchaseQuote=quote
+  remote:FireClient(player,{batchPurchaseReview=true,requestId=requestId,quote=quote,reason=reason})
+ elseif action=="batchPurchaseConfirm" then
+  if not nearby(player,s.plot.lever) then s.purchaseQuote=nil; send(player,"Move closer to your roll station."); return end
+  local quote,reason=PurchaseReview.confirmAll(s,value,partCapacity(s),os.clock())
+  if not quote then send(player,reason); return end
+  Tutorial.advance(s.tutorial,"buy",s.parts)
+  Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls))
+  local best=1; for _,item in ipairs(quote.items) do best=math.max(best,item.rarity) end
+  send(player,"Purchased all "..#quote.items.." reviewed offers for $"..quote.total..".",best>=4 and "rare" or "buy")
  elseif action=="cancelPurchaseReview" then s.purchaseQuote=nil
  elseif action=="purchaseConfirm" then
   if not nearby(player,s.plot.lever) then s.purchaseQuote=nil; send(player,"Move closer to your roll station."); return end

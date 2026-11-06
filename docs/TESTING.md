@@ -289,3 +289,7 @@ Publish matching main client and server code to a private Roblox place and shut 
 ### Living-character proximity
 
 In both places, test station, portal and booth prompts and station-linked remotes while alive, outside 20 studs, while dead, and after respawning. Missing Humanoid/root or non-BasePart roots must not authorize a nearby action; normal Roblox characters should regain access after loading. HUD cash collection remains usable from anywhere. These checks do not replace movement anti-cheat. Standalone mocks cannot validate actual Roblox character replication, custom rigs or physics.
+
+### Reviewed buy-all offers
+
+In a private Roblox server, generate two to nine offers. Request **REVIEW BUY ALL ... FOR CASH**, check every item, total and protected status, cancel, then review and confirm. Check cash is deducted exactly once and all parts are added with the shown protection; vouchers remain unchanged. Test insufficient cash where each individual offer is affordable but the total is not, exactly enough/insufficient inventory capacity, a single offer, expired offers, auto-roll, leaving the station, changed protection, skipped/reordered/added or changed offers, wrong/replayed tokens, and closing the menu while waiting. Every rejected confirmation must leave all parts and cash unchanged. Check nine-offer token batches, tutorial progression, successful save/rejoin, multiple players and mobile layout. Standalone tests do not replace Roblox networking and UI tests.
