@@ -3,7 +3,8 @@ local vectorMeta={}
 vectorMeta.__add=function(a,b) return setmetatable({X=a.X+b.X,Y=a.Y+b.Y,Z=a.Z+b.Z},vectorMeta) end
 local Vector3={new=function(x,y,z) return setmetatable({X=x,Y=y,Z=z},vectorMeta) end}
 local Color3={fromRGB=function(r,g,b) return {R=r/255,G=g/255,B=b/255} end}
-local Enum={Material={SmoothPlastic="SmoothPlastic",Metal="Metal",Neon="Neon",Glass="Glass"},PartType={Ball="Ball"}}
+local UDim2={fromOffset=function(x,y) return {x=x,y=y} end,fromScale=function(x,y) return {x=x,y=y} end,new=function(a,b,c,d) return {a=a,b=b,c=c,d=d} end}
+local Enum={Font={GothamBold="GothamBold"},Material={SmoothPlastic="SmoothPlastic",Metal="Metal",Neon="Neon",Glass="Glass"},PartType={Ball="Ball"}}
 local methods={}
 function methods:SetAttribute(key,value) self._attributes[key]=value end
 function methods:GetAttribute(key) return self._attributes[key] end
@@ -79,3 +80,12 @@ local young=build(1,false); assert(not young["Prestige halo"] and not young["Asc
 local mid=build(5,false); assert(not mid["Prestige halo"])
 local prestige=build(10,true); assert(prestige["Prestige halo"]==1 and prestige["Ascension crown"]==1)
 print("Procedural identity, tier, mutation and bounded display structure tests passed (mocked Roblox)")
+
+local lever=Instance.new("Part"); local plot={lever=lever}
+Visuals.createFrenzyClock(plot)
+assert(plot.frenzyClock and plot.frenzyClock.text.Parent and plot.frenzyClock.fill.Parent)
+Visuals.updateFrenzyClock(plot,{text="2x LUCK IN: 25:00",progress=1/6,active=false})
+assert(plot.frenzyClock.text.Text=="2x LUCK IN: 25:00" and plot.frenzyClock.fill.Size.x==1/6)
+Visuals.updateFrenzyClock(plot,{text="2x LUCK ACTIVE: 05:00",progress=1,active=true})
+assert(plot.frenzyClock.text.Text=="2x LUCK ACTIVE: 05:00" and plot.frenzyClock.fill.Size.x==1)
+print("Station event clock structure and updates passed (mocked Roblox)")

@@ -17,10 +17,11 @@ local CollectionIndex=require(ReplicatedStorage.Shared:WaitForChild("CollectionI
 local OfferSafety=require(ReplicatedStorage.Shared:WaitForChild("OfferSafety"))
 local SeasonRewards=require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards"))
 local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
+local EventPresentation=require(ReplicatedStorage.Shared:WaitForChild("EventPresentation"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
 local sounds={}
-local localSettings={mute=false,hideTint=false,hideGuide=false,hideAnnouncements=false}
+local localSettings={mute=false,hideTint=false,hideGuide=false,hideAnnouncements=false,hideEventBanner=false}
 local updateEvent; local updateTutorial
 local function playEffect(name)
  if localSettings.mute then return end
@@ -51,6 +52,12 @@ local rewards=button(root,"REWARDS",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,224
 local rebirth=button(root,"REBIRTH",UDim2.new(0,120,0,48),UDim2.new(1,-130,0,116),Color3.fromRGB(218,65,135))
 local eventLabel=Instance.new("TextLabel"); eventLabel.BackgroundTransparency=1; eventLabel.Size=UDim2.new(1,-155,0,28); eventLabel.Position=UDim2.new(0.02,0,0,98); eventLabel.TextColor3=Color3.fromRGB(255,225,80); eventLabel.TextStrokeTransparency=0; eventLabel.Font=Enum.Font.GothamBold; eventLabel.TextScaled=true; eventLabel.Parent=root
 local notice=Instance.new("TextLabel"); notice.BackgroundTransparency=1; notice.Size=UDim2.new(1,-155,0,30); notice.Position=UDim2.new(0.02,0,0,67); notice.TextColor3=Color3.new(1,1,1); notice.TextStrokeTransparency=0; notice.Font=Enum.Font.GothamBold; notice.TextScaled=true; notice.Parent=root
+local eventBanner=Instance.new("TextLabel"); eventBanner.Name="EventStartBanner"; eventBanner.AnchorPoint=Vector2.new(0.5,0)
+eventBanner.Size=UDim2.new(0.68,0,0,62); eventBanner.Position=UDim2.new(0.5,0,0.31,0)
+eventBanner.BackgroundColor3=Color3.fromRGB(85,55,165); eventBanner.TextColor3=Color3.fromRGB(255,245,170)
+eventBanner.TextStrokeTransparency=0; eventBanner.TextWrapped=true; eventBanner.TextScaled=true; eventBanner.Font=Enum.Font.GothamBold
+eventBanner.ZIndex=4; eventBanner.Visible=false; eventBanner.Parent=root; round(eventBanner)
+local bannerLimit=Instance.new("UITextSizeConstraint"); bannerLimit.MinTextSize=10; bannerLimit.MaxTextSize=20; bannerLimit.Parent=eventBanner
 local guidance=Instance.new("TextLabel"); guidance.Size=UDim2.new(1,-155,0,42); guidance.Position=UDim2.new(0.02,0,0,130)
 guidance.BackgroundColor3=Color3.fromRGB(105,75,30); guidance.TextColor3=Color3.new(1,1,1); guidance.TextWrapped=true
 guidance.Font=Enum.Font.GothamBold; guidance.TextSize=14; guidance.TextScaled=true; guidance.Visible=false; guidance.Parent=root; local guideLimit=Instance.new("UITextSizeConstraint"); guideLimit.MinTextSize=10; guideLimit.MaxTextSize=14; guideLimit.Parent=guidance; round(guidance)
@@ -889,6 +896,11 @@ render=function()
   row("HIDE RARE ROLL ANNOUNCEMENTS: "..(localSettings.hideAnnouncements and "ON" or "OFF"),function()
    localSettings.hideAnnouncements=not localSettings.hideAnnouncements; render()
   end,Color3.fromRGB(70,75,105))
+  row("HIDE EVENT START BANNERS: "..(localSettings.hideEventBanner and "ON" or "OFF"),function()
+   localSettings.hideEventBanner=not localSettings.hideEventBanner
+   if localSettings.hideEventBanner then eventBanner.Visible=false end
+   render()
+  end,Color3.fromRGB(70,75,105))
   row("HIDE TUTORIAL WORLD MARKERS: "..(localSettings.hideGuide and "ON" or "OFF").." (the written goal stays visible)",function()
    localSettings.hideGuide=not localSettings.hideGuide
    if updateTutorial then updateTutorial() end
@@ -1215,9 +1227,17 @@ task.spawn(function()
  while true do task.wait(2); if loaded then updateTutorial() end end
 end)
 local tint=Instance.new("ColorCorrectionEffect"); tint.Name="BrainrotEventTint"; tint.Enabled=false; tint.Parent=Lighting
+local previousEventFlags=nil; local bannerVersion=0
 updateEvent=function(flags)
- if localSettings.hideTint then tint.Enabled=false; return end
  if not flags then return end
+ local started=EventPresentation.started(previousEventFlags,flags)
+ previousEventFlags=EventPresentation.copy(flags)
+ if #started>0 and not localSettings.hideEventBanner then
+  bannerVersion+=1; local version=bannerVersion
+  eventBanner.Text="EVENT ACTIVE!  "..table.concat(started,"  |  "); eventBanner.Visible=true
+  task.delay(5,function() if bannerVersion==version then eventBanner.Visible=false end end)
+ end
+ if localSettings.hideTint then tint.Enabled=false; return end
  if flags.eclipse then tint.TintColor=Color3.fromRGB(255,170,175); tint.Enabled=true
  elseif flags.storm then tint.TintColor=Color3.fromRGB(255,235,155); tint.Enabled=true
  elseif flags.frenzy then tint.TintColor=Color3.fromRGB(215,180,255); tint.Enabled=true

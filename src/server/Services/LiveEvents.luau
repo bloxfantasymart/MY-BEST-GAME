@@ -40,11 +40,30 @@ function LiveEvents.forecast(now)
   weekend=weekend,
  }}
 end
-function LiveEvents.applyOverride(event,name)
+function LiveEvents.applyOverride(event,name,remaining)
  local fields={Frenzy="frenzy",Eclipse="eclipse",Sigma="sigma",Storm="storm"}
  local field=fields[name]
- if field then event[field]=true end
+ if field then
+  event[field]=true
+  if type(remaining)=="number" and remaining==remaining and remaining>=0 and remaining<=120 then
+   event.override={name=name,remaining=remaining}
+  end
+ end
  return event
+end
+-- Informational display only; rolling still uses authoritative event flags.
+function LiveEvents.frenzyClock(event)
+ local active=event.frenzy==true
+ local override=event.override
+ local remaining
+ if active then
+  remaining=event.frenzyOffset<300 and (300-event.frenzyOffset) or 0
+  if override and override.name=="Frenzy" then remaining=math.max(remaining,override.remaining) end
+ else remaining=1800-event.frenzyOffset end
+ remaining=math.max(0,math.ceil(remaining))
+ local time=string.format("%02d:%02d",math.floor(remaining/60),remaining%60)
+ return {text=(active and "2x NON-COMMON WEIGHT\nACTIVE: " or "2x NON-COMMON WEIGHT\nIN: ")..time,
+  active=active,progress=active and 1 or math.clamp(event.frenzyOffset/1800,0,1)}
 end
 function LiveEvents.text(event)
  local names={}

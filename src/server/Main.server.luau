@@ -85,7 +85,7 @@ end
 local function currentEvent()
  local event=LiveEvents.at(os.time())
  if adminEvent and os.clock()>=adminEvent.expires then adminEvent=nil end
- if adminEvent then LiveEvents.applyOverride(event,adminEvent.name) end
+ if adminEvent then LiveEvents.applyOverride(event,adminEvent.name,math.max(0,math.ceil(adminEvent.expires-os.clock()))) end
  return event
 end
 local function activeEvents()
@@ -322,6 +322,8 @@ local function makePlot(i)
   end)
  end
  Visuals.decoratePlot(plot,folder,center)
+ Visuals.createFrenzyClock(plot)
+ Visuals.updateFrenzyClock(plot,LiveEvents.frenzyClock(currentEvent()))
  return plot
 end
 for i=1,6 do plots[i]=makePlot(i) end
@@ -983,6 +985,8 @@ task.spawn(function()
   task.wait(1)
   if joinGate.closed then break end
   local incomeEvent=currentEvent()
+  local clock=LiveEvents.frenzyClock(incomeEvent)
+  for _,plot in ipairs(plots) do Visuals.updateFrenzyClock(plot,clock) end
   for player,s in pairs(states) do
    if not DataService.isHealthy(player.UserId) then player:Kick("Data connection lost; please rejoin.")
    else

@@ -65,6 +65,29 @@ function Visuals.decoratePlot(plot,folder,center)
   table.insert(plot.boundaries,block(folder,"Boundary",Vector3.new(0.35,0.35,width),center+Vector3.new(x,0.8,0),neon,Enum.Material.Neon))
  end
 end
+-- Small replicated event clock above every station. Updates only on value changes.
+function Visuals.createFrenzyClock(plot)
+ local gui=Instance.new("BillboardGui"); gui.Name="FrenzyClock"; gui.Size=UDim2.fromOffset(210,54)
+ gui.StudsOffset=Vector3.new(0,10,0); gui.AlwaysOnTop=true; gui.MaxDistance=110; gui.Adornee=plot.lever; gui.Parent=plot.lever
+ local background=Instance.new("Frame"); background.Name="Background"; background.Size=UDim2.fromScale(1,1)
+ background.BackgroundColor3=Color3.fromRGB(25,40,35); background.BackgroundTransparency=0.15; background.BorderSizePixel=0; background.Parent=gui
+ local text=Instance.new("TextLabel"); text.Name="Status"; text.Size=UDim2.new(1,0,0.7,0); text.BackgroundTransparency=1
+ text.TextColor3=Color3.fromRGB(240,255,235); text.TextStrokeTransparency=0; text.Font=Enum.Font.GothamBold; text.TextScaled=true; text.Parent=background
+ local bar=Instance.new("Frame"); bar.Name="ProgressTrack"; bar.Size=UDim2.new(0.92,0,0.18,0); bar.Position=UDim2.new(0.04,0,0.76,0)
+ bar.BackgroundColor3=Color3.fromRGB(40,70,50); bar.BorderSizePixel=0; bar.Parent=background
+ local fill=Instance.new("Frame"); fill.Name="ProgressFill"; fill.Size=UDim2.fromScale(0,1); fill.BackgroundColor3=Color3.fromRGB(65,225,95); fill.BorderSizePixel=0; fill.Parent=bar
+ plot.frenzyClock={text=text,fill=fill}
+end
+function Visuals.updateFrenzyClock(plot,status)
+ local clock=plot.frenzyClock
+ if not clock then return end
+ if clock.lastText~=status.text then clock.text.Text=status.text; clock.lastText=status.text end
+ if clock.lastProgress~=status.progress then clock.fill.Size=UDim2.fromScale(status.progress,1); clock.lastProgress=status.progress end
+ if clock.lastActive~=status.active then
+  clock.fill.BackgroundColor3=status.active and Color3.fromRGB(240,220,75) or Color3.fromRGB(65,225,95)
+  clock.lastActive=status.active
+ end
+end
 function Visuals.applyTheme(plot,theme)
  plot.floor.Color=theme.floor
  plot.floor.Material=Enum.Material[theme.material]
