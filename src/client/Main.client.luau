@@ -174,7 +174,12 @@ local function questRewardTools(extras)
 end
 local function giftText(gift)
  local left=math.max(0,gift.seconds-(state.giftElapsed or 0))
- local status=(state.giftClaims and state.giftClaims[gift.id]) and "CLAIMED" or (left==0 and "CLAIM" or (math.floor(left/60).."m "..(left%60).."s"))
+ local extras=state.extras or {}; local savedDay=extras.sessionGiftDay or -1; local day=state.serverDay or 0
+ local status
+ if state.giftClaims and state.giftClaims[gift.id] then status="CLAIMED THIS SESSION"
+ elseif savedDay>day then status="UNAVAILABLE — SERVER CLOCK"
+ elseif savedDay==day and extras.sessionGiftClaims and extras.sessionGiftClaims[gift.id] then status="CLAIMED TODAY (UTC)"
+ else status=left==0 and "CLAIM" or (math.floor(left/60).."m "..(left%60).."s") end
  return gift.label.." — "..status
 end
 local function updateIncomeLabels()
@@ -869,7 +874,7 @@ render=function()
   row("LIVE EVENT SCHEDULE",function() eventSchedule=nil; mode="events"; list.CanvasPosition=Vector2.zero; remote:FireServer("requestEvents"); render() end,Color3.fromRGB(60,120,180))
   row("OPEN FREE SEASON TRACK",function() seasonPage=1; mode="season"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(120,75,180))
   row("SUMMIT PARKOUR CHALLENGE",function() mode="obby"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,145,150))
-  row("SESSION GIFTS — timers reset when you leave",nil,Color3.fromRGB(70,75,105))
+  row("SESSION GIFTS — timers reset when you leave. Each gift can be claimed once per UTC day across servers after a successful save, and once per session.",nil,Color3.fromRGB(70,75,105))
   for _,gift in ipairs(Config.SessionGifts) do
    local b=row(giftText(gift),function() remote:FireServer("claimGift",gift.id) end,Color3.fromRGB(155,105,45))
    giftButtons[gift.id]=b

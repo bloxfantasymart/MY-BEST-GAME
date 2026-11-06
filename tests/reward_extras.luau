@@ -32,3 +32,8 @@ local oldScrap={luckPotions=0,rollVouchers=1,goldenLever=false,sigmaStatue=false
 RewardExtras.normalize(oldScrap)
 assert(oldScrap.scrap==0 and oldScrap.rollVouchers==1)
 print("Legacy profiles initialize scrap without changing vouchers")
+
+local giftLegacy={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false}
+RewardExtras.normalize(giftLegacy)
+assert(giftLegacy.sessionGiftDay==-1 and next(giftLegacy.sessionGiftClaims)==nil)
+print("Legacy session gift limit initializes without granting or changing rewards")

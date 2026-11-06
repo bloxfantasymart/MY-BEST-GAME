@@ -646,6 +646,8 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="claimGift" then
   local gift,reason=SessionGifts.find(Config.SessionGifts,s.giftClaims,value,os.clock()-s.sessionStarted)
   if not gift then send(player,reason); return end
+  local dayPlan,dayReason=SessionGifts.dailyPlan(s.extras,gift.id,os.time())
+  if not dayPlan then send(player,dayReason); return end
   if gift.kind=="cash" then s.cash+=gift.value
   elseif gift.kind=="luck" then s.luckUntil=math.max(s.luckUntil,os.time())+gift.duration
   elseif gift.kind=="vouchers" then
@@ -655,7 +657,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
    if s.rareBlueprints>=Blueprints.MaxOwned then send(player,"Use a blueprint before claiming another."); return end
    s.rareBlueprints+=1
   elseif gift.kind=="crown" then
-   if s.extras.ohioCrown then s.cash+=100000 else s.extras.ohioCrown=true; Titles.apply(player.Character,s.rebirth,s.extras) end
+   if s.extras.ohioCrown then s.cash+=100000 else s.extras.ohioCrown=true end
   elseif gift.kind=="part" or gift.kind=="partPlus" then
    if #s.parts>=partCapacity(s) then send(player,"Free inventory space before claiming this gift."); return end
    local rarity=gift.kind=="part" and gift.rarity or chooseGiftRarity(gift.minRarity)
@@ -663,7 +665,11 @@ remote.OnServerEvent:Connect(function(player, action, value)
    if not rarity or not ok or not item then send(player,"This gift is unavailable. Please try again later."); return end
    table.insert(s.parts,item)
   else send(player,"This gift is not implemented."); return end
-  s.giftClaims[gift.id]=true
+  SessionGifts.commitDaily(s.extras,dayPlan); s.giftClaims[gift.id]=true
+  if gift.kind=="crown" then
+   local ok,err=pcall(Titles.apply,player.Character,s.rebirth,s.extras)
+   if not ok then warn("Could not display crown for "..player.UserId..": "..tostring(err)) end
+  end
   send(player,"Session gift claimed: "..gift.label..(gift.kind=="crown" and " (or $100,000 if already owned)" or "").."!")
  elseif action=="dailyReward" then
   local epoch=os.time(); local day=Progression.nextDaily(s.progress,epoch)

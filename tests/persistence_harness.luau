@@ -456,3 +456,21 @@ print("Daily treasure counters round-trip and malformed data rejection passed")
 
 database.player_93011.extras.treasureDay=-1; database.player_93011.extras.treasureClaims=1
 assert(dailyTreasure.load(93011)==nil, "Uninitialized day cannot have claims")
+
+local giftPersistence=makeService()
+local giftProfile=giftPersistence.load(93012); assert(giftProfile)
+giftProfile.extras={luckPotions=0,rollVouchers=5,goldenLever=false,sigmaStatue=false,ohioCrown=false,sessionGiftDay=20000,sessionGiftClaims={cash1=true,vouchers3=true}}
+assert(giftPersistence.save(93012,giftProfile,true))
+local reloadedGift=giftPersistence.load(93012)
+assert(reloadedGift and reloadedGift.extras.sessionGiftDay==20000 and reloadedGift.extras.sessionGiftClaims.vouchers3 and giftPersistence.save(93012,reloadedGift,true))
+for _,bad in ipairs({false,1,"true"}) do
+ database.player_93012.extras.sessionGiftClaims.cash1=bad
+ assert(giftPersistence.load(93012)==nil and database.player_93012.extras.sessionGiftClaims.cash1==bad)
+end
+database.player_93012.extras.sessionGiftClaims.cash1=true
+database.player_93012.extras.sessionGiftClaims.forged=true
+assert(giftPersistence.load(93012)==nil)
+database.player_93012.extras.sessionGiftClaims.forged=nil
+database.player_93012.extras.sessionGiftDay=nil
+assert(giftPersistence.load(93012)==nil, "Partially missing daily gift state must fail closed")
+print("Saved gift limit round-trip and malformed-data rejection passed")

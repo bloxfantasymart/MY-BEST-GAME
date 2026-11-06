@@ -2,6 +2,7 @@
 -- A lease prevents two servers from actively modifying the same profile.
 -- Studio defaults to an in-memory profile; turn on TestPersistence explicitly to test DataStores.
 local Loadouts=require(script.Parent.Loadouts)
+local SessionGifts=require(script.Parent.SessionGifts)
 local DataStoreService = game:GetService("DataStoreService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -71,6 +72,7 @@ local function validProfile(data)
    or ((e.treasureDay==nil)~=(e.treasureClaims==nil))
    or (e.treasureDay~=nil and (not finite(e.treasureDay,-1,1e9) or e.treasureDay%1~=0
     or not finite(e.treasureClaims,0,10) or e.treasureClaims%1~=0 or (e.treasureDay==-1 and e.treasureClaims~=0)))
+   or not SessionGifts.validDaily(e.sessionGiftDay,e.sessionGiftClaims)
    or type(e.goldenLever)~="boolean" or type(e.sigmaStatue)~="boolean" or type(e.ohioCrown)~="boolean" then return false end
  end
  if data.tripleLuckUntil~=nil and (not finite(data.tripleLuckUntil,0,1e12) or data.tripleLuckUntil%1~=0) then return false end
