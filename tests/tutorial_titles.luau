@@ -37,7 +37,9 @@ protection.step=6; Tutorial.reconcile(protection,{},{{stand=2}},0); assert(prote
 protection.step=7; Tutorial.reconcile(protection,{}, {},0); assert(protection.step==7, "Completion never resets")
 local text={"Roll","Buy","Collect","Craft","Place","Collect"}
 local instruction,target,caption=Guide.describe(3,{{kind="Head"},{kind="Chest",locked=true},{kind="Arms"},{kind="Legs"}},{},12,text)
-assert(string.find(instruction,"Chest",1,true) and string.find(instruction,"Unprotect",1,true) and target=="Roll station" and caption=="ROLL STATION")
+assert(string.find(instruction,"Chest",1,true) and string.find(string.lower(instruction),"unprotect",1,true) and target=="BACKPACK" and caption=="OPEN BACKPACK")
+local _,mixedTarget=Guide.describe(3,{{kind="Head"},{kind="Chest",locked=true},{kind="Arms"}},{},12,text)
+assert(mixedTarget=="Roll station", "Missing unowned parts still need rolling")
 assert(select(2,Guide.describe(4,all,{},12,text))=="Assembly pod")
 local creatures={{stand=1},{stand=3},{stand=0}}
 assert(select(2,Guide.describe(5,{},creatures,3,text))=="Stand 2")
@@ -48,3 +50,11 @@ assert(select(2,Guide.describe(5,{}, {},12,text))=="Assembly pod")
 assert(select(2,Guide.describe(6,{},creatures,12,text))=="Cash ATM")
 assert(Guide.describe(7,{},creatures,12,text)==nil)
 print("Tutorial recovery, protected parts, and context-aware guidance tests passed")
+
+local plot={lever="lever",pod="pod",atm="atm",stands={"one","two","three"}}
+assert(Guide.destination("Roll station",plot,3)=="lever" and Guide.destination("Assembly pod",plot,3)=="pod")
+assert(Guide.destination("Cash ATM",plot,3)=="atm" and Guide.destination("Stand 2",plot,3)=="two")
+assert(not Guide.destination("Stand 3",plot,2) and not Guide.destination("Stand 0",plot,3))
+assert(not Guide.destination("Stand 999999999",plot,3) and not Guide.destination("BACKPACK",plot,3))
+assert(not Guide.destination("Stand -1",plot,3) and not Guide.destination({},plot,3))
+print("Server-owned tutorial travel destination selection passed")

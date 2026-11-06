@@ -61,6 +61,8 @@ local bannerLimit=Instance.new("UITextSizeConstraint"); bannerLimit.MinTextSize=
 local guidance=Instance.new("TextLabel"); guidance.Size=UDim2.new(1,-155,0,42); guidance.Position=UDim2.new(0.02,0,0,130)
 guidance.BackgroundColor3=Color3.fromRGB(105,75,30); guidance.TextColor3=Color3.new(1,1,1); guidance.TextWrapped=true
 guidance.Font=Enum.Font.GothamBold; guidance.TextSize=14; guidance.TextScaled=true; guidance.Visible=false; guidance.Parent=root; local guideLimit=Instance.new("UITextSizeConstraint"); guideLimit.MinTextSize=10; guideLimit.MaxTextSize=14; guideLimit.Parent=guidance; round(guidance)
+local guideGo=button(root,"GO TO GOAL",UDim2.fromOffset(100,42),UDim2.new(),Color3.fromRGB(60,145,150)); guideGo.Visible=false
+local guideAction=nil
 local guideHighlight=Instance.new("Highlight"); guideHighlight.Name="TutorialTarget"; guideHighlight.FillColor=Color3.fromRGB(255,220,60)
 guideHighlight.OutlineColor=Color3.new(1,1,1); guideHighlight.FillTransparency=0.65; guideHighlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; guideHighlight.Enabled=false; guideHighlight.Parent=workspace
 local guideMarker=Instance.new("BillboardGui"); guideMarker.Name="TutorialMarker"; guideMarker.Size=UDim2.fromOffset(160,58)
@@ -89,8 +91,11 @@ local function applyLayout()
  local noticeY=metrics.margin+metrics.hudHeight+metrics.gap
  notice.Size=UDim2.fromOffset(metrics.contentWidth,metrics.lineHeight); notice.Position=UDim2.fromOffset(metrics.margin,noticeY)
  eventLabel.Size=UDim2.fromOffset(metrics.contentWidth,metrics.lineHeight); eventLabel.Position=UDim2.fromOffset(metrics.margin,noticeY+metrics.lineHeight+metrics.gap)
- guidance.Size=UDim2.fromOffset(metrics.contentWidth,math.min(42,math.max(1,size.Y-noticeY-2*metrics.lineHeight-2*metrics.gap)))
- guidance.Position=UDim2.fromOffset(metrics.margin,noticeY+2*metrics.lineHeight+2*metrics.gap)
+ local guideHeight=math.min(42,math.max(1,size.Y-noticeY-2*metrics.lineHeight-2*metrics.gap))
+ local guideMetrics=UILayout.guide(metrics.contentWidth,metrics.gap)
+ local guideY=noticeY+2*metrics.lineHeight+2*metrics.gap
+ guidance.Size=UDim2.fromOffset(guideMetrics.textWidth,guideHeight); guidance.Position=UDim2.fromOffset(metrics.margin,guideY)
+ guideGo.Size=UDim2.fromOffset(guideMetrics.buttonWidth,guideHeight); guideGo.Position=UDim2.fromOffset(metrics.margin+guideMetrics.textWidth+guideMetrics.gap,guideY)
  panel.ZIndex=5; panel.AnchorPoint=Vector2.new(0.5,0.5); panel.Position=UDim2.fromScale(0.5,0.5); panel.Size=UDim2.fromOffset(metrics.panelWidth,metrics.panelHeight)
  if panel.Visible and requestRender then task.defer(function() if panel.Visible then requestRender() end end) end
 end
@@ -933,7 +938,8 @@ render=function()
   row("REFRESH CHALLENGE STATUS",function() remote:FireServer("sync"); notice.Text="Requesting current status..." end,Color3.fromRGB(60,120,180))
   row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="travel" then
-  title.Text="TRAVEL AROUND YOUR PLOT"
+  title.Text="TRAVEL — PLOT AND WORLD"
+  row("CURRENT TUTORIAL GOAL",function() remote:FireServer("teleport","goal"); panel.Visible=false end)
   row("ROLL STATION",function() remote:FireServer("teleport","lever"); panel.Visible=false end)
   row("ASSEMBLY POD",function() remote:FireServer("teleport","pod"); panel.Visible=false end)
   row("CASH ATM",function() remote:FireServer("teleport","atm"); panel.Visible=false end)
@@ -1241,11 +1247,23 @@ rewards.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="rew
 slots.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="upgrades"; panel.Visible=true; render() end)
 travel.Activated:Connect(function() list.CanvasPosition=Vector2.zero; mode="travel"; panel.Visible=true; render() end)
 rebirth.Activated:Connect(function() list.CanvasPosition=Vector2.zero; rebirthSelected=nil; rebirthQuote=nil; mode="rebirth"; panel.Visible=true; render() end)
-bag.Activated:Connect(function() list.CanvasPosition=Vector2.zero; clearSingleSale(); selectedSell=nil; clearBulk(); bulkStandardOnly=true; bagBatch=nil; mode="bag"; panel.Visible=true; render() end)
+local function openBackpack()
+ list.CanvasPosition=Vector2.zero; clearSingleSale(); selectedSell=nil; clearBulk(); bulkStandardOnly=true; bagBatch=nil; mode="bag"; panel.Visible=true; render()
+end
+bag.Activated:Connect(openBackpack)
+guideGo.Activated:Connect(function()
+ if guideAction=="bag" then
+  bagTab="Body Parts"; bagQuery=""; bagDraft=""; bagProtection="Protected"; bagRarity=0; bagMutation=0; bagPlacement="All"; bagPage=1
+  openBackpack()
+ elseif guideAction=="goal" then remote:FireServer("teleport","goal") end
+end)
 updateTutorial=function()
  local step=state.tutorial and state.tutorial.step or 7
  local instruction,targetName,caption=TutorialGuide.describe(step,state.parts,state.creatures,state.standsUnlocked or 12,Config.TutorialText)
  guidance.Visible=instruction~=nil
+ guideAction=targetName=="BACKPACK" and "bag" or (targetName and "goal" or nil)
+ guideGo.Visible=instruction~=nil and guideAction~=nil
+ guideGo.Text=guideAction=="bag" and "OPEN BAG" or "GO TO GOAL"
  if instruction then guidance.Text="GOAL "..step.."/6: "..instruction.."  (+$1,000 on completion)" end
  local world=workspace:FindFirstChild("GeneratedWorld")
  local plot=world and world:FindFirstChild("Plot"..tostring(state.plotIndex))

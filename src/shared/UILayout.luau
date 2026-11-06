@@ -18,6 +18,13 @@ function UILayout.main(width,height)
  return {margin=margin,gap=gap,navWidth=navWidth,navHeight=navHeight,navX=w-margin-navWidth,
   contentWidth=contentWidth,hudHeight=hudHeight,lineHeight=lineHeight,panelWidth=panelWidth,panelHeight=panelHeight}
 end
+function UILayout.guide(contentWidth,requestedGap)
+ local width=math.max(1,math.floor(contentWidth))
+ if width<2 then return {textWidth=width,buttonWidth=0,gap=0} end
+ local buttonWidth=math.max(1,math.min(100,math.floor(width*0.32)))
+ local gap=math.max(0,math.min(math.floor(requestedGap),width-buttonWidth-1))
+ return {textWidth=width-buttonWidth-gap,buttonWidth=buttonWidth,gap=gap}
+end
 function UILayout.hub(width,height)
  local w,h=dimensions(width,height)
  local margin=math.min(8,math.floor(w/20),math.floor(h/20))

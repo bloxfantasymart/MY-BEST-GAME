@@ -51,6 +51,7 @@ local SeasonRewards = require(ReplicatedStorage.Shared:WaitForChild("SeasonRewar
 local StandLayout = require(ReplicatedStorage.Shared:WaitForChild("StandLayout"))
 local CollectionIndex = require(ReplicatedStorage.Shared:WaitForChild("CollectionIndex"))
 local WorldPlan = require(ReplicatedStorage.Shared:WaitForChild("WorldPlan"))
+local TutorialGuide = require(ReplicatedStorage.Shared:WaitForChild("TutorialGuide"))
 local OfferSafety = require(ReplicatedStorage.Shared:WaitForChild("OfferSafety"))
 local collectionNames=CollectionIndex.catalogNames(Config.Catalog)
 local remote = Instance.new("RemoteEvent")
@@ -703,9 +704,21 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="teleport" then
   local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal,forge=forge,obby=obbyStart,valley=valleyTrail}
   local destination=type(value)=="string" and destinations[value] or nil
-  if destination and now-(s.lastTeleport or -10)>=3 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-   s.lastTeleport=now; s.obbyRun=nil; player.Character:PivotTo(CFrame.new(destination.Position+Vector3.new(0,4,8))); send(player,"Teleported to "..destination.Name..".")
+  local offset=Vector3.new(0,4,8)
+  if value=="goal" then
+   Tutorial.reconcile(s.tutorial,s.parts,s.creatures,s.pending)
+   local _,target=TutorialGuide.describe(s.tutorial.step,s.parts,s.creatures,s.standsUnlocked,Config.TutorialText)
+   destination=TutorialGuide.destination(target,s.plot,s.standsUnlocked)
+   if target and target:match("^Stand %d+$") then offset=Vector3.new(0,4,0) end
+   if target=="BACKPACK" then send(player,"Open BACKPACK and unprotect the required parts."); return end
   end
+  if not destination then send(player,"No travel destination available for that request."); return end
+  if now-(s.lastTeleport or -10)<3 then send(player,"Please wait before traveling again."); return end
+  local character=player.Character
+  local root=character and character:FindFirstChild("HumanoidRootPart")
+  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+  if not root or not humanoid or humanoid.Health<=0 then send(player,"Travel is unavailable until you respawn."); return end
+  s.lastTeleport=now; s.obbyRun=nil; character:PivotTo(CFrame.new(destination.Position+offset)); send(player,"Teleported to "..destination.Name..".")
  elseif action=="skip" and nearby(player,s.plot.lever) then
   if s.autoRolling then send(player,"Stop auto-roll before skipping manually."); return end
   local i=findById(s.rolls,value)

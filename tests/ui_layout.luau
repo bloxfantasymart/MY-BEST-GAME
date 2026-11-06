@@ -20,3 +20,10 @@ assert(MotionPolicy.active(nil,false,100))
 assert(MotionPolicy.active(100,false,100) and not MotionPolicy.active(100.1,false,100))
 assert(not MotionPolicy.active(0,true,100) and not MotionPolicy.active(nil,true,100))
 print("Responsive safe-area layout and motion policy tests passed")
+for width=1,2000 do
+ local guide=UILayout.guide(width,4)
+ assert(guide.textWidth>=1 and guide.buttonWidth>=0 and guide.gap>=0)
+ assert(guide.textWidth+guide.buttonWidth+guide.gap==width)
+ if width>=2 then assert(guide.buttonWidth>=1 and guide.buttonWidth<=100) end
+end
+print("Tutorial goal control fits the content width")
