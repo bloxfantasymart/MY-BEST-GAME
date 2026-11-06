@@ -19,6 +19,7 @@ local SeasonRewards=require(ReplicatedStorage.Shared:WaitForChild("SeasonRewards
 local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local EventPresentation=require(ReplicatedStorage.Shared:WaitForChild("EventPresentation"))
 local OddsMath=require(ReplicatedStorage.Shared:WaitForChild("OddsMath"))
+local SyncPolicy=require(ReplicatedStorage.Shared:WaitForChild("SyncPolicy"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
 local sounds={}
@@ -104,6 +105,14 @@ root:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyLayout)
 applyLayout()
 local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={step=1},theme="Classic",passes={},partCapacity=100,backpackUpgrades=0,rareBlueprints=0,autoRolling=false,manualProtectMutations=true,autoCollect=false,income={placed=0,normal=0,online=0,offline=0},autoRun=nil,rebirth=0,isAdmin=false,rebirthCost=1000,target="Dirt Boy",parts={},creatures={},rolls={},progress={dailyLastDay=-1,dailyStreak=0,questDay=-1,rolls=0,rareCrafts=0,collected=0,claimed={}},quests={},season={xp=0,claimed=0,rollProgress=0},extras={luckPotions=0,rollVouchers=0,goldenLever=false,sigmaStatue=false,ohioCrown=false},serverDay=0,giftClaims={},giftElapsed=0,luckRemaining=0,rollRemaining=0}
 local loaded=false; local offlineShown=false
+local syncPolicy=SyncPolicy.new()
+local function updateHud()
+ hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0)..(SyncPolicy.behind(syncPolicy) and "  |  SYNCING" or "")
+end
+local function requestAutomaticSync()
+ local now=os.clock()
+ if SyncPolicy.due(syncPolicy,now) then SyncPolicy.sent(syncPolicy,now); remote:FireServer("sync") end
+end
 local mode=""; local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
 local singleSaleQuote=nil; local singleSaleWaiting=nil; local singleSaleSequence=0
@@ -233,7 +242,7 @@ local function refreshTimedLabels()
  if panel.Visible and mode=="roll" then title.Text="ROLL STATION | offers expire in "..(state.rollRemaining or 0).."s" end
 end
 render=function()
- hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0)
+ updateHud()
  if not panel.Visible then return end
  local previousScroll=list.CanvasPosition
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
@@ -1326,7 +1335,7 @@ requestRender=function()
  local focused=UserInputService:GetFocusedTextBox()
  if panel.Visible and focused and focused:IsDescendantOf(list) then
   pendingRender=true
-  hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0)
+  updateHud()
   return
  end
  pendingRender=false; render()
@@ -1477,9 +1486,14 @@ remote.OnClientEvent:Connect(function(data)
  end
  if data.announcement then if not localSettings.hideAnnouncements then notice.Text=data.announcement; playEffect("rare") end; return end
  if data.effectOnly then playEffect(data.effectOnly); return end
- if data.effect then playEffect(data.effect) end
- if data.tick then updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.blessingRemaining=data.blessingRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0); return end
+ if data.tick then
+  local tickStatus=SyncPolicy.tick(syncPolicy,data.revision)
+  if tickStatus=="stale" then return end
+  if tickStatus=="gap" then requestAutomaticSync() end
+  updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.blessingRemaining=data.blessingRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; updateHud(); return end
  if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; clearCraftReview(); craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; clearForgeReview(); forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false; multiRollConfirm=false; clearPurchaseReview() end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
+ if not SyncPolicy.full(syncPolicy,data.revision,os.clock()) then return end
+ if data.effect then playEffect(data.effect) end
  state=data; if state.manualProtectMutations==false then manualProtectionConfirm=false end; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  if data.offlineReport and not offlineShown then
@@ -1491,10 +1505,10 @@ remote.OnClientEvent:Connect(function(data)
 end)
 
 task.spawn(function()
- -- The reliable RemoteEvent snapshot is server-authoritative. Retry initial
- -- load, then periodically reconcile missed/stale UI state without mutations.
+ -- Retry initial loading, detected revision gaps and periodic reconciliation.
+ -- A sync request never mutates inventory; server ownership remains authoritative.
  while true do
-  remote:FireServer("sync")
-  task.wait(loaded and 30 or 2)
+  requestAutomaticSync()
+  task.wait(2)
  end
 end)
