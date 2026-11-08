@@ -1046,6 +1046,7 @@ render=function()
   row("FUSION FORGE",function() remote:FireServer("teleport","forge"); panel.Visible=false end)
   row("SUMMIT COURSE START",function() remote:FireServer("teleport","obby"); panel.Visible=false end)
   row("OUTER VALLEY TRAIL",function() remote:FireServer("teleport","valley"); panel.Visible=false end)
+  row("RIVER BRIDGE TRAIL",function() remote:FireServer("teleport","river"); panel.Visible=false end)
   row("TRADING HUB PORTAL",function() remote:FireServer("teleport","portal"); panel.Visible=false end)
  elseif mode=="refinery" then
   title.Text="SCRAP REFINERY — ASSEMBLY POD"

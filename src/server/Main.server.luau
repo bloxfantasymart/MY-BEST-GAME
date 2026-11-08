@@ -157,6 +157,8 @@ local forge=part(world,"Fusion forge",Vector3.new(7,4,7),Vector3.new(0,2.5,20),C
 label(forge,"FUSION FORGE\nREBIRTH 15+",5)
 local valleyTrail=part(world,"Outer valley trail",Vector3.new(8,1,8),Vector3.new(580,0.5,40),Color3.fromRGB(105,200,145),Enum.Material.Grass)
 label(valleyTrail,"OUTER VALLEY",4)
+local riverTrail=part(world,"River bridge trail",Vector3.new(8,1,8),Vector3.new(WorldPlan.RiverTrail.x,0.5,WorldPlan.RiverTrail.z),Color3.fromRGB(105,200,145),Enum.Material.Grass)
+label(riverTrail,"RIVER CROSSING",4)
 local cashBoard=part(world,"Server cash leaderboard",Vector3.new(13,9,1),Vector3.new(-22,5,10),Color3.fromRGB(25,35,75))
 local rebirthBoard=part(world,"Server rebirth leaderboard",Vector3.new(13,9,1),Vector3.new(22,5,10),Color3.fromRGB(70,30,105))
 local cashCaption=label(cashBoard,"SERVER CASH",6); cashCaption.Parent.Size=UDim2.fromOffset(250,180)
@@ -749,7 +751,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local success,reason=Season.claimRepeat(s.season,s.extras,RewardExtras.MaxMultiRollTokens)
   send(player,success and "Repeatable roll objective: one multi-roll token!" or reason)
  elseif action=="teleport" then
-  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal,forge=forge,obby=obbyStart,valley=valleyTrail}
+  local destinations={lever=s.plot.lever,pod=s.plot.pod,atm=s.plot.atm,portal=hubPortal,forge=forge,obby=obbyStart,valley=valleyTrail,river=riverTrail}
   local destination=type(value)=="string" and destinations[value] or nil
   local offset=Vector3.new(0,4,8)
   if value=="goal" then
