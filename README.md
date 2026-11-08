@@ -107,3 +107,6 @@ Open **BACKPACK → HAND-PICKED PARTS SALE** to select individual loose body par
 
 ### Automatic state refresh
 The main-place client automatically retries its initial state, checks for missed full updates using server snapshot revisions, and periodically refreshes when no full update has arrived for 30 seconds. **SYNCING** in the cash bar means a newer server revision was observed and a refresh is pending. Requests are rate-limited; temporary lag can leave the display behind, and inventory actions are always checked by the server. This is not a substitute for successful saves or for Roblox network testing. Update and publish the matching main-place client and server together.
+
+### Showcase hub browsing
+In the separate showcase hub, booth owners can search, sort and filter their own creature list by rarity, protection, ascension and placement. Visitors see the displayed creature details, but not the owner's full inventory, creature IDs, protection status or stand assignment. The neon skyline and lounge are decorative, and the benches are not seats. This hub still does **not** support sales or trades. See [hub setup](docs/TRADING_HUB_SETUP.md) and test with two accounts in a private published experience.

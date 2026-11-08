@@ -9,6 +9,7 @@ local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Conf
 local DataService=require(script.Parent.Services.DataService)
 local Visuals=require(script.Parent.Services.Visuals)
 local BoothLogic=require(script.Parent.BoothLogic)
+local HubLandscape=require(script.Parent.HubLandscape)
 local ShowcaseView=require(script.Parent.Services.ShowcaseView)
 local Titles=require(script.Parent.Services.Titles)
 local ShutdownGate=require(script.Parent.Services.ShutdownGate)
@@ -35,6 +36,7 @@ local function nearby(player,part)
  return Proximity.isAliveNear(player.Character,part,20)
 end
 block(world,"Bazaar floor",Vector3.new(230,1,230),Vector3.new(0,-0.5,0),Color3.fromRGB(43,35,80))
+HubLandscape.build(world)
 local center=block(world,"Town square",Vector3.new(42,0.5,42),Vector3.new(0,0.3,0),Color3.fromRGB(100,70,170),Enum.Material.Neon)
 center.CanCollide=true
 local spawn=Instance.new("SpawnLocation"); spawn.Size=Vector3.new(10,1,10); spawn.Position=Vector3.new(0,1,0); spawn.Neutral=true; spawn.Parent=world
@@ -101,7 +103,7 @@ local function openBooth(player,booth,fromPrompt)
   for _,id in ipairs(booth.listings) do
    local c=findCreature(session.profile,id)
    if c then
-    table.insert(listings,ShowcaseView.describe(c,Config.Rarities,Config.Income,false))
+    table.insert(listings,ShowcaseView.describe(c,Config.Rarities,Config.Income,own))
    end
   end
  end

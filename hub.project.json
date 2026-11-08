@@ -17,6 +17,9 @@
         },
         "BoothLogic": {
           "$path": "src/hub/BoothLogic.luau"
+        },
+        "HubLandscape": {
+          "$path": "src/hub/HubLandscape.luau"
         }
       }
     },

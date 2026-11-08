@@ -37,6 +37,7 @@ local directoryButton=button(root,"BOOTH DIRECTORY",UDim2.fromOffset(110,40),Col
 local current=nil; local render; local showAccessibility; local showDirectory; local requestDirectory; local requestRender; local accessibilityOpen=false
 local directoryOpen=false; local directoryData=nil; local directoryWaiting=nil; local directorySequence=0
 local query=""; local draft=""; local sortMode="Newest"; local page=1; local hideDisplayed=false; local releaseConfirm=false; local pendingRender=false
+local rarityFilter=0; local protectionFilter="All"; local ascensionFilter="All"; local placementFilter="All"
 close.Activated:Connect(function() panel.Visible=false; current=nil; pendingRender=false; releaseConfirm=false; directoryOpen=false; directoryWaiting=nil end)
 local function applyLayout()
  local size=root.AbsoluteSize
@@ -87,7 +88,7 @@ render=function(data)
  row("DISPLAYED: "..#data.listings.." / 4",nil,Color3.fromRGB(65,65,95))
  for _,entry in ipairs(data.listings) do
   local rarity=Config.Rarities[entry.rarity]
-  local heading=(entry.ascended and "ASCENDED " or "")..(entry.blueprint and "[BLUEPRINT] " or "")..entry.name.." ["..rarity.name.."] — Level "..entry.level.." — $"..entry.income.."/s #"..string.sub(entry.id,-6)
+  local heading=(entry.ascended and "ASCENDED " or "")..(entry.blueprint and "[BLUEPRINT] " or "")..entry.name.." ["..rarity.name.."] — Level "..entry.level.." — $"..entry.income.."/s"..(data.own and (" #"..string.sub(entry.id,-6)) or "")
   row(heading,nil,Color3.fromRGB(85,65,125))
   for _,partDescription in ipairs(entry.parts) do row(partDescription,nil,Color3.fromRGB(65,65,95)) end
   if data.own then row("REMOVE "..entry.name.." #"..string.sub(entry.id,-6),function() remote:FireServer("remove",{booth=data.booth,id=entry.id}) end,Color3.fromRGB(185,60,85)) end
@@ -103,7 +104,12 @@ render=function(data)
    page=1; render(current)
   end,Color3.fromRGB(65,65,95))
   row("HIDE DISPLAYED: "..(hideDisplayed and "ON" or "OFF"),function() hideDisplayed=not hideDisplayed; page=1; render(current) end,Color3.fromRGB(65,65,95))
-  local entries=ShowcaseInventory.build(data.inventory,data.listings,query,sortMode,hideDisplayed)
+  row("RARITY: "..(rarityFilter==0 and "All" or Config.Rarities[rarityFilter].name),function() rarityFilter=(rarityFilter+1)%(#Config.Rarities+1); page=1; render(current) end,Color3.fromRGB(65,65,95))
+  row("PROTECTION: "..protectionFilter,function() protectionFilter=protectionFilter=="All" and "Protected" or (protectionFilter=="Protected" and "Unprotected" or "All"); page=1; render(current) end,Color3.fromRGB(65,65,95))
+  row("ASCENSION: "..ascensionFilter,function() ascensionFilter=ascensionFilter=="All" and "Ascended" or (ascensionFilter=="Ascended" and "Not ascended" or "All"); page=1; render(current) end,Color3.fromRGB(65,65,95))
+  row("PLACEMENT: "..placementFilter,function() placementFilter=placementFilter=="All" and "Placed" or (placementFilter=="Placed" and "Unplaced" or "All"); page=1; render(current) end,Color3.fromRGB(65,65,95))
+  row("CLEAR BROWSING FILTERS",function() query=""; draft=""; rarityFilter=0; protectionFilter="All"; ascensionFilter="All"; placementFilter="All"; hideDisplayed=false; page=1; render(current) end,Color3.fromRGB(60,120,180))
+  local entries=ShowcaseInventory.build(data.inventory,data.listings,query,sortMode,hideDisplayed,rarityFilter,protectionFilter,ascensionFilter,placementFilter)
   local shown,currentPage,pages=InventoryView.page(entries,page,12); page=currentPage
   row("PAGE "..currentPage.." / "..pages.." | "..#entries.." matching creatures",nil,Color3.fromRGB(65,65,95))
   if currentPage>1 then row("PREVIOUS PAGE",function() page-=1; render(current) end,Color3.fromRGB(60,120,180)) end
@@ -176,7 +182,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.close and current and not accessibilityOpen and current.booth==data.booth then panel.Visible=false; current=nil; pendingRender=false; releaseConfirm=false end
  if data.open then
   if data.fromPrompt then
-   if not current or current.booth~=data.booth or accessibilityOpen or not panel.Visible then query=""; draft=""; page=1; hideDisplayed=false; releaseConfirm=false; list.CanvasPosition=Vector2.zero end
+   if not current or current.booth~=data.booth or accessibilityOpen or not panel.Visible then query=""; draft=""; page=1; hideDisplayed=false; rarityFilter=0; protectionFilter="All"; ascensionFilter="All"; placementFilter="All"; releaseConfirm=false; list.CanvasPosition=Vector2.zero end
    pendingRender=false; render(data)
   elseif panel.Visible and not accessibilityOpen and current and current.booth==data.booth then
    releaseConfirm=false; current=data; requestRender()

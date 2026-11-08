@@ -8,9 +8,9 @@ function ShowcaseView.describe(creature,rarities,incomeFn,includePrivate)
   highest=math.max(highest,p.rarity)
   table.insert(parts,(p.mutation or "Standard").." "..p.name.." "..kind.." ["..rarities[p.rarity].name.."] x"..(p.mutationMultiplier or 1))
  end
- local result={id=creature.id,name=creature.name,level=creature.level,income=math.floor(incomeFn(creature)),rarity=highest,
+ local result={name=creature.name,level=creature.level,income=math.floor(incomeFn(creature)),rarity=highest,
   ascended=creature.ascended==true,blueprint=creature.blueprintApplied==true,parts=parts}
- if includePrivate then result.locked=creature.locked==true; result.stand=creature.stand end
+ if includePrivate then result.id=creature.id; result.locked=creature.locked==true; result.stand=creature.stand end
  return result
 end
 return ShowcaseView
