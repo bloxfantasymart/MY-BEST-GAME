@@ -79,3 +79,29 @@ for _,change in ipairs({"component","stand","rebirth","cost","ascended"}) do
  assert(not Reviews.confirmFusion(f,"token",11,Fusion,nowCost,id) and #f.creatures==3 and f.cash==1000,change)
 end
 print("Conversion reviews reject changed recipes, outputs, eligibility and costs")
+
+-- Assembly safety settings travel with the server quote and are checked again
+-- at confirmation, including when a protected spare was removed in between.
+s,selection=setup(); selection.keepLast=true; selection.standardOnly=true
+assert(not craftReview(s,selection),"A selected last loose copy must be rejected")
+for _,kind in ipairs(kinds) do local spare=part("spare"..kind,kind); spare.locked=true; table.insert(s.parts,spare) end
+q=craftReview(s,selection)
+assert(q and q.selection.keepLast==true and q.selection.standardOnly==true)
+table.remove(s.parts,5)
+assert(not Reviews.confirmCraft(s,"token",11,Crafting,rarities,id) and #s.parts==7 and #s.creatures==0 and s.rareBlueprints==1)
+assert(not Reviews.confirmCraft(s,"token",11,Crafting,rarities,id),"A failed quote cannot be replayed")
+local spare=part("replacementHead","Head"); spare.locked=true; table.insert(s.parts,spare)
+q=craftReview(s,selection); assert(q)
+local crafted=Reviews.confirmCraft(s,"token",11,Crafting,rarities,id)
+assert(crafted and #s.parts==4 and #s.creatures==1)
+for _,item in ipairs(s.parts) do assert(item.locked and item.id:match("^spare") or item.id=="replacementHead") end
+s,selection=setup(); selection.standardOnly=true; s.parts[1].mutation="Golden"; s.parts[1].mutationMultiplier=2.5
+assert(not craftReview(s,selection))
+s.parts[1].mutation="Standard"; s.parts[1].mutationMultiplier=2
+assert(not craftReview(s,selection),"Non-unit Standard multiplier must be excluded")
+s.parts[1].mutationMultiplier=1; q=craftReview(s,selection); assert(q and q.selection.standardOnly)
+s.parts[2].mutation="Shiny"; s.parts[2].mutationMultiplier=1.5
+assert(not Reviews.confirmCraft(s,"token",11,Crafting,rarities,id) and #s.parts==4 and #s.creatures==0)
+s,selection=setup(); selection.keepLast="true"; assert(not craftReview(s,selection))
+selection.keepLast=nil; selection.standardOnly=1; assert(not craftReview(s,selection))
+print("Assembly safety quote and commit enforce spare copies and Standard-only inputs")

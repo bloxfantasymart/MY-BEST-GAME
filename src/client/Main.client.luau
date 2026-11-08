@@ -137,6 +137,7 @@ local craftWaiting=nil; local forgeWaiting=nil; local conversionSequence=0
 local function clearCraftReview() craftConfirm=false; craftWaiting=nil end
 local function clearForgeReview() forgeConfirm=false; forgeWaiting=nil end
 local craftKind="Head"; local craftPage=1; local craftQuery=""; local craftDraft=""; local craftSort="Newest"
+local autoKeepLast=false; local autoStandardOnly=false
 local forgePage=1; local forgeQuery=""; local forgeDraft=""
 local standPage=1; local standQuery=""; local standDraft=""; local standSort="Income"; local standSelection=nil
 local layoutSlot=1; local layoutPage=1; local layoutStage=nil; local layoutQuote=nil; local layoutWaiting=nil; local layoutSequence=0
@@ -520,17 +521,35 @@ render=function()
   row("RARE BLUEPRINT: "..(useBlueprint and "ON" or "OFF").." | owned: "..(state.rareBlueprints or 0).." (requires 4 Rare+ parts, +25% base income)",function()
    useBlueprint=not useBlueprint; clearCraftReview(); chosen={}; render()
   end,Color3.fromRGB(125,75,175))
+  row("ASSEMBLY KEEP ONE LOOSE COPY PER NAME + TYPE: "..(autoKeepLast and "ON" or "OFF").." (tap to change)",function()
+   autoKeepLast=not autoKeepLast; clearCraftReview(); render()
+  end,Color3.fromRGB(70,75,105))
+  row("ASSEMBLY STANDARD PARTS ONLY: "..(autoStandardOnly and "ON" or "OFF").." (tap to change)",function()
+   autoStandardOnly=not autoStandardOnly; clearCraftReview(); render()
+  end,Color3.fromRGB(70,75,105))
   row("AUTO-FILL BEST eligible part of each type",function()
-   clearCraftReview(); chosen=AutoFill.best(state.parts,Config.Rarities,Config.Types,useBlueprint and 3 or 1) or {}
-   if not next(chosen) then notice.Text="You need one eligible part of each type to auto-fill." end
+   clearCraftReview(); chosen=AutoFill.best(state.parts,Config.Rarities,Config.Types,useBlueprint and 3 or 1,{keepLast=autoKeepLast,standardOnly=autoStandardOnly}) or {}
+   if not next(chosen) then notice.Text="No complete auto-fill under these settings. Check protection, blueprint and safety options." end
    render()
   end,Color3.fromRGB(60,120,180))
+  row("Safety options also apply to manual choices and are checked by the server before crafting. A protected loose copy counts as retained; creature components do not.",nil,Color3.fromRGB(70,75,105))
   local components={}
   for _,item in ipairs(state.parts) do
    if chosen[item.kind]==item.id and not item.locked then components[item.kind]=item end
   end
   local preview=CraftMath.evaluate(components,Config.Rarities,useBlueprint)
-  local ready=preview and #state.creatures<100 and (not useBlueprint or (state.rareBlueprints or 0)>0)
+  local risks=AutoFill.risks(state.parts,components,Config.Types)
+  if #risks.lastCopies>0 then
+   local names={}; for _,item in ipairs(risks.lastCopies) do table.insert(names,item.name.." "..item.kind) end
+   row("LAST LOOSE COPY: "..table.concat(names,", ")..". Crafting moves these parts into the creature; they will no longer be loose.",nil,Color3.fromRGB(150,85,45))
+  end
+  if #risks.mutations>0 then
+   local names={}; for _,item in ipairs(risks.mutations) do table.insert(names,(item.mutation or "Standard").." "..item.name.." "..item.kind) end
+   row("MUTATED INPUTS: "..table.concat(names,", ")..". These parts become creature components and cannot be recovered as loose parts.",nil,Color3.fromRGB(150,85,45))
+  end
+  local policyBlocked=(autoKeepLast and #risks.lastCopies>0) or (autoStandardOnly and #risks.mutations>0)
+  if policyBlocked then row("SAFETY OPTIONS BLOCK THIS RECIPE. Choose different parts or turn off the relevant option.",nil,Color3.fromRGB(150,65,65)) end
+  local ready=preview and not policyBlocked and #state.creatures<100 and (not useBlueprint or (state.rareBlueprints or 0)>0)
   if preview then
    row("PREVIEW: "..preview.name.." | "..Config.Rarities[preview.highest].name.." | $"..string.format("%.4g",preview.income).."/s at level 1",nil,Color3.fromRGB(60,120,180))
    row(preview.harmony and ("Matching "..preview.mutation.." mutations: 2x harmony bonus") or "Mixed mutations: no harmony bonus",nil,Color3.fromRGB(70,75,105))
@@ -543,6 +562,7 @@ render=function()
    row("SERVER ASSEMBLY REVIEW — expires in 60 seconds",nil,Color3.fromRGB(150,85,45))
    for _,item in ipairs(review.inputs) do row(item.kind..": "..(item.mutation or "Standard").." x"..(item.mutationMultiplier or 1).." "..item.name.." ["..Config.Rarities[item.rarity].name.."] | base "..string.format("%.4g",item.income).." | price $"..(item.price or 10).." #"..string.sub(item.id,-6),nil,Color3.fromRGB(70,75,105)) end
    row("OUTPUT: "..review.output.name.." | $"..string.format("%.4g",review.output.income).."/s | blueprint "..(review.selection.useBlueprint and "CONSUMED" or "not used"),nil,Color3.fromRGB(60,120,180))
+   row("SERVER SAFETY: keep one loose copy "..(review.selection.keepLast and "ON" or "OFF").." | Standard only "..(review.selection.standardOnly and "ON" or "OFF"),nil,Color3.fromRGB(70,75,105))
    row("CONFIRM: CONSUME FOUR REVIEWED PARTS",function()
     if craftConfirm~=review then return end
     clearCraftReview(); remote:FireServer("craftConfirm",review.token); chosen={}; notice.Text="Requesting reviewed assembly..."; render()
@@ -555,7 +575,7 @@ render=function()
    row("REQUEST SERVER ASSEMBLY REVIEW",function()
     if not ready then notice.Text="Select four eligible parts and check inventory and blueprint availability."; return end
     conversionSequence=conversionSequence%2147483647+1; craftWaiting=conversionSequence
-    local selection={useBlueprint=useBlueprint}; for _,kind in ipairs(Config.Types) do selection[kind]=chosen[kind] end
+    local selection={useBlueprint=useBlueprint,keepLast=autoKeepLast,standardOnly=autoStandardOnly}; for _,kind in ipairs(Config.Types) do selection[kind]=chosen[kind] end
     remote:FireServer("craftReview",{requestId=craftWaiting,selection=selection}); render()
    end,Color3.fromRGB(52,170,105))
   end

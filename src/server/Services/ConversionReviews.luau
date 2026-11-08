@@ -36,7 +36,7 @@ function Reviews.craft(state,selection,now,token,Crafting,rarities)
  if not validToken(token) then return nil,"Could not create a review." end
  local plan,reason=Crafting.plan(state.parts,state.creatures,state.rareBlueprints,selection,rarities)
  if not plan then return nil,reason end
- local selected={useBlueprint=selection.useBlueprint==true}
+ local selected={useBlueprint=selection.useBlueprint==true,keepLast=selection.keepLast==true,standardOnly=selection.standardOnly==true}
  for _,kind in ipairs(kinds) do selected[kind]=selection[kind] end
  return {token=token,expires=now+Reviews.Lifetime,selection=selected,inputs=craftSnapshot(plan),output=fields(plan.preview,{"name","income","highest","harmony","mutation","useBlueprint"})}
 end

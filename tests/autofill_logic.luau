@@ -53,3 +53,62 @@ for i,kind in ipairs(kinds) do assert(rareSelection[kind]=="rare"..i) end
 rareParts[2].locked=true
 assert(AutoFill.best(rareParts,rarities,kinds,3)==nil)
 print("Blueprint auto-fill rarity restriction tests passed")
+
+-- A protected duplicate still remains loose; a creature component is never in
+-- this list. Mutation labels and non-unit multipliers both count as mutations.
+local safeParts={}
+for i,kind in ipairs(kinds) do
+ table.insert(safeParts,{id="candidate"..i,name="A",kind=kind,rarity=1,income=10,mutation="Standard",mutationMultiplier=1})
+ table.insert(safeParts,{id="kept"..i,name="A",kind=kind,rarity=1,income=100,mutation="Standard",mutationMultiplier=1,locked=true})
+ table.insert(safeParts,{id="unique"..i,name="B",kind=kind,rarity=4,income=1000,mutation="Golden",mutationMultiplier=2.5})
+end
+local safe=AutoFill.best(safeParts,rarities,kinds,1,{keepLast=true,standardOnly=true})
+for i,kind in ipairs(kinds) do assert(safe[kind]=="candidate"..i,"Must preserve one loose copy and exclude mutations") end
+local components={}; for i,kind in ipairs(kinds) do components[kind]=safeParts[3*i] end
+local risk=AutoFill.risks(safeParts,components,kinds)
+assert(#risk.lastCopies==4 and #risk.mutations==4)
+components.Head=safeParts[1]; risk=AutoFill.risks(safeParts,components,kinds)
+assert(#risk.lastCopies==3 and #risk.mutations==3)
+safeParts[1].mutationMultiplier=2; risk=AutoFill.risks(safeParts,{Head=safeParts[1]},kinds)
+assert(#risk.lastCopies==0 and #risk.mutations==1,"A non-unit Standard multiplier is still highlighted")
+local counts=AutoFill.looseCounts(safeParts); assert(counts.Head.A==2 and counts.Head.B==1 and counts.Chest.A==2)
+local missing={}
+for i,kind in ipairs(kinds) do missing[i]={id=tostring(i),name="Only",kind=kind,rarity=1,income=2,mutation="Standard"} end
+assert(AutoFill.best(missing,rarities,kinds,1,{keepLast=true})==nil)
+assert(AutoFill.best(missing,rarities,kinds,1,{keepLast=false}))
+
+-- Compare each safety-policy combination against exhaustive search. This also
+-- exercises duplicate groups, protected keepers, rare blueprints and harmony.
+math.randomseed(3851)
+for trial=1,100 do
+ local all,bins={},{{},{},{},{}}
+ for k,kind in ipairs(kinds) do
+  for i=1,4 do
+   local mutation=mutations[math.random(1,4)]
+   local item={id=k..":"..i,name=math.random(1,2)==1 and "A" or "B",kind=kind,rarity=math.random(1,4),income=math.random(1,200),mutation=mutation[1],mutationMultiplier=mutation[2],locked=math.random(1,6)==1}
+   table.insert(all,item); table.insert(bins[k],item)
+  end
+ end
+ local totals=AutoFill.looseCounts(all)
+ for _,keepLast in ipairs({false,true}) do for _,standardOnly in ipairs({false,true}) do
+  for _,minimum in ipairs({1,3}) do
+   local best=-1
+   for _,a in ipairs(bins[1]) do for _,b in ipairs(bins[2]) do for _,c in ipairs(bins[3]) do for _,d in ipairs(bins[4]) do
+    local choices={a,b,c,d}; local eligible=true
+    for _,item in ipairs(choices) do
+     if item.locked or item.rarity<minimum or (keepLast and totals[item.kind][item.name]<2)
+      or (standardOnly and (item.mutation~="Standard" or item.mutationMultiplier~=1)) then eligible=false end
+    end
+    if eligible then best=math.max(best,score(choices)) end
+   end end end end
+   local selection,actual=AutoFill.best(all,rarities,kinds,minimum,{keepLast=keepLast,standardOnly=standardOnly})
+   if best<0 then assert(selection==nil, "No complete safe selection should exist")
+   else
+    assert(selection and math.abs(actual-best)<0.00001, "Safe auto-fill must find the exact best eligible recipe")
+    local chosen={}; for _,kind in ipairs(kinds) do for _,item in ipairs(all) do if item.id==selection[kind] then table.insert(chosen,item) end end end
+    assert(#chosen==4 and math.abs(score(chosen)-best)<0.00001)
+   end
+  end
+ end end
+end
+print("Safety options, last-copy/mutation warnings and exhaustive constrained-search tests passed")

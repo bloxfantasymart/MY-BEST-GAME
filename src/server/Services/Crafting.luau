@@ -18,6 +18,21 @@ function Crafting.plan(parts,creatures,blueprintCount,selection,rarities)
   if not Inventory.canConsume(item) or item.kind~=kind then return nil,"Select one unlocked owned part of each type." end
   seen[id]=true; components[kind]=item
  end
+ -- Optional safety rules are part of the server-owned review and are
+ -- rechecked immediately before commit. A protected duplicate is retained;
+ -- only loose parts of the same name and type count, not creature components.
+ if (selection.keepLast~=nil and type(selection.keepLast)~="boolean") or (selection.standardOnly~=nil and type(selection.standardOnly)~="boolean") then return nil,"Invalid assembly safety options." end
+ for _,kind in ipairs(kinds) do
+  local item=components[kind]
+  if selection.standardOnly and ((item.mutation or "Standard")~="Standard" or (item.mutationMultiplier or 1)~=1) then
+   return nil,"Standard-only assembly cannot use mutated parts."
+  end
+  if selection.keepLast then
+   local count=0
+   for _,candidate in ipairs(parts) do if candidate.name==item.name and candidate.kind==kind then count+=1 end end
+   if count<2 then return nil,"Keep-one safety requires another loose "..item.name.." "..kind.."." end
+  end
+ end
  local allowed,reason=Blueprints.validate(selection.useBlueprint,blueprintCount,components)
  if not allowed then return nil,reason end
  local blueprint=selection.useBlueprint==true
