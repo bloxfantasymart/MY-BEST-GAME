@@ -36,6 +36,7 @@ local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
 local Obby = require(script.Parent.Services.Obby)
 local Loadouts = require(script.Parent.Services.Loadouts)
 local InteractionGate=require(script.Parent.Services.InteractionGate)
+local RemoteInput=require(script.Parent.Services.RemoteInput)
 local CheckpointRequest=require(script.Parent.Services.CheckpointRequest)
 local Proximity=require(script.Parent.Services.Proximity)
 local ItemIds = require(script.Parent.Services.ItemIds)
@@ -555,16 +556,16 @@ local function runAdmin(admin,payload)
  else send(target,"An administrator updated your profile in this server.") end
  if states[admin] then send(admin,"Admin action completed."); adminSnapshot(admin,plan.target) end
 end
-remote.OnServerEvent:Connect(function(player, action, value)
+local function handleRemote(player,action,value)
  local s=states[player]
- if not s or joinGate.closed or type(action)~="string" or #action>40 then return end
+ if not s or joinGate.closed then return end
  if not DataService.isHealthy(player.UserId) then player:Kick("Your data session could not be renewed. Please rejoin."); return end
  local now=os.clock()
+ if not InteractionGate.allow(s,"remote",now) or not RemoteInput.accept("main",action,value) then return end
  if expireOffers(s,now) then
   send(player,"Unpurchased roll offers expired after 60 seconds.")
   if action=="buy" or action=="buyWithVoucher" or action=="purchaseReview" or action=="purchaseConfirm" or action=="batchPurchaseReview" or action=="batchPurchaseConfirm" or action=="skip" then return end
  end
- if not InteractionGate.allow(s,"remote",now) then return end
  settleIncome(s,now,currentEvent())
  if action=="adminOpen" then
   if AdminService.authorized(Config.AdminUserIds,player.UserId) then adminSnapshot(player,value) end
@@ -984,6 +985,15 @@ remote.OnServerEvent:Connect(function(player, action, value)
   send(player,"Rebirth complete! New archetypes unlocked.")
  elseif action=="collect" then
   collect(player,s)
+ end
+end
+remote.OnServerEvent:Connect(function(player,action,value)
+ local ok,err=pcall(handleRemote,player,action,value)
+ if not ok then
+  local s=states[player]; local now=os.clock()
+  if s and (not s.lastRemoteError or now<s.lastRemoteError or now-s.lastRemoteError>=10) then
+   s.lastRemoteError=now; warn("Main remote handler failed for user "..player.UserId..": "..tostring(err))
+  end
  end
 end)
 profile=function(s,closing)

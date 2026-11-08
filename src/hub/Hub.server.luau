@@ -14,6 +14,7 @@ local ShowcaseView=require(script.Parent.Services.ShowcaseView)
 local Titles=require(script.Parent.Services.Titles)
 local ShutdownGate=require(script.Parent.Services.ShutdownGate)
 local InteractionGate=require(script.Parent.Services.InteractionGate)
+local RemoteInput=require(script.Parent.Services.RemoteInput)
 local Proximity=require(script.Parent.Services.Proximity)
 local remote=Instance.new("RemoteEvent"); remote.Name="HubAction"; remote.Parent=ReplicatedStorage
 local profiles={}
@@ -139,12 +140,11 @@ for i=1,15 do
   openBooth(player,booth,true)
  end)
 end
-remote.OnServerEvent:Connect(function(player,action,payload)
+local function handleRemote(player,action,payload)
  local s=profiles[player]
- if not s or joinGate.closed or not DataService.isHealthy(player.UserId) or type(action)~="string" or #action>30 then return end
+ if not s or joinGate.closed or not DataService.isHealthy(player.UserId) then return end
  local now=os.clock()
- if not InteractionGate.allow(s,"remote",now) then return end
- if type(payload)~="table" then return end
+ if not InteractionGate.allow(s,"remote",now) or not RemoteInput.accept("hub",action,payload) then return end
  if action=="directory" then
   local requestId=payload.requestId
   if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
@@ -181,6 +181,15 @@ remote.OnServerEvent:Connect(function(player,action,payload)
   if not ok then text(player,reason); return end
  else return end
  refreshBooth(booth); openBooth(player,booth)
+end
+remote.OnServerEvent:Connect(function(player,action,payload)
+ local ok,err=pcall(handleRemote,player,action,payload)
+ if not ok then
+  local s=profiles[player]; local now=os.clock()
+  if s and (not s.lastRemoteError or now<s.lastRemoteError or now-s.lastRemoteError>=10) then
+   s.lastRemoteError=now; warn("Hub remote handler failed for user "..player.UserId..": "..tostring(err))
+  end
+ end
 end)
 local function releaseBooth(s)
  if not s.booth then return end
