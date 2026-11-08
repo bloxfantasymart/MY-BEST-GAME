@@ -23,6 +23,8 @@ function ItemIds.collect(state)
  if quote then addEntries(used,quote.before); addEntries(used,quote.after) end
  quote=state.bulkSaleQuote
  if quote then addEntries(used,quote.items) end
+ quote=state.selectedSaleQuote
+ if quote then addEntries(used,quote.items) end
  for _,conversion in ipairs({state.craftQuote or false,state.fusionQuote or false}) do
   if conversion then
    for _,item in ipairs(conversion.inputs or {}) do

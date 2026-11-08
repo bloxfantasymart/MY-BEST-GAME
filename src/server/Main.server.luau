@@ -39,6 +39,7 @@ local InteractionGate=require(script.Parent.Services.InteractionGate)
 local Proximity=require(script.Parent.Services.Proximity)
 local ItemIds = require(script.Parent.Services.ItemIds)
 local SingleSale = require(script.Parent.Services.SingleSale)
+local SelectedSale = require(script.Parent.Services.SelectedSale)
 local PurchaseReview = require(script.Parent.Services.PurchaseReview)
 local DuplicateCleanup = require(script.Parent.Services.DuplicateCleanup)
 local ConversionReviews = require(script.Parent.Services.ConversionReviews)
@@ -832,6 +833,22 @@ remote.OnServerEvent:Connect(function(player, action, value)
   local count,total=Inventory.confirmBulkSale(s,value,os.clock(),Config.PartSellValue)
   if not count then send(player,total); return end
   s.cash+=total; Tutorial.reconcile(s.tutorial,s.parts); send(player,"Sold "..count.." parts for $"..total..".")
+ elseif action=="selectedSaleReview" and type(value)=="table" then
+  local requestId=value.requestId
+  if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end
+  s.selectedSaleQuote=nil
+  local ok,token=pcall(function() return HttpService:GenerateGUID(false) end)
+  local quote,reason
+  if ok then quote,reason=SelectedSale.review(s,value.ids,os.clock(),token,Config.PartSellValue)
+  else reason="Could not create a selected sale review. Try again." end
+  s.selectedSaleQuote=quote
+  remote:FireClient(player,{selectedSaleReview=true,requestId=requestId,quote=quote,reason=reason})
+ elseif action=="cancelSelectedSaleReview" then
+  s.selectedSaleQuote=nil
+ elseif action=="selectedSaleConfirm" then
+  local count,total=SelectedSale.confirm(s,value,os.clock(),Config.PartSellValue)
+  if not count then send(player,total); return end
+  s.cash+=total; Tutorial.reconcile(s.tutorial,s.parts); send(player,"Sold "..count.." selected parts for $"..total..".")
  elseif action=="singleSaleReview" and type(value)=="table" then
   local requestId=value.requestId
   if type(requestId)~="number" or requestId~=requestId or requestId%1~=0 or requestId<1 or requestId>2147483647 then return end

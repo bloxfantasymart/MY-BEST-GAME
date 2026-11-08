@@ -124,6 +124,11 @@ local duplicateQuote=nil; local duplicateWaiting=nil; local duplicateSequence=0;
 local function clearSingleSale() singleSaleQuote=nil; singleSaleWaiting=nil end
 local bulkRarity=1; local confirmBulk=nil; local bulkWaiting=nil; local bulkSequence=0; local bulkReviewPage=1; local bulkStandardOnly=true
 local function clearBulk() confirmBulk=nil; bulkWaiting=nil end
+local chosenSale={}; local chosenSaleQuote=nil; local chosenSaleWaiting=nil; local chosenSaleSequence=0
+local chosenSalePage=1; local chosenSaleReviewPage=1; local chosenSaleQuery=""; local chosenSaleDraft=""; local chosenSaleRarity=0; local chosenSaleMutation=0
+local function chosenSaleIds()
+ local ids={}; for id in pairs(chosenSale) do table.insert(ids,id) end; table.sort(ids); return ids
+end
 local bagBatch=nil; local bagBatchPage=1
 local bagQuery=""; local bagDraft=""; local bagProtection="All"; local bagSort="Newest"; local bagPage=1
 local bagRarity=0; local bagMutation=0; local bagPlacement="All"
@@ -1074,6 +1079,61 @@ render=function()
   end
   row("The server requires you to be near your assembly pod, rechecks resources and rejects changed or expired reviews. Boxes must be opened separately.",nil,Color3.fromRGB(70,75,105))
   row("BACK TO BACKPACK",function() refineWaiting=nil; refineQuote=nil; mode="bag"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
+ elseif mode=="selectedSale" then
+  title.Text="BACKPACK — HAND-PICKED PARTS SALE"
+  row("Optional permanent sale of the exact parts you select. Protected parts and all creatures are excluded. Mutations CAN be sold if you select them.",nil,Color3.fromRGB(150,85,45))
+  if chosenSaleQuote then
+   local review=chosenSaleQuote
+   row("SERVER REVIEW: "..#review.items.." selected parts for $"..review.total..". Expires after 60 seconds. Review every page before confirming.",nil,Color3.fromRGB(150,85,45))
+   local items,current,pages=InventoryView.page(review.items,chosenSaleReviewPage,10); chosenSaleReviewPage=current
+   row("REVIEW PAGE "..current.." / "..pages,nil,Color3.fromRGB(70,75,105))
+   if current>1 then row("PREVIOUS REVIEW PAGE",function() chosenSaleReviewPage-=1; render() end,Color3.fromRGB(60,120,180)) end
+   if current<pages then row("NEXT REVIEW PAGE",function() chosenSaleReviewPage+=1; render() end,Color3.fromRGB(60,120,180)) end
+   for _,item in ipairs(items) do
+    row(item.mutation.." "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] x"..item.multiplier.." | sell $"..item.value.." | recorded price $"..item.price.."\nFULL ID: "..item.id,nil,Color3.fromRGB(70,75,105))
+   end
+   row("CONFIRM PERMANENT SALE FOR $"..review.total,function()
+    if chosenSaleQuote~=review then return end
+    chosenSaleQuote=nil; chosenSale={}; remote:FireServer("selectedSaleConfirm",review.token); notice.Text="Requesting reviewed sale..."; render()
+   end,Color3.fromRGB(200,65,85))
+   row("CANCEL SALE REVIEW",function() chosenSaleQuote=nil; remote:FireServer("cancelSelectedSaleReview"); render() end,Color3.fromRGB(70,75,105))
+  elseif chosenSaleWaiting then
+   row("WAITING FOR SERVER SALE REVIEW...",nil,Color3.fromRGB(70,75,105))
+   row("CANCEL REVIEW REQUEST",function() chosenSaleWaiting=nil; remote:FireServer("cancelSelectedSaleReview"); render() end,Color3.fromRGB(70,75,105))
+  else
+   local search=Instance.new("TextBox"); search.Size=UDim2.new(1,-10,0,50); search.BackgroundColor3=Color3.fromRGB(60,65,95); search.TextColor3=Color3.new(1,1,1)
+   search.Text=chosenSaleDraft; search.PlaceholderText="Search part names, types or mutations"; search.ClearTextOnFocus=false; search.Font=Enum.Font.GothamBold; search.TextSize=16
+   search.Parent=list; rowOrder+=1; search.LayoutOrder=rowOrder; round(search)
+   search:GetPropertyChangedSignal("Text"):Connect(function() chosenSaleDraft=string.sub(search.Text,1,80) end)
+   row("APPLY SEARCH"..(chosenSaleQuery~="" and (": "..chosenSaleQuery) or ""),function() chosenSaleQuery=chosenSaleDraft; chosenSalePage=1; render() end,Color3.fromRGB(60,120,180))
+   row("RARITY: "..(chosenSaleRarity==0 and "All" or Config.Rarities[chosenSaleRarity].name),function() chosenSaleRarity=(chosenSaleRarity+1)%(#Config.Rarities+1); chosenSalePage=1; render() end,Color3.fromRGB(70,75,105))
+   row("MUTATION: "..(chosenSaleMutation==0 and "All" or Config.Mutations[chosenSaleMutation].name),function() chosenSaleMutation=(chosenSaleMutation+1)%(#Config.Mutations+1); chosenSalePage=1; render() end,Color3.fromRGB(70,75,105))
+   row("CLEAR FILTERS (selection is kept)",function() chosenSaleQuery=""; chosenSaleDraft=""; chosenSaleRarity=0; chosenSaleMutation=0; chosenSalePage=1; render() end,Color3.fromRGB(70,75,105))
+   local mutation=chosenSaleMutation==0 and "All" or Config.Mutations[chosenSaleMutation].name
+   local entries=InventoryView.build(state.parts,state.creatures,"Body Parts",chosenSaleQuery,"All","Newest",Config.Income,chosenSaleRarity,mutation,"All")
+   local items,current,pages=InventoryView.page(entries,chosenSalePage,10); chosenSalePage=current
+   local ids=chosenSaleIds()
+   row("SELECTED "..#ids.." across all filters and pages | PAGE "..current.." / "..pages.." | "..#entries.." matching",nil,Color3.fromRGB(70,75,105))
+   if current>1 then row("PREVIOUS PAGE",function() chosenSalePage-=1; render() end,Color3.fromRGB(60,120,180)) end
+   if current<pages then row("NEXT PAGE",function() chosenSalePage+=1; render() end,Color3.fromRGB(60,120,180)) end
+   row("SELECT UNPROTECTED PARTS ON THIS PAGE",function() for _,entry in ipairs(items) do if not entry.item.locked then chosenSale[entry.item.id]=true end end; render() end,Color3.fromRGB(60,120,180))
+   row("UNSELECT PARTS ON THIS PAGE",function() for _,entry in ipairs(items) do chosenSale[entry.item.id]=nil end; render() end,Color3.fromRGB(70,75,105))
+   for _,entry in ipairs(items) do
+    local item=entry.item; local selected=chosenSale[item.id]==true
+    local prefix=selected and "[SELECTED] " or (item.locked and "[PROTECTED] " or "[ ] ")
+    row(prefix..(item.mutation or "Standard").." "..item.name.." "..item.kind.." ["..Config.Rarities[item.rarity].name.."] | sell $"..Config.PartSellValue(item).." | #"..string.sub(item.id,-6),function()
+     if selected then chosenSale[item.id]=nil elseif not item.locked then chosenSale[item.id]=true else notice.Text="Protected parts cannot be selected for sale." end; render()
+    end,item.locked and Color3.fromRGB(70,75,105) or Config.Rarities[item.rarity].color)
+   end
+   if #ids>0 then
+    row("REQUEST SERVER REVIEW OF "..#ids.." SELECTED PARTS",function()
+     chosenSaleSequence=chosenSaleSequence%2147483647+1; chosenSaleWaiting=chosenSaleSequence
+     remote:FireServer("selectedSaleReview",{requestId=chosenSaleWaiting,ids=ids}); render()
+    end,Color3.fromRGB(150,85,45))
+    row("CLEAR ALL SELECTIONS",function() chosenSale={}; render() end,Color3.fromRGB(70,75,105))
+   end
+  end
+  row("BACK TO BACKPACK",function() chosenSaleWaiting=nil; chosenSaleQuote=nil; chosenSale={}; remote:FireServer("cancelSelectedSaleReview"); mode="bag"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="duplicates" then
   title.Text="BACKPACK — DUPLICATE CLEANUP"
   row("Optional permanent sale. Keeps the first eligible unprotected copy in each exact group. Protected parts and all non-Standard mutations are excluded, even as keepers. Creatures are never sold.",nil,Color3.fromRGB(150,85,45))
@@ -1125,6 +1185,10 @@ render=function()
  elseif mode=="bag" then
   title.Text="BACKPACK — "..bagTab
   row("OPEN INVENTORY SAFETY OVERVIEW",function() selectedSell=nil; clearSingleSale(); clearBulk(); bagBatch=nil; mode="bagSummary"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
+  row("HAND-PICKED PARTS SALE (SERVER REVIEW)",function()
+   chosenSale={}; chosenSaleQuote=nil; chosenSaleWaiting=nil; chosenSalePage=1; chosenSaleReviewPage=1; chosenSaleQuery=""; chosenSaleDraft=""; chosenSaleRarity=0; chosenSaleMutation=0
+   mode="selectedSale"; list.CanvasPosition=Vector2.zero; render()
+  end,Color3.fromRGB(150,85,45))
   row("OPTIONAL DUPLICATE CLEANUP (SERVER REVIEW)",function() duplicateQuote=nil; duplicateWaiting=nil; duplicateRarity=1; duplicatePage=1; mode="duplicates"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(150,85,45))
   row("TAB: "..bagTab.." (tap to change)",function()
    if bagTab=="All" then bagTab="Body Parts" elseif bagTab=="Body Parts" then bagTab="Brainrots" elseif bagTab=="Brainrots" then bagTab="Boosts" else bagTab="All" end
@@ -1438,6 +1502,14 @@ remote.OnClientEvent:Connect(function(data)
    craftWaiting=nil; craftConfirm=data.quote; if data.reason then notice.Text=data.reason end; requestRender()
   elseif data.kind=="fusion" and forgeWaiting==data.requestId and mode=="forge" and panel.Visible then
    forgeWaiting=nil; forgeConfirm=data.quote; if data.reason then notice.Text=data.reason end; requestRender()
+  end
+  return
+ end
+ if data.selectedSaleReview then
+  if chosenSaleWaiting==data.requestId and mode=="selectedSale" and panel.Visible then
+   chosenSaleWaiting=nil; chosenSaleQuote=data.quote; chosenSaleReviewPage=1
+   if data.reason then notice.Text=data.reason end
+   requestRender()
   end
   return
  end
