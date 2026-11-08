@@ -256,6 +256,13 @@ end)
 task.spawn(function()
  while true do task.wait(2); for player in pairs(profiles) do if not DataService.isHealthy(player.UserId) then player:Kick("Data session expired. Please rejoin.") end end end
 end)
+task.spawn(function()
+ while not joinGate.closed do
+  task.wait(5)
+  if joinGate.closed then break end
+  for player in pairs(profiles) do remote:FireClient(player,{saveStatus=DataService.status(player.UserId)}) end
+ end
+end)
 game:BindToClose(function()
  ShutdownGate.close(joinGate)
  local remaining=0

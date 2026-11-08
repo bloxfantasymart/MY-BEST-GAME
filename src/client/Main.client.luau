@@ -110,7 +110,9 @@ local state={cash=0,pending=0,slots=1,standsUnlocked=12,plotIndex=0,tutorial={st
 local loaded=false; local offlineShown=false
 local syncPolicy=SyncPolicy.new()
 local function updateHud()
- hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0)..(SyncPolicy.behind(syncPolicy) and "  |  SYNCING" or "")
+ local status=state.saveStatus and state.saveStatus.state
+ local persistence=status=="temporary" and "  |  TEMPORARY DATA" or ((status=="delayed" or status=="expired") and "  |  SAVE DELAY" or "")
+ hud.Text="$"..math.floor(state.cash).."  |  Collect $"..math.floor(state.pending).."  |  R"..(state.rebirth or 0)..(SyncPolicy.behind(syncPolicy) and "  |  SYNCING" or "")..persistence
 end
 local function requestAutomaticSync()
  local now=os.clock()
@@ -239,7 +241,19 @@ local function updateEventSchedule()
   else eventOverrideLabel.Text="No server-only admin override was active when this snapshot was requested." end
  end
 end
+local profileStatusLabel=nil
+local function profileStatusText(status)
+ if not status then return "Waiting for server data status." end
+ local age=math.max(0,math.floor(status.age or 0))
+ if status.state=="temporary" then return "TEMPORARY STUDIO DATA: nothing is persisted; leaving resets progress." end
+ if status.state=="delayed" then return "SAVE DELAY: no successful DataStore contact for "..age.." seconds. Progress may be lost; the server will disconnect the session if it cannot renew." end
+ if status.state=="expired" then return "DATA SESSION EXPIRED. Progress may be lost; reconnect after the server releases the profile." end
+ if status.state=="closing" then return "Data session is closing; final saves are best-effort." end
+ if status.state=="connected" then return "Last successful DataStore contact: "..age.." seconds ago. Changes since then may be unsaved; later saves can still fail." end
+ return "Data status unavailable. Progress is not guaranteed saved."
+end
 local function refreshTimedLabels()
+ if panel.Visible and mode=="dataStatus" and profileStatusLabel and profileStatusLabel.Parent then profileStatusLabel.Text=profileStatusText(state.saveStatus) end
  if panel.Visible and mode=="rewards" then
   for _,gift in ipairs(Config.SessionGifts) do
    local b=giftButtons[gift.id]
@@ -921,8 +935,21 @@ render=function()
   row("60m Epic+ gift tier odds: "..table.concat(odds,", ")..". Standard mutation; any rebirth.",nil,Color3.fromRGB(70,75,105))
   if state.isAdmin then row("DEVELOPER ADMIN",function() pendingAdmin=nil; mode="admin"; list.CanvasPosition=Vector2.zero; remote:FireServer("adminOpen",adminTarget); render() end,Color3.fromRGB(155,65,65)) end
   row("ACCESSIBILITY SETTINGS",function() mode="settings"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
+  row("PROFILE SAVE STATUS & CHECKPOINT",function() mode="dataStatus"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
   row("REFRESH GAME STATE FROM SERVER",function() remote:FireServer("sync"); notice.Text="Requesting current game state..." end,Color3.fromRGB(60,120,180))
   row("HOW TO PLAY",function() mode="help"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(60,120,180))
+ elseif mode=="dataStatus" then
+  title.Text="PROFILE SAVE STATUS"
+  profileStatusLabel=row(profileStatusText(state.saveStatus),nil,Color3.fromRGB(150,85,45))
+  profileStatusLabel.Size=UDim2.new(1,-10,0,120)
+  row("The timer measures the server's last successful profile load or checkpoint, not proof that your latest actions were saved. Shutdown, crashes or failed saves can still lose progress.",nil,Color3.fromRGB(70,75,105))
+  if state.saveStatus and state.saveStatus.state=="temporary" then
+   row("Temporary Studio data cannot be saved. See the README for private persistence testing.",nil,Color3.fromRGB(70,75,105))
+  else
+   row("REQUEST CHECKPOINT (at most once per 60 seconds)",function() remote:FireServer("requestCheckpoint"); notice.Text="Requesting a checkpoint..." end,Color3.fromRGB(60,120,180))
+   row("A request runs in the background and may fail or be superseded by a newer checkpoint. Do not assume a pending request has saved your progress.",nil,Color3.fromRGB(70,75,105))
+  end
+  row("BACK TO REWARDS",function() mode="rewards"; list.CanvasPosition=Vector2.zero; render() end,Color3.fromRGB(70,75,105))
  elseif mode=="events" then
   title.Text="LIVE EVENTS — UTC SCHEDULE"
   row("REFRESH EVENT SCHEDULE",function() remote:FireServer("requestEvents"); notice.Text="Requesting event schedule..." end,Color3.fromRGB(60,120,180))
@@ -1593,7 +1620,7 @@ remote.OnClientEvent:Connect(function(data)
   local tickStatus=SyncPolicy.tick(syncPolicy,data.revision)
   if tickStatus=="stale" then return end
   if tickStatus=="gap" then requestAutomaticSync() end
-  updateEvent(data.eventFlags); state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.blessingRemaining=data.blessingRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; updateHud(); return end
+  updateEvent(data.eventFlags); state.saveStatus=data.saveStatus or state.saveStatus; state.serverDay=data.serverDay; state.income=data.income or state.income; state.giftElapsed=data.giftElapsed; state.luckRemaining=data.luckRemaining; state.tripleLuckRemaining=data.tripleLuckRemaining; state.blessingRemaining=data.blessingRemaining; state.rollRemaining=data.rollRemaining; eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); refreshTimedLabels(); state.cash=data.cash; state.pending=data.pending; updateHud(); return end
  if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; clearCraftReview(); craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; clearForgeReview(); forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false; multiRollConfirm=false; clearPurchaseReview() end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  if not SyncPolicy.full(syncPolicy,data.revision,os.clock()) then return end
  if data.effect then playEffect(data.effect) end

@@ -3,6 +3,7 @@
 -- Studio defaults to an in-memory profile; turn on TestPersistence explicitly to test DataStores.
 local Loadouts=require(script.Parent.Loadouts)
 local SessionGifts=require(script.Parent.SessionGifts)
+local PersistenceStatus=require(script.Parent.PersistenceStatus)
 local DataStoreService = game:GetService("DataStoreService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -228,6 +229,9 @@ function DataService.save(userId, data, release)
  session.busy=false
  if release and sessions[userId]==session then sessions[userId]=nil end
  return saved
+end
+function DataService.status(userId)
+ return PersistenceStatus.describe(sessions[userId],os.clock())
 end
 function DataService.isHealthy(userId)
  local session=sessions[userId]

@@ -36,6 +36,7 @@ local LevelUpgrade = require(script.Parent.Services.LevelUpgrade)
 local Obby = require(script.Parent.Services.Obby)
 local Loadouts = require(script.Parent.Services.Loadouts)
 local InteractionGate=require(script.Parent.Services.InteractionGate)
+local CheckpointRequest=require(script.Parent.Services.CheckpointRequest)
 local Proximity=require(script.Parent.Services.Proximity)
 local ItemIds = require(script.Parent.Services.ItemIds)
 local SingleSale = require(script.Parent.Services.SingleSale)
@@ -168,7 +169,7 @@ local rebirthCaption=label(rebirthBoard,"SERVER REBIRTHS",6); rebirthCaption.Par
 local function partCapacity(s)
  return PassService.capacity(s.passes,s.backpackUpgrades,SeasonRewards.bonusSlots(s.season.claimed))
 end
-local settleIncome
+local settleIncome; local profile
 local function obbyStatus(s)
  return Obby.status(s,s.player.Character,os.clock(),os.time())
 end
@@ -184,7 +185,7 @@ local function send(player, message, effect, haptic)
  s.snapshotRevision=(s.snapshotRevision or 0)+1
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {revision=s.snapshotRevision,cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, manualProtectMutations=s.manualProtectMutations, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, treasureStatus=Treasure.status(s.extras,os.time()), blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect, haptic=haptic})
+ remote:FireClient(player, {revision=s.snapshotRevision,saveStatus=DataService.status(player.UserId),cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, manualProtectMutations=s.manualProtectMutations, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, treasureStatus=Treasure.status(s.extras,os.time()), blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect, haptic=haptic})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -570,6 +571,22 @@ remote.OnServerEvent:Connect(function(player, action, value)
  elseif action=="adminAction" then
   if AdminService.authorized(Config.AdminUserIds,player.UserId) then runAdmin(player,value) end
  elseif action=="sync" then send(player)
+ elseif action=="requestCheckpoint" then
+  if DataService.status(player.UserId).state=="temporary" then send(player,"Studio temporary data cannot be saved persistently."); return end
+  local allowed,reason=CheckpointRequest.begin(s,now)
+  if not allowed then send(player,reason); return end
+  send(player,"Save requested. Current changes may still be unsaved until it finishes.")
+  task.spawn(function()
+   local ok,saved=pcall(function()
+    if states[player]~=s or joinGate.closed or not DataService.isHealthy(player.UserId) then return false end
+    settleIncome(s,os.clock(),currentEvent())
+    return DataService.save(player.UserId,profile(s),false)
+   end)
+   CheckpointRequest.finish(s)
+   if states[player]~=s or joinGate.closed then return end
+   if ok and saved then send(player,"Save completed or a newer checkpoint superseded it. Later changes may be unsaved.")
+   else warn("Requested save failed for "..player.UserId); send(player,"Save failed. Progress may be lost; please wait for recovery.") end
+  end)
  elseif action=="requestEvents" then
   local epoch=os.time(); local schedule=LiveEvents.forecast(epoch)
   currentEvent() -- clear an expired override before reporting it
@@ -969,7 +986,7 @@ remote.OnServerEvent:Connect(function(player, action, value)
   collect(player,s)
  end
 end)
-local function profile(s,closing)
+profile=function(s,closing)
  CollectionIndex.record(s.collection,s.parts,s.creatures,collectionNames)
  return {version=1,cash=s.cash,pending=s.pending,slots=s.slots,standsUnlocked=s.standsUnlocked,rebirth=s.rebirth,backpackUpgrades=s.backpackUpgrades,rareBlueprints=s.rareBlueprints,autoCollect=s.autoCollector.enabled,obbyLastClaim=s.obbyLastClaim,standLoadouts=s.standLoadouts,parts=s.parts,creatures=s.creatures,collection=s.collection,progress=s.progress,season=s.season,extras=s.extras,luckUntil=s.luckUntil,tripleLuckUntil=s.tripleLuckUntil,tutorial=s.tutorial,theme=s.theme,keepSlotsEntitled=s.keepSlotsEntitled,lastLogout=closing and os.time() or 0}
 end
@@ -1097,7 +1114,7 @@ task.spawn(function()
     if AutoCollector.due(s.autoCollector,s.rebirth,os.clock(),s.pending) then collect(player,s,true) end
     s.plot.bankLabel.Text="Bank: $"..math.floor(s.pending)
     if changed then send(player,expired and "Unpurchased roll offers expired after 60 seconds." or nil)
-    else remote:FireClient(player, {tick=true, revision=s.snapshotRevision or 0, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=incomeEvent, income=incomeSummary(s,rates,incomeEvent), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock()))}) end
+    else remote:FireClient(player, {tick=true, revision=s.snapshotRevision or 0, saveStatus=DataService.status(player.UserId), cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=incomeEvent, income=incomeSummary(s,rates,incomeEvent), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock()))}) end
    end
   end
  end

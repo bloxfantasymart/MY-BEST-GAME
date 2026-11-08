@@ -22,7 +22,8 @@ local header=Instance.new("TextLabel"); header.Size=UDim2.new(0.8,0,0,65); heade
 header.BackgroundColor3=Color3.fromRGB(42,35,75); header.TextColor3=Color3.new(1,1,1); header.TextWrapped=true; header.Font=Enum.Font.GothamBold; header.TextSize=16
 header.TextScaled=true
 local headerLimit=Instance.new("UITextSizeConstraint"); headerLimit.MinTextSize=10; headerLimit.MaxTextSize=16; headerLimit.Parent=header
-header.Text="SHOWCASE HUB: Claim a booth or inspect another player's creatures. Buying and trading are disabled."; header.Parent=root; round(header)
+local headerBase="SHOWCASE HUB: Claim a booth or inspect another player's creatures. Buying and trading are disabled."
+header.Text=headerBase; header.Parent=root; round(header)
 local notice=Instance.new("TextLabel"); notice.BackgroundTransparency=1; notice.Size=UDim2.new(0.8,0,0,30); notice.Position=UDim2.new(0.1,0,0,75)
 notice.TextColor3=Color3.new(1,1,1); notice.TextStrokeTransparency=0; notice.TextScaled=true; notice.Font=Enum.Font.GothamBold; notice.Parent=root
 local panel=Instance.new("Frame"); panel.Size=UDim2.new(0.85,0,0.7,0); panel.Position=UDim2.new(0.075,0,0.2,0); panel.BackgroundColor3=Color3.fromRGB(37,32,70); panel.Visible=false; panel.Parent=root; round(panel)
@@ -174,6 +175,12 @@ UserInputService.TextBoxFocusReleased:Connect(function(box)
  if pendingRender and box:IsDescendantOf(list) then task.defer(function() if pendingRender then requestRender() end end) end
 end)
 remote.OnClientEvent:Connect(function(data)
+ if data.saveStatus then
+  local status=data.saveStatus.state
+  local suffix=status=="temporary" and " | TEMPORARY STUDIO DATA" or ((status=="delayed" or status=="expired") and " | SAVE DELAY: progress may be lost" or "")
+  header.Text=headerBase..suffix
+  return
+ end
  if data.directory then
   if directoryOpen and panel.Visible and directoryWaiting==data.requestId then directoryWaiting=nil; directoryData=data.booths; showDirectory() end
   return

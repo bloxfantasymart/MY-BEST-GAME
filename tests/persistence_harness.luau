@@ -474,3 +474,20 @@ database.player_93012.extras.sessionGiftClaims.forged=nil
 database.player_93012.extras.sessionGiftDay=nil
 assert(giftPersistence.load(93012)==nil, "Partially missing daily gift state must fail closed")
 print("Saved gift limit round-trip and malformed-data rejection passed")
+
+-- Status reports the local mode/contact age only; it must not expose the lease.
+local statusService=makeService()
+assert(statusService.status(99001).state=="unavailable")
+local profileStatus=statusService.load(99001)
+assert(profileStatus and statusService.status(99001).state=="connected")
+local publicStatus=statusService.status(99001)
+assert(publicStatus.age>=0 and publicStatus.token==nil and publicStatus.lock==nil)
+assert(statusService.save(99001,profileStatus,true))
+assert(statusService.status(99001).state=="unavailable")
+services.RunService.IsStudio=function() return true end
+local memoryService=makeService(); local temporary=memoryService.load(99002)
+assert(temporary and memoryService.status(99002).state=="temporary")
+assert(memoryService.save(99002,temporary,false) and memoryService.status(99002).state=="temporary")
+assert(memoryService.save(99002,temporary,true) and memoryService.status(99002).state=="unavailable")
+services.RunService.IsStudio=function() return false end
+print("DataService status exposes temporary and persistent modes without lease tokens")
