@@ -110,3 +110,6 @@ The main-place client automatically retries its initial state, checks for missed
 
 ### Showcase hub browsing
 In the separate showcase hub, booth owners can search, sort and filter their own creature list by rarity, protection, ascension and placement. Visitors see the displayed creature details, but not the owner's full inventory, creature IDs, protection status or stand assignment. The neon skyline and lounge are decorative, and the benches are not seats. This hub still does **not** support sales or trades. See [hub setup](docs/TRADING_HUB_SETUP.md) and test with two accounts in a private published experience.
+
+### Optional touch feedback
+In the main place, open **REWARDS → ACCESSIBILITY SETTINGS**, turn on **TOUCH HAPTIC FEEDBACK**, then tap **TEST TOUCH HAPTICS**. On supported touch devices, normal rolls give a short pulse, Mythic-or-higher offers give a stronger bounded pulse, and successful manual cash collection gives a double pulse. Automatic collection and other players' announcements do not vibrate your device. Feedback is off by default, limited to one pattern every two seconds, and resets when you leave; unsupported devices silently skip it. Vibration depends on Roblox and device support and still needs testing on real hardware. It never grants or changes items.

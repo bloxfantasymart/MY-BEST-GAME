@@ -2,6 +2,7 @@
 local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local SoundService=game:GetService("SoundService")
+local HapticService=game:GetService("HapticService")
 local Lighting=game:GetService("Lighting")
 local UserInputService=game:GetService("UserInputService")
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
@@ -20,10 +21,12 @@ local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local EventPresentation=require(ReplicatedStorage.Shared:WaitForChild("EventPresentation"))
 local OddsMath=require(ReplicatedStorage.Shared:WaitForChild("OddsMath"))
 local SyncPolicy=require(ReplicatedStorage.Shared:WaitForChild("SyncPolicy"))
+local HapticController=require(ReplicatedStorage.Shared:WaitForChild("HapticController"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
 local sounds={}
-local localSettings={mute=false,hideTint=false,hideGuide=false,hideAnnouncements=false,hideEventBanner=false}
+local localSettings={mute=false,hideTint=false,hideGuide=false,hideAnnouncements=false,hideEventBanner=false,haptics=false}
+local haptics=HapticController.new(HapticService,Enum.UserInputType.Touch,{Enum.VibrationMotor.Small,Enum.VibrationMotor.Large},task.delay,os.clock)
 local updateEvent; local updateTutorial
 local function playEffect(name)
  if localSettings.mute then return end
@@ -1024,6 +1027,13 @@ render=function()
    if localSettings.mute then for _,sound in pairs(sounds) do sound:Stop() end end
    render()
   end,Color3.fromRGB(60,120,180))
+  row("TOUCH HAPTIC FEEDBACK: "..(localSettings.haptics and "ON" or "OFF").." (opt-in; supported devices only)",function()
+   localSettings.haptics=not localSettings.haptics; HapticController.setEnabled(haptics,localSettings.haptics); render()
+  end,Color3.fromRGB(60,120,180))
+  if localSettings.haptics then row("TEST TOUCH HAPTICS",function()
+   local ok,reason=HapticController.play(haptics,"test")
+   notice.Text=ok and "Touch feedback test sent." or (reason=="cooldown" and "Please wait before testing again." or "Touch vibration is unavailable on this device.")
+  end,Color3.fromRGB(60,120,180)) end
   row("HIDE RARE ROLL ANNOUNCEMENTS: "..(localSettings.hideAnnouncements and "ON" or "OFF"),function()
    localSettings.hideAnnouncements=not localSettings.hideAnnouncements; render()
   end,Color3.fromRGB(70,75,105))
@@ -1578,7 +1588,7 @@ remote.OnClientEvent:Connect(function(data)
   return
  end
  if data.announcement then if not localSettings.hideAnnouncements then notice.Text=data.announcement; playEffect("rare") end; return end
- if data.effectOnly then playEffect(data.effectOnly); return end
+ if data.effectOnly then playEffect(data.effectOnly); if data.haptic then HapticController.play(haptics,data.haptic) end; return end
  if data.tick then
   local tickStatus=SyncPolicy.tick(syncPolicy,data.revision)
   if tickStatus=="stale" then return end
@@ -1587,6 +1597,7 @@ remote.OnClientEvent:Connect(function(data)
  if data.open then list.CanvasPosition=Vector2.zero; if data.open=="assemble" then chosen={}; useBlueprint=false; clearCraftReview(); craftKind="Head"; craftPage=1; craftQuery=""; craftDraft="" end; if data.open=="forge" then forgeIds={}; clearForgeReview(); forgePage=1; forgeQuery=""; forgeDraft="" end; if data.open=="roll" then discardConfirm=false; skipReview=nil; manualProtectionConfirm=false; multiRollConfirm=false; clearPurchaseReview() end; if data.open=="stand" then standPage=1; standQuery=""; standDraft=""; standSelection=nil end; mode=data.open; stand=data.stand or 0; panel.Visible=true; render(); return end
  if not SyncPolicy.full(syncPolicy,data.revision,os.clock()) then return end
  if data.effect then playEffect(data.effect) end
+ if data.haptic then HapticController.play(haptics,data.haptic) end
  state=data; if state.manualProtectMutations==false then manualProtectionConfirm=false end; updateEvent(data.eventFlags); eventLabel.Text=(data.event or "")..((data.luckRemaining or 0)>0 and " | 2x boost "..data.luckRemaining.."s" or "")..((data.tripleLuckRemaining or 0)>0 and " | 3x boost "..data.tripleLuckRemaining.."s" or "")..((data.blessingRemaining or 0)>0 and " | Altar x1.5 "..data.blessingRemaining.."s" or ""); loaded=true; updateTutorial()
  if data.message and data.message~="" then notice.Text=data.message end
  if data.offlineReport and not offlineShown then

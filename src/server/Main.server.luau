@@ -175,7 +175,7 @@ end
 local function incomeSummary(s,rates,event)
  return PlotEconomy.summary(rates or PlotEconomy.rates(s.creatures,Config.Income),event or currentEvent(),PassService.owned(s.passes,"VIP"),s.extras.sigmaStatue)
 end
-local function send(player, message, effect)
+local function send(player, message, effect, haptic)
  local s = states[player]
  if not s then return end
  CollectionIndex.record(s.collection,s.parts,s.creatures,collectionNames)
@@ -184,7 +184,7 @@ local function send(player, message, effect)
  s.snapshotRevision=(s.snapshotRevision or 0)+1
  local stats=player:FindFirstChild("leaderstats")
  if stats then stats.Cash.Value=s.cash; stats.Rebirths.Value=s.rebirth end
- remote:FireClient(player, {revision=s.snapshotRevision,cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, manualProtectMutations=s.manualProtectMutations, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, treasureStatus=Treasure.status(s.extras,os.time()), blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect})
+ remote:FireClient(player, {revision=s.snapshotRevision,cash=s.cash, pending=math.floor(s.pending), slots=s.slots, standsUnlocked=s.standsUnlocked, plotIndex=s.plot.index, obby=obbyStatus(s), tutorial=s.tutorial, theme=s.theme, isAdmin=AdminService.authorized(Config.AdminUserIds,player.UserId), passes=s.passes, partCapacity=partCapacity(s), offlineReport=s.offlineReport, backpackUpgrades=s.backpackUpgrades, rareBlueprints=s.rareBlueprints, autoRolling=s.autoRolling, manualProtectMutations=s.manualProtectMutations, autoCollect=s.autoCollector.enabled, income=incomeSummary(s), autoRun=s.autoRun, rebirth=s.rebirth, target=Config.RebirthTarget(s.rebirth), rebirthCost=Config.RebirthCost(s.rebirth), event=eventText(), eventFlags=currentEvent(), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), giftClaims=s.giftClaims, treasureStatus=Treasure.status(s.extras,os.time()), blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), extras=s.extras, season=s.season, rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock())), progress=s.progress, quests=Progression.quests(s.progress), collection=s.collection, standLoadouts=s.standLoadouts, parts=s.parts, creatures=s.creatures, rolls=s.rolls, message=message or "", effect=effect, haptic=haptic})
 end
 local function owned(player, plot)
  return not joinGate.closed and plot.owner == player and states[player] ~= nil and DataService.isHealthy(player.UserId)
@@ -258,7 +258,7 @@ prompt(forge,"Open fusion forge").Triggered:Connect(function(player)
  local s=states[player]
  if s and not joinGate.closed and DataService.isHealthy(player.UserId) and nearby(player,forge) and InteractionGate.allow(s,"prompt",os.clock()) then remote:FireClient(player,{open="forge"}) end
 end)
-local function collect(player,s)
+local function collect(player,s,automatic)
  if settleIncome then settleIncome(s,os.clock(),currentEvent()) end
  local amount=math.floor(s.pending)
  if amount<=0 then send(player,"No cash ready to collect yet."); return end
@@ -267,7 +267,8 @@ local function collect(player,s)
  local completed=Tutorial.advance(s.tutorial,"collect",s.parts)
  if completed then s.cash+=Tutorial.Bonus end
  if os.clock()-(s.lastCollectEffect or -10)>1 then s.lastCollectEffect=os.clock(); Visuals.collect(s.plot) end
- send(player,"Collected $"..amount.."!"..(completed and " Tutorial complete: +$"..Tutorial.Bonus.."!" or ""),"collect")
+ local haptic=nil; if not automatic then haptic="collect" end
+ send(player,"Collected $"..amount.."!"..(completed and " Tutorial complete: +$"..Tutorial.Bonus.."!" or ""),"collect",haptic)
 end
 local function goToHub(player)
  local s=states[player]
@@ -430,7 +431,7 @@ local function rollBatch(s,useToken)
   end) end
  end
  Visuals.showRolls(s.plot,s.rolls,math.max(s.slots,#s.rolls)); Visuals.pull(s.plot)
- remote:FireClient(s.player,{effectOnly="roll"})
+ remote:FireClient(s.player,{effectOnly="roll",haptic=best and "rare" or "roll"})
  return true
 end
 local function makeGiftPart(rarity,s)
@@ -1093,7 +1094,7 @@ task.spawn(function()
     settleIncome(s,os.clock(),incomeEvent)
     if s.incomeDirty then changed=true; s.incomeDirty=false end
     local rates=PlotEconomy.rates(s.creatures,Config.Income)
-    if AutoCollector.due(s.autoCollector,s.rebirth,os.clock(),s.pending) then collect(player,s) end
+    if AutoCollector.due(s.autoCollector,s.rebirth,os.clock(),s.pending) then collect(player,s,true) end
     s.plot.bankLabel.Text="Bank: $"..math.floor(s.pending)
     if changed then send(player,expired and "Unpurchased roll offers expired after 60 seconds." or nil)
     else remote:FireClient(player, {tick=true, revision=s.snapshotRevision or 0, cash=s.cash, pending=math.floor(s.pending), event=eventText(), eventFlags=incomeEvent, income=incomeSummary(s,rates,incomeEvent), serverDay=Progression.day(os.time()), giftElapsed=math.floor(os.clock()-s.sessionStarted), blessingRemaining=Blessing.remaining(s,os.clock()), luckRemaining=math.max(0,s.luckUntil-os.time()), tripleLuckRemaining=math.max(0,s.tripleLuckUntil-os.time()), rollRemaining=math.max(0,math.ceil((s.offerExpires or 0)-os.clock()))}) end
