@@ -1,4 +1,6 @@
 --!strict
+local ReplicatedStorage=game:GetService("ReplicatedStorage")
+local AuraStyle=require(ReplicatedStorage.Shared:WaitForChild("AuraStyle"))
 local Titles={}
 function Titles.forRebirth(rebirth)
  if rebirth>=100 then return "Brainrot Overlord" end
@@ -8,7 +10,10 @@ function Titles.forRebirth(rebirth)
  return "Rookie Roller"
 end
 function Titles.apply(character,rebirth,extras)
- local head=character and character:FindFirstChild("Head")
+ if not character then return end
+ -- The tier is derived on the server; nearby clients render cosmetic effects.
+ character:SetAttribute("BrainrotAuraTier",AuraStyle.tier(rebirth))
+ local head=character:FindFirstChild("Head")
  if not head or not head:IsA("BasePart") then return end
  local old=head:FindFirstChild("BrainrotTitle"); if old then old:Destroy() end
  local oldCrown=head:FindFirstChild("OhioCrown"); if oldCrown then oldCrown:Destroy() end

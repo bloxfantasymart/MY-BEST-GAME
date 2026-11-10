@@ -64,9 +64,12 @@ showAccessibility=function()
  accessibilityOpen=true; directoryOpen=false; directoryWaiting=nil; pendingRender=false; releaseConfirm=false; panel.Visible=true; list.CanvasPosition=Vector2.zero; title.Text="ACCESSIBILITY — THIS SESSION"
  for _,child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
  local reduced=player:GetAttribute("ReduceDisplayMotion")==true
- local toggle=button(list,"REDUCE DISPLAY MOTION: "..(reduced and "ON" or "OFF").." (idle movement, rainbow cycling and display particles)",UDim2.new(1,-10,0,UILayout.rowHeight("REDUCE DISPLAY MOTION: idle movement, rainbow cycling and display particles",math.max(200,panel.AbsoluteSize.X))),Color3.fromRGB(60,120,180))
+ local toggle=button(list,"REDUCE DISPLAY MOTION: "..(reduced and "ON" or "OFF").." (idle movement, rainbow cycling, display and aura sparkles)",UDim2.new(1,-10,0,UILayout.rowHeight("REDUCE DISPLAY MOTION: idle movement, rainbow cycling and display particles",math.max(200,panel.AbsoluteSize.X))),Color3.fromRGB(60,120,180))
  toggle.LayoutOrder=1; toggle.Activated:Connect(function() player:SetAttribute("ReduceDisplayMotion",not reduced); showAccessibility() end)
- local note=button(list,"This setting is local to this play session. It does not affect other players or gameplay, and resets when changing places or rejoining.",UDim2.new(1,-10,0,UILayout.rowHeight("This setting is local to this play session. It does not affect other players or gameplay, and resets when changing places or rejoining.",math.max(200,panel.AbsoluteSize.X))),Color3.fromRGB(65,65,95)); note.LayoutOrder=2
+ local hideAuras=player:GetAttribute("HidePlayerAuras")==true
+ local auraToggle=button(list,"HIDE PLAYER AURAS: "..(hideAuras and "ON" or "OFF").." (local view only)",UDim2.new(1,-10,0,50),Color3.fromRGB(60,120,180))
+ auraToggle.LayoutOrder=2; auraToggle.Activated:Connect(function() player:SetAttribute("HidePlayerAuras",not hideAuras); showAccessibility() end)
+ local note=button(list,"These settings are local to this play session. They do not affect other players or gameplay, and reset when changing places or rejoining.",UDim2.new(1,-10,0,UILayout.rowHeight("These settings are local to this play session. They do not affect other players or gameplay, and reset when changing places or rejoining.",math.max(200,panel.AbsoluteSize.X))),Color3.fromRGB(65,65,95)); note.LayoutOrder=3
 end
 accessibility.Activated:Connect(showAccessibility)
 render=function(data)

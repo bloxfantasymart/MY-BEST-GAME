@@ -1046,8 +1046,12 @@ render=function()
  elseif mode=="settings" then
   title.Text="ACCESSIBILITY — THIS SESSION"
   local reduced=player:GetAttribute("ReduceDisplayMotion")==true
-  row("REDUCE DISPLAY MOTION: "..(reduced and "ON" or "OFF").." (idle movement, rainbow cycling and display particles)",function()
+  row("REDUCE DISPLAY MOTION: "..(reduced and "ON" or "OFF").." (idle movement, rainbow cycling, display and aura sparkles)",function()
    player:SetAttribute("ReduceDisplayMotion",not reduced); render()
+  end,Color3.fromRGB(60,120,180))
+  local hideAuras=player:GetAttribute("HidePlayerAuras")==true
+  row("HIDE PLAYER AURAS: "..(hideAuras and "ON" or "OFF").." (local view only)",function()
+   player:SetAttribute("HidePlayerAuras",not hideAuras); render()
   end,Color3.fromRGB(60,120,180))
   row("MUTE GAME SOUND EFFECTS: "..(localSettings.mute and "ON" or "OFF"),function()
    localSettings.mute=not localSettings.mute

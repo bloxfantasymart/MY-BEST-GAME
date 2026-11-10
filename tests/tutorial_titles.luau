@@ -58,3 +58,12 @@ assert(not Guide.destination("Stand 3",plot,2) and not Guide.destination("Stand 
 assert(not Guide.destination("Stand 999999999",plot,3) and not Guide.destination("BACKPACK",plot,3))
 assert(not Guide.destination("Stand -1",plot,3) and not Guide.destination({},plot,3))
 print("Server-owned tutorial travel destination selection passed")
+
+local attrs={}
+local character={SetAttribute=function(_,key,value) attrs[key]=value end,FindFirstChild=function() return nil end}
+Titles.apply(character,25,{})
+assert(attrs.BrainrotAuraTier==2,"Rebirth-derived aura tier must be replicated even when the head is not ready")
+Titles.apply(character,0,{})
+assert(attrs.BrainrotAuraTier==0)
+Titles.apply(nil,100,{})
+print("Title application publishes the server-derived aura tier")

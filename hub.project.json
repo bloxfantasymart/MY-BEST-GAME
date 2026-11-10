@@ -30,6 +30,9 @@
         },
         "DisplayAnimation": {
           "$path": "src/client/DisplayAnimation.client.luau"
+        },
+        "PlayerAura": {
+          "$path": "src/client/PlayerAura.client.luau"
         }
       }
     }
