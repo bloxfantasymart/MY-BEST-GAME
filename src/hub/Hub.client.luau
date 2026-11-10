@@ -3,6 +3,7 @@ local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local UserInputService=game:GetService("UserInputService")
 local UILayout=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UILayout"))
+local RequestTimeout=require(ReplicatedStorage.Shared:WaitForChild("RequestTimeout"))
 local ShowcaseInventory=require(ReplicatedStorage.Shared:WaitForChild("ShowcaseInventory"))
 local InventoryView=require(ReplicatedStorage.Shared:WaitForChild("InventoryView"))
 local Config=require(ReplicatedStorage.Shared:WaitForChild("Config"))
@@ -36,7 +37,7 @@ local layout=Instance.new("UIListLayout"); layout.SortOrder=Enum.SortOrder.Layou
 local accessibility=button(root,"ACCESSIBILITY",UDim2.fromOffset(110,48),Color3.fromRGB(60,120,180))
 local directoryButton=button(root,"BOOTH DIRECTORY",UDim2.fromOffset(110,40),Color3.fromRGB(145,85,180))
 local current=nil; local render; local showAccessibility; local showDirectory; local requestDirectory; local requestRender; local accessibilityOpen=false
-local directoryOpen=false; local directoryData=nil; local directoryWaiting=nil; local directorySequence=0
+local directoryOpen=false; local directoryData=nil; local directoryWaiting=nil; local directorySequence=0; local directoryTimedOut=false
 local query=""; local draft=""; local sortMode="Newest"; local page=1; local hideDisplayed=false; local releaseConfirm=false; local pendingRender=false
 local rarityFilter=0; local protectionFilter="All"; local ascensionFilter="All"; local placementFilter="All"
 close.Activated:Connect(function() panel.Visible=false; current=nil; pendingRender=false; releaseConfirm=false; directoryOpen=false; directoryWaiting=nil end)
@@ -146,7 +147,8 @@ showDirectory=function()
  row("TRAVEL TO RETURN PORTAL (use its prompt to leave)",function()
   directoryOpen=false; directoryWaiting=nil; panel.Visible=false; remote:FireServer("visitPortal",{})
  end,Color3.fromRGB(60,145,150))
- if not directoryData then row("Waiting for a directory snapshot. Tap refresh if needed.",nil,Color3.fromRGB(65,65,95))
+ if directoryTimedOut then row("Directory request timed out. Tap refresh to try again; any shown snapshot may be stale.",nil,Color3.fromRGB(150,85,45)) end
+ if not directoryData then row(directoryWaiting and "Waiting for a directory snapshot." or "No directory snapshot. Tap refresh.",nil,Color3.fromRGB(65,65,95))
  else
   for _,entry in ipairs(directoryData) do
    local booth=entry.index
@@ -161,11 +163,16 @@ showDirectory=function()
 end
 requestDirectory=function()
  if not directoryOpen then return end
- directorySequence=directorySequence%2147483647+1; directoryWaiting=directorySequence
+ directorySequence=directorySequence%2147483647+1; directoryWaiting=directorySequence; directoryTimedOut=false
+ local expected=directoryWaiting
+ RequestTimeout.watch(task.delay,function() return directoryWaiting==expected end,function()
+  directoryWaiting=nil; directoryTimedOut=true
+  if directoryOpen and panel.Visible then showDirectory() end
+ end)
  remote:FireServer("directory",{requestId=directoryWaiting}); showDirectory()
 end
 directoryButton.Activated:Connect(function()
- directoryOpen=true; directoryData=nil; directoryWaiting=nil; accessibilityOpen=false; current=nil; pendingRender=false; releaseConfirm=false
+ directoryOpen=true; directoryData=nil; directoryWaiting=nil; directoryTimedOut=false; accessibilityOpen=false; current=nil; pendingRender=false; releaseConfirm=false
  panel.Visible=true; list.CanvasPosition=Vector2.zero; requestDirectory()
 end)
 requestRender=function()
@@ -185,7 +192,7 @@ remote.OnClientEvent:Connect(function(data)
   return
  end
  if data.directory then
-  if directoryOpen and panel.Visible and directoryWaiting==data.requestId then directoryWaiting=nil; directoryData=data.booths; showDirectory() end
+  if directoryOpen and panel.Visible and directoryWaiting==data.requestId then directoryWaiting=nil; directoryTimedOut=false; directoryData=data.booths; showDirectory() end
   return
  end
  if data.message then notice.Text=data.message end

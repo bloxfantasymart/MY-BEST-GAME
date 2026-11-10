@@ -21,6 +21,7 @@ local UILayout=require(ReplicatedStorage.Shared:WaitForChild("UILayout"))
 local EventPresentation=require(ReplicatedStorage.Shared:WaitForChild("EventPresentation"))
 local OddsMath=require(ReplicatedStorage.Shared:WaitForChild("OddsMath"))
 local SyncPolicy=require(ReplicatedStorage.Shared:WaitForChild("SyncPolicy"))
+local RequestTimeout=require(ReplicatedStorage.Shared:WaitForChild("RequestTimeout"))
 local HapticController=require(ReplicatedStorage.Shared:WaitForChild("HapticController"))
 local remote=ReplicatedStorage:WaitForChild("GameAction")
 local player=Players.LocalPlayer
@@ -82,7 +83,16 @@ local titleLimit=Instance.new("UITextSizeConstraint"); titleLimit.MinTextSize=10
 local close=button(panel,"X",UDim2.fromOffset(48,40),UDim2.new(1,-54,0,4),Color3.fromRGB(200,65,85)); close.Activated:Connect(function() panel.Visible=false end)
 local list=Instance.new("ScrollingFrame"); list.Size=UDim2.new(1,-20,1,-55); list.Position=UDim2.fromOffset(10,50); list.BackgroundTransparency=1; list.BorderSizePixel=0; list.ScrollBarThickness=7; list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.CanvasSize=UDim2.new(); list.Parent=panel
 local layout=Instance.new("UIListLayout"); layout.Padding=UDim.new(0,6); layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=list
-local render; local requestRender
+local render; local requestRender; local mode=""
+local function watchReview(expected,getWaiting,clearWaiting,expectedMode)
+ RequestTimeout.watch(task.delay,function() return getWaiting()==expected end,function()
+  clearWaiting()
+  if panel.Visible and mode==expectedMode then
+   notice.Text="No server review received. Nothing was confirmed; please request the review again."
+   if requestRender then requestRender() end
+  end
+ end)
+end
 local function applyLayout()
  local size=root.AbsoluteSize
  if size.X<1 or size.Y<1 then return end
@@ -118,7 +128,7 @@ local function requestAutomaticSync()
  local now=os.clock()
  if SyncPolicy.due(syncPolicy,now) then SyncPolicy.sent(syncPolicy,now); remote:FireServer("sync") end
 end
-local mode=""; local stand=0; local chosen={}; local rowOrder=0
+local stand=0; local chosen={}; local rowOrder=0
 local bagTab="All"; local selectedSell=nil; local levelReview=nil; local rebirthSelected=nil; local rebirthQuote=nil
 local singleSaleQuote=nil; local singleSaleWaiting=nil; local singleSaleSequence=0
 local purchaseQuote=nil; local purchaseWaiting=nil; local purchaseSequence=0
@@ -326,6 +336,7 @@ render=function()
      purchaseSequence=purchaseSequence%2147483647+1
      local ids={}; for _,offer in ipairs(state.rolls) do table.insert(ids,offer.id) end
      batchPurchaseWaiting={requestId=purchaseSequence,ids=ids}; discardConfirm=false; skipReview=nil
+     watchReview(batchPurchaseWaiting,function() return batchPurchaseWaiting end,function() batchPurchaseWaiting=nil end,"roll")
      remote:FireServer("batchPurchaseReview",{requestId=purchaseSequence}); list.CanvasPosition=Vector2.zero; render()
     end,Color3.fromRGB(60,120,180))
    end
@@ -385,6 +396,7 @@ render=function()
     local function requestPurchase(voucher)
      purchaseSequence=purchaseSequence%2147483647+1
      purchaseWaiting={requestId=purchaseSequence,id=item.id,voucher=voucher}
+     watchReview(purchaseWaiting,function() return purchaseWaiting end,function() purchaseWaiting=nil end,"roll")
      remote:FireServer("purchaseReview",purchaseWaiting); render()
     end
     row("REVIEW CASH PURCHASE FOR $"..item.price,function() requestPurchase(false) end,Color3.fromRGB(60,120,180))
@@ -592,6 +604,7 @@ render=function()
    row("REQUEST SERVER ASSEMBLY REVIEW",function()
     if not ready then notice.Text="Select four eligible parts and check inventory and blueprint availability."; return end
     conversionSequence=conversionSequence%2147483647+1; craftWaiting=conversionSequence
+    watchReview(craftWaiting,function() return craftWaiting end,function() craftWaiting=nil end,"assemble")
     local selection={useBlueprint=useBlueprint,keepLast=autoKeepLast,standardOnly=autoStandardOnly}; for _,kind in ipairs(Config.Types) do selection[kind]=chosen[kind] end
     remote:FireServer("craftReview",{requestId=craftWaiting,selection=selection}); render()
    end,Color3.fromRGB(52,170,105))
@@ -668,6 +681,7 @@ render=function()
    row("REQUEST SERVER FUSION REVIEW",function()
     if not valid then notice.Text="Choose three matching eligible creatures and check rebirth and cash."; return end
     conversionSequence=conversionSequence%2147483647+1; forgeWaiting=conversionSequence
+    watchReview(forgeWaiting,function() return forgeWaiting end,function() forgeWaiting=nil end,"forge")
     remote:FireServer("fusionReview",{requestId=forgeWaiting,ids=table.clone(forgeIds)}); render()
    end,Color3.fromRGB(185,100,35))
   end
@@ -845,6 +859,7 @@ render=function()
     for _,entry in ipairs(pageEntries(stored)) do row("STAND "..entry.stand..": "..nameFor(entry.id).." #"..string.sub(entry.id,-6),nil,Color3.fromRGB(70,75,105)) end
     row("REQUEST SERVER REVIEW TO APPLY",function()
      layoutSequence=layoutSequence%2147483647+1; layoutWaiting=layoutSequence
+     watchReview(layoutWaiting,function() return layoutWaiting end,function() layoutWaiting=nil end,"layouts")
      remote:FireServer("reviewStandLayout",{slot=layoutSlot,requestId=layoutWaiting}); render()
     end,Color3.fromRGB(52,170,105))
     row("REVIEW DELETE SAVED LAYOUT",function()
@@ -1135,6 +1150,7 @@ render=function()
    row("BOXES: "..refineQuantity.." | COST: "..(refineQuantity*100).." SCRAP (tap to change)",function() refineQuantity=refineQuantity%10+1; render() end,Color3.fromRGB(70,75,105))
    row("REQUEST SERVER REFINERY REVIEW",function()
     refineSequence=refineSequence%2147483647+1; refineWaiting=refineSequence
+    watchReview(refineWaiting,function() return refineWaiting end,function() refineWaiting=nil end,"refinery")
     remote:FireServer("refineReview",{requestId=refineWaiting,quantity=refineQuantity}); render()
    end,Color3.fromRGB(60,120,180))
   end
@@ -1189,6 +1205,7 @@ render=function()
    if #ids>0 then
     row("REQUEST SERVER REVIEW OF "..#ids.." SELECTED PARTS",function()
      chosenSaleSequence=chosenSaleSequence%2147483647+1; chosenSaleWaiting=chosenSaleSequence
+     watchReview(chosenSaleWaiting,function() return chosenSaleWaiting end,function() chosenSaleWaiting=nil end,"selectedSale")
      remote:FireServer("selectedSaleReview",{requestId=chosenSaleWaiting,ids=ids}); render()
     end,Color3.fromRGB(150,85,45))
     row("CLEAR ALL SELECTIONS",function() chosenSale={}; render() end,Color3.fromRGB(70,75,105))
@@ -1221,6 +1238,7 @@ render=function()
    row("MAX RARITY: "..Config.Rarities[duplicateRarity].name.." (tap to change; starts at Common)",function() duplicateRarity=duplicateRarity%#Config.Rarities+1; render() end,Color3.fromRGB(70,75,105))
    row("REQUEST SERVER REVIEW OF DUPLICATES",function()
     duplicateSequence=duplicateSequence%2147483647+1; duplicateWaiting=duplicateSequence
+    watchReview(duplicateWaiting,function() return duplicateWaiting end,function() duplicateWaiting=nil end,"duplicates")
     remote:FireServer("duplicateReview",{requestId=duplicateWaiting,rarity=duplicateRarity}); render()
    end,Color3.fromRGB(185,100,35))
   end
@@ -1348,6 +1366,7 @@ render=function()
        row("REQUEST SERVER REVIEW OF PERMANENT SALE",function()
         singleSaleSequence=singleSaleSequence%2147483647+1
         singleSaleWaiting={requestId=singleSaleSequence,category=category,id=selected.id}
+        watchReview(singleSaleWaiting,function() return singleSaleWaiting end,function() singleSaleWaiting=nil end,"bag")
         remote:FireServer("singleSaleReview",singleSaleWaiting); render()
        end,Color3.fromRGB(200,65,85))
       end
@@ -1428,6 +1447,7 @@ render=function()
     else
      row("REQUEST SERVER REVIEW OF ELIGIBLE PARTS",function()
       bulkSequence=bulkSequence%2147483647+1; bulkWaiting=bulkSequence; selectedSell=nil; levelReview=nil; bagBatch=nil
+      watchReview(bulkWaiting,function() return bulkWaiting end,function() bulkWaiting=nil end,"bag")
       remote:FireServer("bulkSaleReview",{requestId=bulkWaiting,rarity=bulkRarity,standardOnly=bulkStandardOnly}); render()
      end,Color3.fromRGB(185,60,85))
     end

@@ -324,3 +324,9 @@ On a separate private test experience, exercise every main and hub UI action wit
 
 ### Rebirth auras
 In private published main and hub places, use configured test-only admin access or test profiles to check rebirth 0, 9, 10, 24, 25, 49, 50, 99 and 100. Verify titles and tier-colored auras update after rebirth, admin changes, respawn and hub travel; ordinary players cannot select their tier by remote. With two accounts, check the local 100-stud cutoff, camera movement, streaming, leaving and rejoining, and effects do not duplicate. Reduced motion must remove sparkles while leaving static light/beam; **HIDE PLAYER AURAS** must hide all of them only for that viewer, reset on rejoin and work in both places. Test R6/R15/custom rigs, missing/late root parts, mobile/PC performance, lighting and obscured UI. These visuals are cosmetic and not map-wide; mock tests do not establish Roblox rendering, replication or performance.
+
+### Delayed review and directory recovery
+
+In a private Roblox test, delay or drop a review response (purchase, buy-all, assembly, fusion, layout, refinery, duplicate cleanup, selected/single/bulk sale). After 12 seconds the pending indicator should clear and the player can request a new review. A delayed old response must not replace the newer request or show a confirmation. Cancel a request, change screens, and reopen to check old timers do not clear new requests. No transaction is automatically retried or confirmed. If a **confirmation** response is missing, refresh and inspect inventory/balance before taking further action; a timeout on a review is not evidence about an earlier confirmation.
+
+In the hub, delay a directory response: after 12 seconds a timeout is shown, any old snapshot is labeled potentially stale, and refresh is available. Confirm late responses and previous refresh timers cannot replace or clear a newer request. These behaviors have standalone scheduler tests but still need Roblox network/UI testing.

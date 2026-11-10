@@ -120,3 +120,5 @@ Main and hub RemoteEvent handlers now apply per-session throttles before checkin
 
 ### Rebirth character auras
 The server publishes a cosmetic tier based on rebirth 10, 25, 50 and 100 in both places. Clients build local colored beams, sparkles and point lights for characters within 100 studs and remove them when hidden, distant, respawned, streamed out or gone. Reduced display motion suppresses aura sparkles; a separate session-only accessibility switch hides all player auras locally. There are no gameplay bonuses, saved settings, map-wide beams, custom assets or final aura artwork. Standalone lifecycle tests use mocks; actual Roblox rendering, streaming, respawn, accessibility and device performance require testing.
+
+- Client recovery: pending server-owned review requests and hub directory refreshes now time out after 12 seconds; late replies are ignored and the player may manually request again. This does not retry or resolve transaction confirmations, and needs in-engine network testing.
